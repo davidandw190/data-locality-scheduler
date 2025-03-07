@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +70,18 @@ func NewDataLocalityCollector(nodeName string, clientset kubernetes.Interface) *
 
 func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) (map[string]string, error) {
 	labels := make(map[string]string)
+	startTime := time.Now()
+
+	defer func() {
+		klog.V(4).Infof("Storage capability collection took %v", time.Since(startTime))
+	}()
+
+	defer func() {
+		if r := recover(); r != nil {
+			klog.Errorf("Recovered from panic in CollectStorageCapabilities: %v", r)
+			debug.PrintStack()
+		}
+	}()
 
 	node, err := c.clientset.CoreV1().Nodes().Get(ctx, c.nodeName, metav1.GetOptions{})
 	if err != nil {
@@ -77,9 +90,12 @@ func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) 
 
 	c.detectAndSetNodeTopology(node, labels)
 
-	hasMinio, minioBuckets, storageCapacity, err := c.detectStorageService(ctx)
+	detectionCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	hasMinio, minioBuckets, storageCapacity, err := c.detectStorageService(detectionCtx)
 	if err != nil {
-		klog.Warningf("Error detecting storage service: %v", err)
+		klog.Warningf("Error detecting storage service: %v, continuing with partial information", err)
 	}
 
 	if hasMinio {
@@ -95,36 +111,26 @@ func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) 
 			labels[BucketLabelPrefix+bucket] = "true"
 		}
 
-		// detect storage technology (SSD, HDD, etc.)
+		// detect storage technology (SSD, HDD, etc.) with better error handling
 		storageTech, err := c.detectStorageTechnology()
 		if err == nil && storageTech != "" {
 			labels[StorageTechLabel] = storageTech
+		} else {
+			klog.V(4).Infof("Could not determine storage technology: %v", err)
 		}
 	} else {
-		// check for other storage types (local PVs, etc.)
-		hasLocalStorage, localCapacity := c.detectLocalStorage(ctx)
-		if hasLocalStorage {
-			labels[StorageNodeLabel] = "true"
-			labels[StorageTypeLabel] = "local"
-
-			if localCapacity > 0 {
-				labels[StorageCapacityLabel] = strconv.FormatInt(localCapacity, 10)
-			}
-
-			storageTech, err := c.detectStorageTechnology()
-			if err == nil && storageTech != "" {
-				labels[StorageTechLabel] = storageTech
-			}
-		} else {
-			labels[StorageNodeLabel] = ""
-			labels[StorageTypeLabel] = ""
-		}
+		c.detectAndLabelLocalStorage(ctx, labels)
 	}
 
-	// update network measurements periodically
+	// network measurements
 	if time.Since(c.lastBandwidthUpdate) > BandwidthMeasurementInterval {
-		c.collectNetworkMeasurements(ctx, labels)
-		c.lastBandwidthUpdate = time.Now()
+		networkCtx, networkCancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer networkCancel()
+
+		go func() {
+			c.collectNetworkMeasurements(networkCtx, labels)
+			c.lastBandwidthUpdate = time.Now()
+		}()
 	} else {
 		c.bandwidthCacheMutex.RLock()
 		for nodeName, bandwidth := range c.bandwidthCache {
@@ -138,6 +144,29 @@ func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) 
 	}
 
 	return labels, nil
+}
+
+func (c *DataLocalityCollector) detectAndLabelLocalStorage(ctx context.Context, labels map[string]string) {
+	hasLocalStorage, localCapacity := c.detectLocalStorage(ctx)
+	if hasLocalStorage {
+		labels[StorageNodeLabel] = "true"
+		labels[StorageTypeLabel] = "local"
+
+		if localCapacity > 0 {
+			labels[StorageCapacityLabel] = strconv.FormatInt(localCapacity, 10)
+		}
+
+		storageTech, err := c.detectStorageTechnology()
+		if err == nil && storageTech != "" {
+			labels[StorageTechLabel] = storageTech
+		} else {
+			klog.V(4).Infof("Could not determine storage technology for local storage: %v", err)
+		}
+	} else {
+		// we clear storage labels if they previously existed
+		labels[StorageNodeLabel] = ""
+		labels[StorageTypeLabel] = ""
+	}
 }
 
 func (c *DataLocalityCollector) detectAndSetNodeTopology(node *v1.Node, labels map[string]string) {

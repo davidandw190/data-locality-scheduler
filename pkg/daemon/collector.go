@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -132,6 +133,12 @@ func (c *NodeCapabilityCollector) collectComputeCapabilities() error {
 			cpuThreads = count
 		} else {
 			errors = append(errors, fmt.Sprintf("failed to parse nproc output: %v", err))
+			if output, err := c.executeCommand("grep", "-c", "^processor", "/proc/cpuinfo"); err == nil {
+				if count, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+					cpuThreads = count
+					klog.V(3).Infof("Used fallback method to determine CPU thread count: %d", cpuThreads)
+				}
+			}
 		}
 	} else if output, err := c.executeCommand("grep", "-c", "^processor", "/proc/cpuinfo"); err == nil {
 		if count, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
@@ -141,6 +148,8 @@ func (c *NodeCapabilityCollector) collectComputeCapabilities() error {
 		}
 	} else {
 		errors = append(errors, "could not determine CPU thread count")
+		cpuThreads = runtime.NumCPU()
+		klog.V(2).Infof("Using runtime.NumCPU() as fallback: %d", cpuThreads)
 	}
 
 	if output, err := c.executeCommand("cat", "/proc/cpuinfo"); err == nil {
@@ -720,11 +729,20 @@ func (c *NodeCapabilityCollector) updateNodeLabels(ctx context.Context) error {
 }
 
 func (c *NodeCapabilityCollector) executeCommand(command string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Increased timeout
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, command, args...)
-	return cmd.Output()
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("command %s %v failed: %w (stderr: %s)",
+				command, args, err, string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("command %s %v failed: %w", command, args, err)
+	}
+
+	return output, nil
 }
 
 func (c *NodeCapabilityCollector) executeCommandWithSudo(command string, args ...string) ([]byte, error) {

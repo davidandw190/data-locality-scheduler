@@ -2,7 +2,7 @@ package storage
 
 import (
 	"fmt"
-	"math/rand/v2"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
