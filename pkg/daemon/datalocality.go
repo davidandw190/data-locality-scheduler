@@ -17,32 +17,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const maxNodesToMeasure = 10
-
-const (
-	// Storage service labels
-	StorageNodeLabel     = "node-capability/storage-service"
-	StorageTypeLabel     = "node-capability/storage-type"
-	StorageTechLabel     = "node-capability/storage-technology"
-	StorageCapacityLabel = "node-capability/storage-capacity-bytes"
-	BucketLabelPrefix    = "node-capability/storage-bucket-"
-
-	// Network labels
-	BandwidthPrefix = "node-capability/bandwidth-to-"
-	LatencyPrefix   = "node-capability/latency-to-"
-
-	BandwidthMeasurementInterval = 6 * time.Hour
-
-	// Edge-cloud labels
-	EdgeNodeLabel  = "node-capability/node-type"
-	EdgeNodeValue  = "edge"
-	CloudNodeValue = "cloud"
-
-	// Topology labels
-	RegionLabel = "topology.kubernetes.io/region"
-	ZoneLabel   = "topology.kubernetes.io/zone"
-)
-
 type DataLocalityCollector struct {
 	nodeName              string
 	clientset             kubernetes.Interface
@@ -64,7 +38,7 @@ func NewDataLocalityCollector(nodeName string, clientset kubernetes.Interface) *
 		bandwidthCache:        make(map[string]int64),
 		bandwidthLatencyCache: make(map[string]float64),
 		storageCache:          make(map[string]interface{}),
-		lastBandwidthUpdate:   time.Now().Add(-BandwidthMeasurementInterval), // we force immediate update
+		lastBandwidthUpdate:   time.Now().Add(-DefaultBandwidthMeasurementInterval), // we force immediate update
 	}
 }
 
@@ -123,7 +97,7 @@ func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) 
 	}
 
 	// network measurements
-	if time.Since(c.lastBandwidthUpdate) > BandwidthMeasurementInterval {
+	if time.Since(c.lastBandwidthUpdate) > DefaultBandwidthMeasurementInterval {
 		networkCtx, networkCancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer networkCancel()
 
@@ -408,7 +382,7 @@ func (c *DataLocalityCollector) collectNetworkMeasurements(ctx context.Context, 
 	nodesToMeasure := append(sameZoneNodes, sameRegionNodes...)
 	nodesToMeasure = append(nodesToMeasure, otherNodes...)
 
-	maxNodesToMeasure := maxNodesToMeasure
+	maxNodesToMeasure := MaxNodesToMeasure
 	if len(nodesToMeasure) > maxNodesToMeasure {
 		nodesToMeasure = nodesToMeasure[:maxNodesToMeasure]
 	}

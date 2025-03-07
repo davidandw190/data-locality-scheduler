@@ -16,13 +16,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const (
-	LabelPrefix  = "node-capability"
-	MaxScore     = 100
-	MinScore     = 10
-	DefaultScore = 50
-)
-
 type NodeCapabilityCollector struct {
 	nodeName      string
 	clientset     kubernetes.Interface
