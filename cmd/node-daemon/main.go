@@ -89,13 +89,6 @@ func main() {
 		klog.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
 
-	collector := daemon.NewNodeCapabilityCollector(nodeName, clientset)
-
-	var dataCollector *daemon.DataLocalityCollector
-	if enableDataLocality {
-		dataCollector = daemon.NewDataLocalityCollector(nodeName, clientset)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -107,24 +100,40 @@ func main() {
 		cancel()
 	}()
 
+	var collectors []daemon.NodeCollector
+
+	// primary node capability collector
+	capCollector := daemon.NewNodeCapabilityCollector(nodeName, clientset)
+	collectors = append(collectors, capCollector)
+
+	// optional data locality collector
+	var dataCollector daemon.NodeCollector
+	if enableDataLocality {
+		dataCollector = daemon.NewDataLocalityCollector(nodeName, clientset)
+		collectors = append(collectors, dataCollector)
+	}
+
 	if edgeNode || region != "" || zone != "" {
 		updateTopologyLabels(ctx, clientset, nodeName, edgeNode, region, zone)
 	}
 
-	go startHealthServer(healthServerPort, collector)
+	healthServer := startHealthServer(healthServerPort, collectors)
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		healthServer.Shutdown(shutdownCtx)
+	}()
 
 	klog.Info("Performing initial capability collection")
-	if err := collector.CollectAndUpdateCapabilities(ctx); err != nil {
-		klog.Errorf("Error collecting node capabilities: %v", err)
-	}
-
-	if enableDataLocality {
-		klog.Info("Collecting data locality information")
-		storageLabels, err := dataCollector.CollectStorageCapabilities(ctx)
+	for _, collector := range collectors {
+		klog.Infof("Running initial collection for %s", collector.Name())
+		labels, err := collector.Collect(ctx)
 		if err != nil {
-			klog.Warningf("Error collecting data locality information: %v", err)
-		} else if len(storageLabels) > 0 {
-			updateNodeLabels(ctx, clientset, nodeName, storageLabels)
+			klog.Errorf("Error during initial collection for %s: %v", collector.Name(), err)
+			continue
+		}
+		if len(labels) > 0 {
+			updateNodeLabels(ctx, clientset, nodeName, labels)
 		}
 	}
 
@@ -148,16 +157,16 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			if err := collector.CollectAndUpdateCapabilities(ctx); err != nil {
-				klog.Errorf("Error collecting node capabilities: %v", err)
-			}
-
-			if enableDataLocality {
-				storageLabels, err := dataCollector.CollectStorageCapabilities(ctx)
+			for _, collector := range collectors {
+				labels, err := collector.Collect(ctx)
 				if err != nil {
-					klog.Warningf("Error collecting data locality information: %v", err)
-				} else if len(storageLabels) > 0 {
-					updateNodeLabels(ctx, clientset, nodeName, storageLabels)
+					klog.Errorf("Error in collection for %s: %v", collector.Name(), err)
+					continue
+				}
+				if len(labels) > 0 {
+					updateNodeLabels(ctx, clientset, nodeName, labels)
+				} else {
+					klog.V(4).Infof("No label updates from %s", collector.Name())
 				}
 			}
 
@@ -168,7 +177,6 @@ func main() {
 	}
 }
 
-// updateTopologyLabels updates node topology labels
 func updateTopologyLabels(ctx context.Context, clientset kubernetes.Interface, nodeName string, edgeNode bool, region, zone string) {
 	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
@@ -185,29 +193,29 @@ func updateTopologyLabels(ctx context.Context, clientset kubernetes.Interface, n
 
 	// edge/cloud label
 	if edgeNode {
-		if updatedNode.Labels["node-capability/node-type"] != "edge" {
-			updatedNode.Labels["node-capability/node-type"] = "edge"
+		if updatedNode.Labels[daemon.EdgeNodeLabel] != daemon.EdgeNodeValue {
+			updatedNode.Labels[daemon.EdgeNodeLabel] = daemon.EdgeNodeValue
 			updated = true
 		}
 	} else {
-		if updatedNode.Labels["node-capability/node-type"] != "cloud" {
-			updatedNode.Labels["node-capability/node-type"] = "cloud"
+		if updatedNode.Labels[daemon.EdgeNodeLabel] != daemon.CloudNodeValue {
+			updatedNode.Labels[daemon.EdgeNodeLabel] = daemon.CloudNodeValue
 			updated = true
 		}
 	}
 
 	// region label
 	if region != "" {
-		if updatedNode.Labels["topology.kubernetes.io/region"] != region {
-			updatedNode.Labels["topology.kubernetes.io/region"] = region
+		if updatedNode.Labels[daemon.RegionLabel] != region {
+			updatedNode.Labels[daemon.RegionLabel] = region
 			updated = true
 		}
 	}
 
 	// zone label
 	if zone != "" {
-		if updatedNode.Labels["topology.kubernetes.io/zone"] != zone {
-			updatedNode.Labels["topology.kubernetes.io/zone"] = zone
+		if updatedNode.Labels[daemon.ZoneLabel] != zone {
+			updatedNode.Labels[daemon.ZoneLabel] = zone
 			updated = true
 		}
 	}
@@ -224,6 +232,10 @@ func updateTopologyLabels(ctx context.Context, clientset kubernetes.Interface, n
 
 // updateNodeLabels updates storage and bandwidth labels
 func updateNodeLabels(ctx context.Context, clientset kubernetes.Interface, nodeName string, labels map[string]string) {
+	if len(labels) == 0 {
+		return
+	}
+
 	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Failed to get node %s: %v", nodeName, err)
@@ -261,40 +273,58 @@ func updateNodeLabels(ctx context.Context, clientset kubernetes.Interface, nodeN
 	}
 }
 
-func startHealthServer(port int, collector *daemon.NodeCapabilityCollector) {
+func startHealthServer(port int, collectors []daemon.NodeCollector) *http.Server {
 	mux := http.NewServeMux()
 
-	// Health check endpoint
+	// health check endpoint
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
-	// Capabilities endpoint
+	// readiness check endpoint
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Ready"))
+	})
+
+	// capabilities endpoint
 	mux.HandleFunc("/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		capabilities := collector.GetCapabilities()
 
 		w.Write([]byte("{\n"))
-		i := 0
-		for key, value := range capabilities {
-			comma := ""
-			if i < len(capabilities)-1 {
-				comma = ","
+
+		for i, collector := range collectors {
+			capabilities := collector.GetCapabilities()
+
+			if i > 0 {
+				w.Write([]byte(",\n"))
+			}
+			w.Write([]byte(fmt.Sprintf("  \"%s\": {\n", collector.Name())))
+
+			j := 0
+			for key, value := range capabilities {
+				comma := ""
+				if j < len(capabilities)-1 {
+					comma = ","
+				}
+
+				value = strings.Replace(value, "\"", "\\\"", -1)
+				w.Write([]byte(fmt.Sprintf("    \"%s\": \"%s\"%s\n", key, value, comma)))
+				j++
 			}
 
-			value = strings.Replace(value, "\"", "\\\"", -1)
-			w.Write([]byte(fmt.Sprintf("  \"%s\": \"%s\"%s\n", key, value, comma)))
-			i++
+			w.Write([]byte("  }"))
 		}
-		w.Write([]byte("}\n"))
+
+		w.Write([]byte("\n}\n"))
 	})
 
 	// Version endpoint
 	mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(fmt.Sprintf("{\n  \"version\": \"%s\",\n  \"buildTime\": \"%s\"\n}\n",
-			version, buildTime)))
+		w.Write(fmt.Appendf(nil, "{\n  \"version\": \"%s\",\n  \"buildTime\": \"%s\"\n}\n",
+			version, buildTime))
 	})
 
 	server := &http.Server{
@@ -302,8 +332,12 @@ func startHealthServer(port int, collector *daemon.NodeCapabilityCollector) {
 		Handler: mux,
 	}
 
-	klog.Infof("Starting health server on :%d", port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		klog.Errorf("Health server failed: %v", err)
-	}
+	go func() {
+		klog.Infof("Starting health server on :%d", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			klog.Errorf("Health server failed: %v", err)
+		}
+	}()
+
+	return server
 }

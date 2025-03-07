@@ -17,6 +17,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func (c *DataLocalityCollector) Name() string {
+	return "DataLocalityCollector"
+}
+
 type DataLocalityCollector struct {
 	nodeName              string
 	clientset             kubernetes.Interface
@@ -42,7 +46,7 @@ func NewDataLocalityCollector(nodeName string, clientset kubernetes.Interface) *
 	}
 }
 
-func (c *DataLocalityCollector) CollectStorageCapabilities(ctx context.Context) (map[string]string, error) {
+func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string, error) {
 	labels := make(map[string]string)
 	startTime := time.Now()
 
@@ -485,4 +489,20 @@ func isNodeReady(node *v1.Node) bool {
 		}
 	}
 	return false
+}
+
+func (c *DataLocalityCollector) GetCapabilities() map[string]string {
+	c.bandwidthCacheMutex.RLock()
+	defer c.bandwidthCacheMutex.RUnlock()
+
+	result := make(map[string]string)
+	for nodeName, bandwidth := range c.bandwidthCache {
+		result[BandwidthPrefix+nodeName] = strconv.FormatInt(bandwidth, 10)
+	}
+
+	for nodeName, latency := range c.bandwidthLatencyCache {
+		result[LatencyPrefix+nodeName] = strconv.FormatFloat(latency, 'f', 2, 64)
+	}
+
+	return result
 }

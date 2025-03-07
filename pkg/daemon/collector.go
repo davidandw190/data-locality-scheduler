@@ -16,6 +16,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func (c *NodeCapabilityCollector) Name() string {
+	return "NodeCapabilityCollector"
+}
+
 type NodeCapabilityCollector struct {
 	nodeName      string
 	clientset     kubernetes.Interface
@@ -33,7 +37,7 @@ func NewNodeCapabilityCollector(nodeName string, clientset kubernetes.Interface)
 	}
 }
 
-func (c *NodeCapabilityCollector) CollectAndUpdateCapabilities(ctx context.Context) error {
+func (c *NodeCapabilityCollector) Collect(ctx context.Context) (map[string]string, error) {
 	klog.InfoS("Collecting node capabilities", "node", c.nodeName)
 
 	startTime := time.Now()
@@ -69,12 +73,24 @@ func (c *NodeCapabilityCollector) CollectAndUpdateCapabilities(ctx context.Conte
 	c.capabilities["collection-duration-ms"] = strconv.Itoa(int(time.Since(startTime).Milliseconds()))
 
 	if err := c.updateNodeLabels(ctx); err != nil {
-		return fmt.Errorf("failed to update node labels: %w", err)
+		return nil, fmt.Errorf("failed to update node labels: %w", err)
 	}
 
 	c.lastCollected = time.Now()
 
-	return nil
+	result := make(map[string]string)
+	for key, value := range c.capabilities {
+		labelKey := fmt.Sprintf("%s/%s", LabelPrefix, key)
+
+		if !isValidLabelKey(labelKey) || !isValidLabelValue(value) {
+			klog.Warning("Invalid label key or value, skipping", "key", labelKey, "value", value)
+			continue
+		}
+
+		result[labelKey] = value
+	}
+
+	return result, nil
 }
 
 func (c *NodeCapabilityCollector) collectPlatformInfo() {
