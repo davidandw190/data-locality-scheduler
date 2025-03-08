@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"maps"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -844,5 +846,7 @@ func isValidLabelValue(value string) bool {
 }
 
 func (c *NodeCapabilityCollector) GetCapabilities() map[string]string {
-	return c.capabilities
+	result := make(map[string]string)
+	maps.Copy(result, c.capabilities)
+	return result
 }

@@ -99,11 +99,17 @@ func (bg *BandwidthGraph) SetBandwidth(source, dest string, bandwidthBytesPerSec
 func (bg *BandwidthGraph) GetNetworkPath(source, dest string) *NetworkPath {
 	if source == "" || dest == "" {
 		klog.Warningf("Cannot get network path for empty node name: [%s] -> [%s]", source, dest)
+
+		bg.mu.RLock()
+		defaultBandwidth := bg.defaultBandwidth
+		defaultLatency := bg.defaultLatency
+		bg.mu.RUnlock()
+
 		return &NetworkPath{
 			SourceNode:  source,
 			DestNode:    dest,
-			Bandwidth:   bg.defaultBandwidth,
-			Latency:     bg.defaultLatency,
+			Bandwidth:   defaultBandwidth,
+			Latency:     defaultLatency,
 			MeasuredAt:  time.Time{},
 			Reliability: 0.5,
 			IsEstimated: true,
@@ -230,7 +236,9 @@ func (bg *BandwidthGraph) EstimateTransferTime(source, dest string, sizeBytes in
 
 	bandwidth := path.Bandwidth
 	if bandwidth <= 0 {
+		bg.mu.RLock()
 		bandwidth = bg.defaultBandwidth
+		bg.mu.RUnlock()
 	}
 
 	transferTime := float64(sizeBytes) / bandwidth
@@ -247,6 +255,7 @@ func (bg *BandwidthGraph) EstimateTransferTime(source, dest string, sizeBytes in
 	bg.mu.RLock()
 	nodeType := bg.nodeTypes[source]
 	bg.mu.RUnlock()
+
 	if nodeType == StorageTypeEdge && source != dest {
 		transferTime *= 1.2 // +20% to account for limited uplink
 	}

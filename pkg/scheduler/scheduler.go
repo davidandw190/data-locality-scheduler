@@ -321,6 +321,8 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 	existingStorageNodes := make(map[string]bool)
 
 	s.storageMutex.Lock()
+	defer s.storageMutex.Unlock()
+
 	for _, node := range nodes.Items {
 		if value, ok := node.Labels[StorageNodeLabel]; ok && value == "true" {
 			existingStorageNodes[node.Name] = true
@@ -459,7 +461,6 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 	s.storageIndex.PruneStaleBuckets()
 	s.storageIndex.PruneStaleDataItems()
 	s.storageIndex.MarkRefreshed()
-	s.storageMutex.Unlock()
 
 	klog.V(4).Info("Storage refresh complete")
 	return nil
