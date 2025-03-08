@@ -5,6 +5,7 @@ metadata:
   namespace: data-locality-scheduler
   labels:
     app: node-capability-daemon
+    component: monitoring
 spec:
   selector:
     matchLabels:
@@ -13,6 +14,7 @@ spec:
     metadata:
       labels:
         app: node-capability-daemon
+        component: monitoring
     spec:
       serviceAccountName: node-daemon
       containers:
