@@ -41,7 +41,6 @@ type NodeScore struct {
 	Score int
 }
 
-// Scheduler implements a data-locality aware Kubernetes scheduler
 type Scheduler struct {
 	clientset            kubernetes.Interface
 	schedulerName        string

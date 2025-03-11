@@ -11,7 +11,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// BandwidthGraph tracks network performance between nodes
 type BandwidthGraph struct {
 	// source->dest->path
 	pathMap     map[string]map[string]*NetworkPath
@@ -66,7 +65,6 @@ func (bg *BandwidthGraph) SetNodeTopology(nodeName, region, zone string, nodeTyp
 	bg.nodeTypes[nodeName] = nodeType
 }
 
-// SetBandwidth sets the bandwidth and latency between two nodes
 func (bg *BandwidthGraph) SetBandwidth(source, dest string, bandwidthBytesPerSec, latencyMs float64) {
 	if source == "" || dest == "" {
 		klog.Warningf("Cannot set bandwidth for empty node name: [%s] -> [%s]", source, dest)
@@ -407,7 +405,6 @@ func (bg *BandwidthGraph) PrintSummary() string {
 	return result.String()
 }
 
-// MockNetworkPaths adds mock network paths for testing
 func (bg *BandwidthGraph) MockNetworkPaths() {
 	bg.mu.Lock()
 	defer bg.mu.Unlock()

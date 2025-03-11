@@ -9,7 +9,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// StorageIndex tracks data storage across the cluster
 type StorageIndex struct {
 	dataItems     map[string]*DataItem
 	bucketNodes   map[string][]string
@@ -169,7 +168,6 @@ func (si *StorageIndex) RemoveStorageNode(nodeName string) {
 	klog.V(4).Infof("Removed storage node %s from index", nodeName)
 }
 
-// RegisterBucket associates a bucket with nodes
 func (si *StorageIndex) RegisterBucket(bucket string, nodes []string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -179,7 +177,6 @@ func (si *StorageIndex) RegisterBucket(bucket string, nodes []string) {
 	klog.V(4).Infof("Registered bucket %s on nodes %v", bucket, nodes)
 }
 
-// AddDataItem adds or updates a data item
 func (si *StorageIndex) AddDataItem(item *DataItem) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -251,7 +248,6 @@ func (si *StorageIndex) GetDataItem(urn string) (*DataItem, bool) {
 	return itemCopy, true
 }
 
-// GetBucketNodes returns the nodes containing a bucket
 func (si *StorageIndex) GetBucketNodes(bucket string) []string {
 	si.mu.RLock()
 	defer si.mu.RUnlock()
@@ -266,7 +262,6 @@ func (si *StorageIndex) GetBucketNodes(bucket string) []string {
 	return result
 }
 
-// GetStorageNodesForData returns storage nodes that contain the specified data
 func (si *StorageIndex) GetStorageNodesForData(urn string) []string {
 	si.mu.RLock()
 	defer si.mu.RUnlock()
@@ -452,8 +447,6 @@ func (si *StorageIndex) PruneStaleDataItems() int {
 	return count
 }
 
-// MockMinioData adds mock data for testing
-// This simulates the presence of data in MinIO buckets
 func (si *StorageIndex) MockMinioData() {
 	si.mu.Lock()
 	defer si.mu.Unlock()

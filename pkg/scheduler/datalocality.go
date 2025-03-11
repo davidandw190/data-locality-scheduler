@@ -51,7 +51,6 @@ func NewDataLocalityPriority(
 	}
 }
 
-// Score calculates a node's priority score based on data locality
 func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) {
 	startTime := time.Now()
 	defer func() {
@@ -96,7 +95,6 @@ func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) 
 	return dataScore, nil
 }
 
-// extractDataDependencies extracts data dependencies from pod annotations
 func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []DataDependency, error) {
 	var inputData []DataDependency
 	var outputData []DataDependency
@@ -370,7 +368,6 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 	return int(weightedScore / totalWeight)
 }
 
-// calculateDataWeight computes a weight for a data dependency
 func calculateDataWeight(data DataDependency) float64 {
 	sizeWeight := max(math.Log1p(float64(data.SizeBytes)/float64(1024*1024))+1.0, 1.0)
 

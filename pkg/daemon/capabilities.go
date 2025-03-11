@@ -739,7 +739,7 @@ func (c *NodeCapabilityCollector) updateNodeLabels(ctx context.Context) error {
 }
 
 func (c *NodeCapabilityCollector) executeCommand(command string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Increased timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, command, args...)
@@ -764,7 +764,6 @@ func (c *NodeCapabilityCollector) executeCommandWithSudo(command string, args ..
 	return c.executeCommand(command, args...)
 }
 
-// Sanitize the label value to ensure it's valid for Kubernetes
 func sanitizeValue(value string) string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 	sanitized := re.ReplaceAllString(value, "-")
