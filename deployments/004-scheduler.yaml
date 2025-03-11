@@ -5,8 +5,6 @@ metadata:
   namespace: data-locality-scheduler
   labels:
     app: data-locality-scheduler
-  annotations:
-    description: "Deployment for the data locality aware Kubernetes scheduler"
 spec:
   replicas: 1
   selector:
@@ -20,7 +18,7 @@ spec:
       serviceAccountName: data-locality-scheduler
       containers:
       - name: scheduler
-        image: data-locality-scheduler:latest # TODO: replace with image reference in prod
+        image: data-locality-scheduler:latest # TODO: replace with image reference
         imagePullPolicy: IfNotPresent
         args:
         - "--scheduler-name=data-locality-scheduler"

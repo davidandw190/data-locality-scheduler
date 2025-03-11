@@ -3,15 +3,11 @@ kind: ServiceAccount
 metadata:
   name: data-locality-scheduler
   namespace: data-locality-scheduler
-  annotations:
-    description: "Service account for the data locality aware scheduler"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: data-locality-scheduler-role
-  annotations:
-    description: "Role providing necessary permissions for the custom scheduler"
 rules:
 - apiGroups: [ "" ]
   resources: [ "endpoints" ]
@@ -45,8 +41,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: data-locality-scheduler-binding
-  annotations:
-    description: "Binding that grants the scheduler service account the necessary permissions"
 subjects:
 - kind: ServiceAccount
   name: data-locality-scheduler
@@ -61,15 +55,11 @@ kind: ServiceAccount
 metadata:
   name: node-daemon
   namespace: data-locality-scheduler
-  annotations:
-    description: "Service account for the node capability daemon"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: node-capability-daemon-role
-  annotations:
-    description: "Role providing necessary permissions for the node daemon"
 rules:
 - apiGroups: [ "" ]
   resources: [ "nodes" ]
@@ -88,8 +78,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: node-capability-daemon-binding
-  annotations:
-    description: "Binding that grants the node daemon the necessary permissions"
 subjects:
 - kind: ServiceAccount
   name: node-daemon

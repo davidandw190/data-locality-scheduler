@@ -326,7 +326,6 @@ func (c *DataLocalityCollector) detectStorageTechnology() (string, error) {
 			device = strings.Split(device, "p")[0] // removing partition number
 			device = strings.TrimRight(device, "0123456789")
 
-			// Check rotational status
 			rotaPath := fmt.Sprintf("/sys/block/%s/queue/rotational", device)
 			cmd = exec.Command("cat", rotaPath)
 			output, err = cmd.CombinedOutput()
@@ -442,7 +441,7 @@ func (c *DataLocalityCollector) mockBandwidthMeasurement(node v1.Node) (int64, f
 
 	// all these are estimations based on topology relationship
 	if c.zone != "" && c.zone == targetZone {
-		// Same zone
+		// same zone
 		if c.nodeType == EdgeNodeValue && targetType == EdgeNodeValue {
 			bandwidth = int64(float64(500000000) * jitter) // 500 MB/s edge-edge
 			latency = 1.0 / jitter                         // 1ms
@@ -454,7 +453,7 @@ func (c *DataLocalityCollector) mockBandwidthMeasurement(node v1.Node) (int64, f
 			latency = 1.0 / jitter                         // 1ms
 		}
 	} else if c.region != "" && c.region == targetRegion {
-		// Same region, different zone
+		// same region, different zone
 		if c.nodeType == EdgeNodeValue && targetType == EdgeNodeValue {
 			bandwidth = int64(float64(200000000) * jitter) // 200 MB/s edge-edge
 			latency = 5.0 / jitter                         // 5ms
@@ -466,7 +465,7 @@ func (c *DataLocalityCollector) mockBandwidthMeasurement(node v1.Node) (int64, f
 			latency = 10.0 / jitter                        // 10ms
 		}
 	} else {
-		// Different regions
+		// different regions
 		if c.nodeType == EdgeNodeValue && targetType == EdgeNodeValue {
 			bandwidth = int64(float64(50000000) * jitter) // 50 MB/s edge-edge
 			latency = 50.0 / jitter                       // 50ms

@@ -36,7 +36,6 @@ const (
 	storageRefreshInterval = 5 * time.Minute
 )
 
-// NodeScore represents a node's score used for scheduling
 type NodeScore struct {
 	Name  string
 	Score int
@@ -54,10 +53,8 @@ type Scheduler struct {
 	dataLocalityPriority *DataLocalityPriority
 }
 
-// PriorityFunc is a function that scores nodes for scheduling
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
 
-// NewScheduler creates a new custom scheduler
 func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Scheduler {
 	return &Scheduler{
 		clientset:      clientset,
@@ -69,7 +66,6 @@ func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Schedul
 	}
 }
 
-// SetStorageIndex sets the storage index
 func (s *Scheduler) SetStorageIndex(idx *storage.StorageIndex) {
 	s.storageMutex.Lock()
 	defer s.storageMutex.Unlock()
@@ -77,7 +73,6 @@ func (s *Scheduler) SetStorageIndex(idx *storage.StorageIndex) {
 	s.storageIndex = idx
 }
 
-// SetBandwidthGraph sets the bandwidth graph
 func (s *Scheduler) SetBandwidthGraph(graph *storage.BandwidthGraph) {
 	s.storageMutex.Lock()
 	defer s.storageMutex.Unlock()
@@ -85,7 +80,6 @@ func (s *Scheduler) SetBandwidthGraph(graph *storage.BandwidthGraph) {
 	s.bandwidthGraph = graph
 }
 
-// Run starts the scheduler
 func (s *Scheduler) Run(ctx context.Context) error {
 	s.initPriorityFunctions()
 	s.dataLocalityPriority = NewDataLocalityPriority(s.storageIndex, s.bandwidthGraph)
@@ -115,7 +109,6 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	return nil
 }
 
-// initPriorityFunctions initializes the default priority functions
 func (s *Scheduler) initPriorityFunctions() {
 	s.priorityFuncs = append(s.priorityFuncs, s.scoreResourcePriority)
 	s.priorityFuncs = append(s.priorityFuncs, s.scoreNodeAffinity)
@@ -123,7 +116,6 @@ func (s *Scheduler) initPriorityFunctions() {
 	s.priorityFuncs = append(s.priorityFuncs, s.scoreNodeCapabilities)
 }
 
-// initStorageInformation initializes storage information from node labels
 func (s *Scheduler) initStorageInformation(ctx context.Context) error {
 	klog.Info("Initializing storage information")
 
@@ -259,7 +251,6 @@ func (s *Scheduler) initStorageInformation(ctx context.Context) error {
 	return nil
 }
 
-// initBandwidthInformation initializes the bandwidth graph from node labels
 func (s *Scheduler) initBandwidthInformation(nodes []v1.Node) {
 	s.bandwidthGraph.SetTopologyDefaults(
 		1e9, 0.1, // local: 1 GB/s, 0.1ms latency
@@ -268,7 +259,6 @@ func (s *Scheduler) initBandwidthInformation(nodes []v1.Node) {
 		50e6, 20.0, // edge-cloud: 50 MB/s, 20ms latency
 	)
 
-	// bandwidth info from node labels
 	for _, source := range nodes {
 		for _, dest := range nodes {
 			if source.Name == dest.Name {

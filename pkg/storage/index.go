@@ -31,7 +31,6 @@ func NewStorageIndex() *StorageIndex {
 	}
 }
 
-// RegisterOrUpdateStorageNode adds or updates a storage node
 func (si *StorageIndex) RegisterOrUpdateStorageNode(node *StorageNode) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -66,7 +65,6 @@ func (si *StorageIndex) RegisterOrUpdateStorageNode(node *StorageNode) {
 		node.Name, string(node.NodeType), node.Region, node.Zone)
 }
 
-// removeNodeFromRegion removes a node from a region mapping
 func (si *StorageIndex) removeNodeFromRegion(nodeName, region string) {
 	nodes := si.regionNodes[region]
 	for i, name := range nodes {
@@ -78,7 +76,6 @@ func (si *StorageIndex) removeNodeFromRegion(nodeName, region string) {
 	}
 }
 
-// addNodeToRegion adds a node to a region mapping
 func (si *StorageIndex) addNodeToRegion(nodeName, region string) {
 	for _, name := range si.regionNodes[region] {
 		if name == nodeName {
@@ -88,7 +85,6 @@ func (si *StorageIndex) addNodeToRegion(nodeName, region string) {
 	si.regionNodes[region] = append(si.regionNodes[region], nodeName)
 }
 
-// removeNodeFromZone removes a node from a zone mapping
 func (si *StorageIndex) removeNodeFromZone(nodeName, zone string) {
 	nodes := si.zoneNodes[zone]
 	for i, name := range nodes {
@@ -100,7 +96,6 @@ func (si *StorageIndex) removeNodeFromZone(nodeName, zone string) {
 	}
 }
 
-// addNodeToZone adds a node to a zone mapping
 func (si *StorageIndex) addNodeToZone(nodeName, zone string) {
 	for _, name := range si.zoneNodes[zone] {
 		if name == nodeName {
@@ -284,7 +279,7 @@ func (si *StorageIndex) GetStorageNodesForData(urn string) []string {
 	}
 
 	// otherwise infer from bucket information
-	// Assuming URN format: bucket/path/to/data
+	// assuming URN format: bucket/path/to/data
 	parts := strings.SplitN(urn, "/", 2)
 	if len(parts) < 1 {
 		return nil

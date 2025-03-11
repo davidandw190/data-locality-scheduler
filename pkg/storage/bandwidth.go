@@ -226,8 +226,7 @@ func (bg *BandwidthGraph) estimateFromTopology(source, dest string) *NetworkPath
 	}
 }
 
-// EstimateTransferTime calculates the estimated time to transfer data between nodes
-func (bg *BandwidthGraph) EstimateTransferTime(source, dest string, sizeBytes int64) float64 {
+func (bg *BandwidthGraph) EstimateTransferTimeBetweenNodes(source, dest string, sizeBytes int64) float64 {
 	if sizeBytes <= 0 {
 		return 0
 	}
@@ -432,23 +431,23 @@ func (bg *BandwidthGraph) MockNetworkPaths() {
 
 			// determine path characteristics based on topology relationship
 			if sourceZone != "" && sourceZone == destZone {
-				// Same zone
+				// same zone
 				bandwidth = bg.sameZoneBandwidth
 				latency = bg.sameZoneLatency
 				reliability = 0.9
 			} else if sourceRegion != "" && sourceRegion == destRegion {
-				// Same region
+				// same region
 				bandwidth = bg.sameRegionBandwidth
 				latency = bg.sameRegionLatency
 				reliability = 0.8
 			} else if (sourceType == StorageTypeEdge && destType == StorageTypeCloud) ||
 				(sourceType == StorageTypeCloud && destType == StorageTypeEdge) {
-				// Edge-cloud connection
+				// edge-cloud
 				bandwidth = bg.edgeCloudBandwidth
 				latency = bg.edgeCloudLatency
 				reliability = 0.7
 			} else {
-				// Cross-region
+				// cross-region
 				bandwidth = bg.crossRegionBandwidth
 				latency = bg.crossRegionLatency
 				reliability = 0.6

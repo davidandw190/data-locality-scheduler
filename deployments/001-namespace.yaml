@@ -4,5 +4,3 @@ metadata:
   name: data-locality-scheduler
   labels:
     name: data-locality-scheduler
-  annotations:
-    description: "Dedicated namespace for custom Kubernetes scheduler extension components"

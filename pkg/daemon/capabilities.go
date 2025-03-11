@@ -360,7 +360,6 @@ func (c *NodeCapabilityCollector) collectMemoryCapabilities() error {
 	return nil
 }
 
-// detectMemoryType attempts to identify the type of memory (DDR4, DDR5, etc.)
 func (c *NodeCapabilityCollector) detectMemoryType() string {
 	if output, err := c.executeCommandWithSudo("dmidecode", "-t", "memory"); err == nil {
 		if strings.Contains(string(output), "DDR5") {

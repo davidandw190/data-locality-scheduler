@@ -89,7 +89,7 @@ func main() {
 		sameZoneBandwidth := sameZoneBandwidthMBps * 1024 * 1024
 		sameRegionBandwidth := sameRegionBandwidthMBps * 1024 * 1024
 		edgeToCloudBandwidth := edgeToCloudBandwidthMBps * 1024 * 1024
-		bandwidthGraph := storage.NewBandwidthGraph(10 * 1024 * 1024) // 10 MB/s default for unknown connections
+		bandwidthGraph := storage.NewBandwidthGraph(10 * 1024 * 1024) // 10 MB/s default
 
 		storageIndex := storage.NewStorageIndex()
 

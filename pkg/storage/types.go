@@ -4,7 +4,6 @@ import (
 	"time"
 )
 
-// StorageNodeType classifies nodes as edge or cloud
 type StorageNodeType string
 
 const (
@@ -12,7 +11,6 @@ const (
 	StorageTypeCloud StorageNodeType = "cloud"
 )
 
-// StorageServiceType identifies the type of storage service
 type StorageServiceType string
 
 const (

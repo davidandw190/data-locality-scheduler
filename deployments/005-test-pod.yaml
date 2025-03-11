@@ -4,13 +4,12 @@ metadata:
   name: test-pod
   namespace: data-locality-scheduler
   annotations:
-    description: "Test pod that utilizes the data locality scheduler"
-    data.scheduler.thesis/input-1: "eo-scenes/sample-scene.tif,104857600,10,4,geotiff"
+    data.scheduler.thesis/input-1: "eo-scenes/raw-scene.tif,104857600,10,4,geotiff"
     data.scheduler.thesis/output-1: "cog-data/processed-scene.tif,52428800,0,4,cog"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-  - name: eo-processor
+  - name: eo-`processor`
     image: python:3.9
     command: [ "sleep", "3600" ]
     resources:

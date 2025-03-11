@@ -289,7 +289,7 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 			}
 
 			// otherwise we calculate transfer time
-			transferTime := p.bandwidthGraph.EstimateTransferTime(storageNode, nodeName, data.SizeBytes)
+			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(storageNode, nodeName, data.SizeBytes)
 			if transferTime < bestTransferTime {
 				bestTransferTime = transferTime
 				bestStorageNode = storageNode
@@ -347,7 +347,7 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 				break
 			}
 
-			transferTime := p.bandwidthGraph.EstimateTransferTime(nodeName, storageNode, data.SizeBytes)
+			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(nodeName, storageNode, data.SizeBytes)
 			if transferTime < bestTransferTime {
 				bestTransferTime = transferTime
 				bestStorageNode = storageNode
