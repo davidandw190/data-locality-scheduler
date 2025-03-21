@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
-	"github.com/minio/minio-go/v7"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -96,22 +95,8 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		klog.Warningf("Continuing with limited storage awareness")
 	}
 
-	minioClient := storage.NewMinioClient(s.clientset, s.storageIndex, "data-locality-scheduler")
-	if err := minioClient.DiscoverMinioInstances(ctx); err != nil {
-		klog.Warningf("Failed to discover MinIO instances: %v", err)
-	} else {
-		if err := minioClient.IndexAllBuckets(ctx); err != nil {
-			klog.Warningf("Failed to index MinIO buckets: %v", err)
-		}
-		go minioClient.RunPeriodicRefresh(ctx, 5*time.Minute)
-	}
-
-	// MOCK DATA
-	if s.storageIndex.GetAllStorageNodes() == nil || len(s.storageIndex.GetAllStorageNodes()) == 0 {
-		s.storageIndex.MockMinioData()
-		s.bandwidthGraph.MockNetworkPaths()
-		klog.Info("Using mock storage data for initial testing")
-	}
+	s.storageIndex.MockMinioData()
+	s.bandwidthGraph.MockNetworkPaths()
 
 	go s.refreshStorageDataPeriodically(ctx)
 	go s.startHealthCheckServer(ctx)
@@ -709,33 +694,28 @@ func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 	}
 
 	if pod.Annotations != nil {
-		// Check if this is a serverless function
-		if _, ok := pod.Annotations["scheduler.serverless/function"]; ok {
-			// For serverless functions, data locality is more important
+		if _, ok := pod.Annotations["scheduler.thesis/data-intensive"]; ok {
 			weights = []float64{
 				0.2, // Resource priority
 				0.1, // Node affinity
-				0.2, // Node type (edge/cloud becomes more important for functions)
+				0.1, // Node type
 				0.1, // Node capabilities
-				0.4, // Data locality (higher weight for functions)
-			}
-			
-			// For data-intensive functions, data locality is even more important
-			if _, ok := pod.Annotations["scheduler.serverless/data-intensive"]; ok {
-				weights[4] = 0.5 // Increase data locality weight
-				weights[2] = 0.1 // Decrease node type weight
-			}
-			
-			// For compute-intensive functions, resource priority is more important
-			if _, ok := pod.Annotations["scheduler.serverless/compute-intensive"]; ok {
-				weights[0] = 0.4 // Increase resource priority weight
-				weights[4] = 0.2 // Decrease data locality weight
+				0.5, // Data locality (higher)
 			}
 		}
 
-		// Explicit preference for edge nodes
+		if _, ok := pod.Annotations["scheduler.thesis/compute-intensive"]; ok {
+			weights = []float64{
+				0.5, // Resource priority (higher)
+				0.2, // Node affinity
+				0.1, // Node type
+				0.1, // Node capabilities
+				0.1, // Data locality (lower)
+			}
+		}
+
 		if _, ok := pod.Annotations["scheduler.thesis/prefer-edge"]; ok {
-			weights[2] = 0.3 // Increase node type weight
+			weights[2] = 0.3
 		}
 	}
 
@@ -1219,3 +1199,128 @@ func hasGPUCapability(node *v1.Node) bool {
 			return true
 		}
 	}
+
+	return false
+}
+
+func hasFastStorage(node *v1.Node) bool {
+	// fast storage labels
+	if tech, ok := node.Labels["node-capability/storage-technology"]; ok {
+		if tech == "nvme" || tech == "ssd" {
+			return true
+		}
+	}
+
+	// explicit fast storage label
+	if val, ok := node.Labels["node-capability/fast-storage"]; ok && val == "true" {
+		return true
+	}
+
+	return false
+}
+
+func podNeedsGPU(pod *v1.Pod) bool {
+	if pod.Annotations != nil {
+		if _, ok := pod.Annotations["scheduler.thesis/requires-gpu"]; ok {
+			return true
+		}
+	}
+
+	for _, container := range pod.Spec.Containers {
+		if container.Resources.Requests != nil {
+			for resourceName := range container.Resources.Requests {
+				if strings.Contains(string(resourceName), "gpu") ||
+					strings.Contains(string(resourceName), "nvidia.com") {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+func podNeedsFastStorage(pod *v1.Pod) bool {
+	if pod.Annotations != nil {
+		if _, ok := pod.Annotations["scheduler.thesis/requires-fast-storage"]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func nodeHasLabelKey(node *v1.Node, key string) bool {
+	_, exists := node.Labels[key]
+	return exists
+}
+
+func nodeHasValueForKey(node *v1.Node, key string, values []string) bool {
+	if value, exists := node.Labels[key]; exists {
+		for _, v := range values {
+			if value == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func nodeMatchesNumericComparison(node *v1.Node, key string, op v1.NodeSelectorOperator, values []string) bool {
+	if val, exists := node.Labels[key]; exists && len(values) > 0 {
+		nodeVal, err1 := strconv.Atoi(val)
+		compareVal, err2 := strconv.Atoi(values[0])
+
+		if err1 == nil && err2 == nil {
+			if op == v1.NodeSelectorOpGt {
+				return nodeVal > compareVal
+			} else if op == v1.NodeSelectorOpLt {
+				return nodeVal < compareVal
+			}
+		}
+	}
+	return false
+}
+
+func extractPodCapabilityRequirements(pod *v1.Pod) map[string]string {
+	capabilities := make(map[string]string)
+
+	if pod.Annotations != nil {
+		for key, value := range pod.Annotations {
+			if strings.HasPrefix(key, "scheduler.thesis/capability-") {
+				capName := strings.TrimPrefix(key, "scheduler.thesis/capability-")
+				capabilities[capName] = value
+			}
+		}
+
+		if _, ok := pod.Annotations["scheduler.thesis/requires-gpu"]; ok {
+			capabilities["gpu-accelerated"] = "true"
+		}
+
+		if _, ok := pod.Annotations["scheduler.thesis/requires-fast-storage"]; ok {
+			capabilities["fast-storage"] = "true"
+		}
+	}
+
+	return capabilities
+}
+
+func tolerationsTolerateTaint(tolerations []v1.Toleration, taint *v1.Taint) bool {
+	for _, toleration := range tolerations {
+		if toleration.Effect == taint.Effect &&
+			(toleration.Key == taint.Key || toleration.Key == "") &&
+			(toleration.Value == taint.Value || toleration.Operator == v1.TolerationOpExists) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(slice []string, str string) bool {
+	for _, item := range slice {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
