@@ -15,8 +15,7 @@ import (
 type DataDependency struct {
 	URN            string
 	SizeBytes      int64
-	ProcessingTime int
-	Priority       int
+	ProcessingTime int // opt - seconds
 	DataType       string
 }
 
@@ -133,14 +132,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				}
 			}
 
-			// optional priority
-			priority := 3 // default medium
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && p >= 1 && p <= 5 {
-					priority = p
-				}
-			}
-
 			// optional data type
 			dataType := "generic"
 			if len(parts) > 4 {
@@ -151,7 +142,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
 				DataType:       dataType,
 			})
 		} else if strings.HasPrefix(k, "data.scheduler.thesis/output-") {
@@ -182,14 +172,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				}
 			}
 
-			// optional priority
-			priority := 3 // default medium
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && p >= 1 && p <= 5 {
-					priority = p
-				}
-			}
-
 			// optional data type
 			dataType := "generic"
 			if len(parts) > 4 {
@@ -200,7 +182,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
 				DataType:       dataType,
 			})
 		}
@@ -219,7 +200,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: 30,
-				Priority:       4,
 				DataType:       "eo-imagery",
 			})
 		}
@@ -238,7 +218,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: 0,
-				Priority:       4,
 				DataType:       "cog",
 			})
 		}
@@ -369,12 +348,13 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 }
 
 func calculateDataWeight(data DataDependency) float64 {
-	sizeWeight := max(math.Log1p(float64(data.SizeBytes)/float64(1024*1024))+1.0, 1.0)
+	sizeWeight := math.Log1p(float64(data.SizeBytes)/float64(1024*1024)) + 1.0
 
-	priorityFactor := float64(data.Priority) / 3.0
-	weight := sizeWeight * priorityFactor
+	if sizeWeight < 1.0 {
+		sizeWeight = 1.0
+	}
 
-	return weight
+	return sizeWeight
 }
 
 func calculateScoreFromTransferTime(transferTime float64, maxScore int) int {
