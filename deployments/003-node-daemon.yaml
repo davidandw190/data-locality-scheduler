@@ -19,7 +19,7 @@ spec:
       serviceAccountName: node-daemon
       containers:
       - name: node-capability-daemon
-        image: localhost:5000/node-daemon:latest
+        image: node-daemon:latest
         imagePullPolicy: IfNotPresent
         args:
         - "--collection-interval=60"
