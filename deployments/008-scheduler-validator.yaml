@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-validator
+  namespace: data-locality-scheduler
+data:
+  validate.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "=========================================================="
+    echo "Data Locality Scheduler Validation"
+    echo "=========================================================="
+
+    echo -e "\n1. Cluster Node Information:"
+    kubectl get nodes -o wide
+
+    echo -e "\n2. Node Capability Labels:"
+    for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
+      echo -e "\nNode: $node"
+      kubectl get node $node -o json | jq -r '.metadata.labels | with_entries(select(.key | startswith("node-capability")))'
+    done
+
+    echo -e "\n3. Storage Services:"
+    kubectl get pods -n data-locality-scheduler -l app=minio -o wide
+    kubectl get pods -n data-locality-scheduler -l app=minio-edge -o wide
+
+    echo -e "\n4. Test Workloads Placement:"
+    kubectl get pods -n data-locality-scheduler -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase | grep -v "minio\|scheduler\|daemon\|validator\|setup"
+
+    echo -e "\n5. Data Locality Analysis:"
+    for pod in $(kubectl get pods -n data-locality-scheduler -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -v "minio\|scheduler\|daemon\|validator\|setup"); do
+      echo -e "\nPod: $pod"
+      POD_NODE=$(kubectl get pod -n data-locality-scheduler $pod -o jsonpath='{.spec.nodeName}')
+      NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+      NODE_ZONE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}')
+      NODE_REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+      
+      echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Zone: $NODE_ZONE, Region: $NODE_REGION)"
+      
+      if kubectl get pod -n data-locality-scheduler $pod -o jsonpath='{.metadata.annotations}' | grep -q 'data.scheduler.thesis'; then
+        echo "Data dependencies:"
+        kubectl get pod -n data-locality-scheduler $pod -o json | jq -r '.metadata.annotations | with_entries(select(.key | startswith("data.scheduler.thesis")))'
+      fi
+      
+      if kubectl get pod -n data-locality-scheduler $pod -o jsonpath='{.metadata.annotations}' | grep -q 'prefer-edge'; then
+        echo "Pod prefers edge nodes"
+        if [[ "$NODE_TYPE" == "edge" ]]; then
+          echo "✅ Successfully scheduled on edge node!"
+        else
+          echo "❌ Scheduled on cloud node despite edge preference!"
+        fi
+      elif kubectl get pod -n data-locality-scheduler $pod -o jsonpath='{.metadata.annotations}' | grep -q 'prefer-cloud'; then
+        echo "Pod prefers cloud nodes"
+        if [[ "$NODE_TYPE" == "cloud" ]]; then
+          echo "✅ Successfully scheduled on cloud node!"
+        else
+          echo "❌ Scheduled on edge node despite cloud preference!"
+        fi
+      fi
+      
+      # Analyze data locality by checking storage pods location
+      for storage_pod in $(kubectl get pods -n data-locality-scheduler -l 'app in (minio,minio-edge)' -o jsonpath='{.items[*].metadata.name}'); do
+        STORAGE_NODE=$(kubectl get pod -n data-locality-scheduler $storage_pod -o jsonpath='{.spec.nodeName}')
+        
+        if [[ "$STORAGE_NODE" == "$POD_NODE" ]]; then
+          echo "✅ Perfect data locality - pod scheduled on same node as storage pod $storage_pod!"
+        elif kubectl get node $STORAGE_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}' | grep -q "$NODE_ZONE"; then
+          echo "👍 Good data locality - pod and storage pod $storage_pod in same zone"
+        elif kubectl get node $STORAGE_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}' | grep -q "$NODE_REGION"; then
+          echo "🆗 Acceptable data locality - pod and storage pod $storage_pod in same region"
+        else
+          echo "⚠️ Pod and storage pod $storage_pod in different regions"
+        fi
+      done
+    done
+
+    echo -e "\n6. Scheduler Logs (snippets):"
+    kubectl logs -n data-locality-scheduler deployment/data-locality-scheduler | grep -i -E "datalocality|scheduling|score" | tail -15
+
+    echo -e "\n7. Node Daemon Logs (snippet from one node):"
+    NODE_DAEMON_POD=$(kubectl get pods -n data-locality-scheduler -l app=node-capability-daemon -o jsonpath='{.items[0].metadata.name}')
+    kubectl logs -n data-locality-scheduler $NODE_DAEMON_POD | grep -i "storage\|capability" | tail -10
+
+    echo -e "\n8. Scheduler Endpoints Info:"
+    SCHEDULER_POD=$(kubectl get pod -n data-locality-scheduler -l app=data-locality-scheduler -o jsonpath='{.items[0].metadata.name}')
+    kubectl port-forward -n data-locality-scheduler $SCHEDULER_POD 8080:8080 &
+    PORT_FORWARD_PID=$!
+    sleep 3
+
+    echo -e "\nStorage Summary:"
+    curl -s localhost:8080/storage-summary | head -20
+
+    echo -e "\nBandwidth Summary:" 
+    curl -s localhost:8080/bandwidth-summary | head -20
+
+    # Kill port-forward
+    kill $PORT_FORWARD_PID
+
+    echo -e "\n=========================================================="
+    echo "Validation Complete"
+    echo "=========================================================="
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scheduler-validator
+  namespace: data-locality-scheduler
+spec:
+  containers:
+  - name: validator
+    image: bitnami/kubectl:latest
+    command: [ "/bin/bash", "/scripts/validate.sh" ]
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+    volumeMounts:
+    - name: scripts
+      mountPath: /scripts
+  volumes:
+  - name: scripts
+    configMap:
+      name: scheduler-validator
+      defaultMode: 755
+  restartPolicy: Never
+  serviceAccountName: data-locality-scheduler
