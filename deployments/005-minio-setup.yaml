@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-setup-script
+  namespace: data-locality-scheduler
+data:
+  setup.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "Setting up MinIO buckets and test data..."
+
+    # Wait for MinIO to be ready
+    until mc alias set myminio http://minio:9000 minioadmin minioadmin; do
+      echo "Waiting for MinIO service..."
+      sleep 2
+    done
+
+    # Create test buckets
+    mc mb myminio/test-bucket || true
+    mc mb myminio/results-bucket || true
+    mc mb myminio/edge-bucket || true
+    mc mb myminio/cloud-bucket || true
+
+    # Create test data files
+    echo '{"name":"test-data","content":"test data for locality scheduling","size":1048576}' > /tmp/test-data.json
+    echo '{"name":"edge-data","content":"data originating from edge device","size":1048576}' > /tmp/edge-data.json
+    echo '{"name":"cloud-data","content":"data originating from cloud service","size":1048576}' > /tmp/cloud-data.json
+
+    # Upload test data
+    mc cp /tmp/test-data.json myminio/test-bucket/test-data.json
+    mc cp /tmp/edge-data.json myminio/edge-bucket/edge-data.json
+    mc cp /tmp/cloud-data.json myminio/cloud-bucket/cloud-data.json
+
+    # Also set up edge MinIO instances if available
+    for region in 1 2; do
+      echo "Setting up region-$region edge MinIO if available..."
+      if mc alias set edger$region http://minio-edge-region$region:9000 minioadmin minioadmin 2>/dev/null; then
+        mc mb edger$region/edge-bucket || true
+        mc cp /tmp/edge-data.json edger$region/edge-bucket/edge-data.json
+        echo "Region $region edge MinIO setup complete"
+      else
+        echo "Region $region edge MinIO not available, skipping"
+      fi
+    done
+
+    # List all objects
+    echo "Listing all MinIO objects:"
+    mc ls myminio/test-bucket/
+    mc ls myminio/edge-bucket/
+    mc ls myminio/cloud-bucket/
+
+    echo "MinIO setup complete."
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: minio-setup
+  namespace: data-locality-scheduler
+spec:
+  containers:
+  - name: mc
+    image: minio/mc
+    command: [ "/bin/sh", "-c" ]
+    args:
+    - "/scripts/setup.sh"
+    volumeMounts:
+    - name: scripts
+      mountPath: /scripts
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+  volumes:
+  - name: scripts
+    configMap:
+      name: minio-setup-script
+      defaultMode: 755
+  restartPolicy: OnFailure

@@ -1,23 +1,23 @@
-# minio-storage-test.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: minio-test-pvc
+  name: minio-pv-claim
   namespace: data-locality-scheduler
 spec:
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: minio-storage
+  name: minio
   namespace: data-locality-scheduler
   labels:
     app: minio
+    app.kubernetes.io/component: storage-service
 spec:
   selector:
     matchLabels:
@@ -28,6 +28,7 @@ spec:
     metadata:
       labels:
         app: minio
+        app.kubernetes.io/component: storage-service
     spec:
       containers:
       - name: minio
@@ -35,25 +36,27 @@ spec:
         args:
         - server
         - /data
+        - --console-address
+        - :9001
         env:
         - name: MINIO_ROOT_USER
           value: "minioadmin"
         - name: MINIO_ROOT_PASSWORD
           value: "minioadmin"
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "250m"
-            memory: "256Mi"
         ports:
         - containerPort: 9000
           name: api
         - containerPort: 9001
           name: console
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
         volumeMounts:
-        - name: data
+        - name: storage
           mountPath: /data
         readinessProbe:
           httpGet:
@@ -62,17 +65,18 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 10
       volumes:
-      - name: data
+      - name: storage
         persistentVolumeClaim:
-          claimName: minio-test-pvc
+          claimName: minio-pv-claim
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: minio-service
+  name: minio
   namespace: data-locality-scheduler
   labels:
     app: minio
+    app.kubernetes.io/component: storage-service
 spec:
   ports:
   - port: 9000
