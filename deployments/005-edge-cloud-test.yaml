@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge-cloud-test-data
+  namespace: data-locality-scheduler
+data:
+  edge-data.json: |
+    {"name":"edge-dataset","timestamp":"2025-03-22T10:00:00Z","source":"edge-device"}
+  cloud-data.json: |
+    {"name":"cloud-dataset","timestamp":"2025-03-22T10:00:00Z","source":"cloud-service"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-preferring-workload
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "edge-bucket/edge-data.json,1048576,5,3,json"
+    scheduler.thesis/prefer-edge: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: edge-processor
+    image: python:3.9
+    command: [ "python", "-c", "import time; print('Processing edge data...'); time.sleep(3600)" ]
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cloud-preferring-workload
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "cloud-bucket/cloud-data.json,1048576,5,3,json"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: cloud-processor
+    image: python:3.9
+    command: [ "python", "-c", "import time; print('Processing cloud data...'); time.sleep(3600)" ]
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region2-workload
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "edge-bucket/edge-data.json,1048576,5,3,json"
+    scheduler.thesis/prefer-edge: "true"
+    topology.kubernetes.io/region: "region-2"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: region2-processor
+    image: python:3.9
+    command: [ "python", "-c", "import time; print('Processing region-2 data...'); time.sleep(3600)" ]
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  restartPolicy: Never
