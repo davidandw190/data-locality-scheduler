@@ -19,13 +19,13 @@ spec:
       serviceAccountName: node-daemon
       containers:
       - name: node-capability-daemon
-        image: node-daemon:latest
+        image: localhost:5000/node-daemon:latest
         imagePullPolicy: IfNotPresent
         args:
         - "--collection-interval=60"
         - "--enable-data-locality=true"
         - "--health-port=8080"
-        - "--v=2"
+        - "--v=4"
         env:
         - name: NODE_NAME
           valueFrom:
@@ -67,7 +67,7 @@ spec:
           readOnly: true
         - name: dev
           mountPath: /dev
-          readOnly: false # to allow K8s to write to /dev/termination-log
+          readOnly: false
         - name: proc
           mountPath: /proc
           readOnly: true
