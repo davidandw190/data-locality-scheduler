@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -59,30 +61,20 @@ func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string,
 
 	c.detectAndSetNodeTopology(node, labels)
 
-	minioDetector := NewMinioDetector(c.clientset, c.nodeName, nil)
-	hasMinio, minioBuckets, err := minioDetector.DetectLocalMinioService(ctx)
+	storageIndex := storage.NewStorageIndex()
+	minioIndexer := minio.NewIndexer(storageIndex, 5*time.Minute)
+
+	detector := NewMinioDetector(c.clientset, c.nodeName, minioIndexer)
+	hasMinio, minioBuckets, err := detector.DetectLocalMinioService(ctx)
 
 	if err != nil {
-		klog.Warningf("Error detecting Minio: %v, continuing with partial information", err)
+		klog.Warningf("Error detecting Minio: %v", err)
 	}
 
 	if hasMinio {
-		labels[StorageNodeLabel] = "true"
-		labels[StorageTypeLabel] = "object"
-		labels[StorageTechLabel] = "minio"
-
-		for _, bucket := range minioBuckets {
-			labels[BucketLabelPrefix+bucket] = "true"
-		}
-
-		storageCapacity := minioDetector.getStorageCapacity()
-		if storageCapacity > 0 {
-			labels[StorageCapacityLabel] = strconv.FormatInt(storageCapacity, 10)
-		}
-
+		detector.AddMinioLabelsToNode(labels, minioBuckets)
 		klog.V(2).Infof("Detected Minio on node %s with %d buckets", c.nodeName, len(minioBuckets))
 	} else {
-		// No Minio - check for other volume types
 		volumeDetector := NewVolumeDetector(c.clientset, c.nodeName)
 		volumes, err := volumeDetector.DetectLocalVolumes(ctx)
 
@@ -91,11 +83,6 @@ func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string,
 		} else if len(volumes) > 0 {
 			volumeDetector.AddVolumeLabelsToNode(volumes, labels)
 			klog.V(2).Infof("Detected %d volumes on node %s", len(volumes), c.nodeName)
-		} else {
-			labels[StorageNodeLabel] = ""
-			labels[StorageTypeLabel] = ""
-			labels[StorageTechLabel] = ""
-			labels[StorageCapacityLabel] = ""
 		}
 	}
 
