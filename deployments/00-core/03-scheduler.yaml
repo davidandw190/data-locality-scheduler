@@ -18,7 +18,7 @@ spec:
       serviceAccountName: data-locality-scheduler
       containers:
       - name: scheduler
-        image: davidandw190/node-daemon:0.0.9
+        image: davidandw190/data-locality-scheduler:0.0.9
         imagePullPolicy: IfNotPresent
         args:
         - "--scheduler-name=data-locality-scheduler"
