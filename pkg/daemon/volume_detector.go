@@ -341,13 +341,41 @@ func (d *VolumeDetector) detectStorageTechnology(devicePath string) (string, err
 // AddVolumeLabelsToNode adds volume-related labels to the node labels map
 func (d *VolumeDetector) AddVolumeLabelsToNode(volumes []VolumeInfo, labels map[string]string) {
 	if len(volumes) == 0 {
+		klog.V(4).Infof("No storage volumes detected on node %s", d.nodeName)
 		return
+	}
+
+	var validVolumes []VolumeInfo
+	var totalCapacity int64
+
+	for _, vol := range volumes {
+		if vol.CapacityBytes > 100*1024*1024 {
+			validVolumes = append(validVolumes, vol)
+			totalCapacity += vol.CapacityBytes
+		}
+	}
+
+	if len(validVolumes) == 0 || totalCapacity == 0 {
+		klog.V(3).Infof("No valid storage volumes with capacity detected on node %s", d.nodeName)
+		return
+	}
+
+	node, err := d.clientset.CoreV1().Nodes().Get(context.Background(), d.nodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.Warningf("Failed to get node %s: %v", d.nodeName, err)
+		return
+	}
+
+	region := node.Labels["topology.kubernetes.io/region"]
+	zone := node.Labels["topology.kubernetes.io/zone"]
+	if region == "" || zone == "" {
+		klog.Warningf("Node %s missing region/zone information, storage functionality may be limited", d.nodeName)
 	}
 
 	labels[StorageNodeLabel] = "true"
 
 	var localCount, pvcCount, csiCount int
-	for _, vol := range volumes {
+	for _, vol := range validVolumes {
 		switch vol.Type {
 		case "local":
 			localCount++
@@ -364,10 +392,12 @@ func (d *VolumeDetector) AddVolumeLabelsToNode(volumes []VolumeInfo, labels map[
 		labels[StorageTypeLabel] = "pv"
 	} else if csiCount > 0 {
 		labels[StorageTypeLabel] = "csi"
+	} else {
+		labels[StorageTypeLabel] = "unknown"
 	}
 
 	techCounts := make(map[string]int)
-	for _, vol := range volumes {
+	for _, vol := range validVolumes {
 		if vol.StorageTechnology != "unknown" {
 			techCounts[vol.StorageTechnology]++
 		}
@@ -386,14 +416,7 @@ func (d *VolumeDetector) AddVolumeLabelsToNode(volumes []VolumeInfo, labels map[
 		labels[StorageTechLabel] = predominantTech
 	}
 
-	var totalCapacity int64
-	for _, vol := range volumes {
-		totalCapacity += vol.CapacityBytes
-	}
-
-	if totalCapacity > 0 {
-		labels[StorageCapacityLabel] = strconv.FormatInt(totalCapacity, 10)
-	}
+	labels[StorageCapacityLabel] = strconv.FormatInt(totalCapacity, 10)
 
 	if predominantTech == "nvme" || predominantTech == "ssd" {
 		labels["node-capability/fast-storage"] = "true"
@@ -404,4 +427,7 @@ func (d *VolumeDetector) AddVolumeLabelsToNode(volumes []VolumeInfo, labels map[
 	}
 
 	labels["node-capability/storage-last-updated"] = time.Now().Format(time.RFC3339)
+
+	klog.Infof("Added storage labels to node %s: type=%s, tech=%s, capacity=%d",
+		d.nodeName, labels[StorageTypeLabel], predominantTech, totalCapacity)
 }

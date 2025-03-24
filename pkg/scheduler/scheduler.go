@@ -50,6 +50,7 @@ type Scheduler struct {
 	storageMutex         sync.RWMutex
 	priorityFuncs        []PriorityFunc
 	dataLocalityPriority *DataLocalityPriority
+	enableMockData       bool
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
@@ -95,8 +96,13 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		klog.Warningf("Continuing with limited storage awareness")
 	}
 
-	s.storageIndex.MockMinioData()
-	s.bandwidthGraph.MockNetworkPaths()
+	if s.enableMockData {
+		klog.Info("Creating mock storage data for testing")
+		s.storageIndex.MockMinioData()
+		s.bandwidthGraph.MockNetworkPaths()
+	} else {
+		klog.Info("Mock data creation disabled, using only real storage detection")
+	}
 
 	go s.refreshStorageDataPeriodically(ctx)
 	go s.startHealthCheckServer(ctx)
@@ -453,6 +459,10 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 
 	klog.V(4).Info("Storage refresh complete")
 	return nil
+}
+
+func (s *Scheduler) SetEnableMockData(enable bool) {
+	s.enableMockData = enable
 }
 
 // createPodInformer creates a pod informer to watch for unscheduled pods

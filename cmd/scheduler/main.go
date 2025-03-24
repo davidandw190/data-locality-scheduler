@@ -28,6 +28,7 @@ func main() {
 	var master string
 	var schedulerName string
 	var dataLocalityEnabled bool
+	var enableMockData bool
 	var showVersion bool
 	var localBandwidthMBps float64
 	var sameZoneBandwidthMBps float64
@@ -38,6 +39,7 @@ func main() {
 	flag.StringVar(&master, "master", "", "The address of the Kubernetes API server")
 	flag.StringVar(&schedulerName, "scheduler-name", "data-locality-scheduler", "Name of the scheduler")
 	flag.BoolVar(&dataLocalityEnabled, "enable-data-locality", true, "Enable data locality aware scheduling")
+	flag.BoolVar(&enableMockData, "enable-mock-data", false, "Enable mock MinIO data creation for testing")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.Float64Var(&localBandwidthMBps, "local-bandwidth-mbps", 1000.0, "Bandwidth for local (same-node) transfers in MB/s")
 	flag.Float64Var(&sameZoneBandwidthMBps, "same-zone-bandwidth-mbps", 500.0, "Bandwidth for same-zone transfers in MB/s")
@@ -91,6 +93,7 @@ func main() {
 		edgeToCloudBandwidth := edgeToCloudBandwidthMBps * 1024 * 1024
 		bandwidthGraph := storage.NewBandwidthGraph(10 * 1024 * 1024)
 
+		sched.SetEnableMockData(enableMockData)
 		storageIndex := storage.NewStorageIndex()
 
 		bandwidthGraph.SetTopologyDefaults(
