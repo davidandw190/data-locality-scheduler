@@ -126,7 +126,7 @@ func (c *DataLocalityCollector) GetCapabilities() map[string]string {
 }
 
 func (c *DataLocalityCollector) detectAndSetNodeTopology(node *v1.Node, labels map[string]string) {
-	if nodeType, exists := node.Labels[EdgeNodeLabel]; exists {
+	if nodeType, exists := node.Labels[EdgeNodeLabel]; exists && (nodeType == EdgeNodeValue || nodeType == CloudNodeValue) {
 		c.nodeType = nodeType
 		labels[EdgeNodeLabel] = nodeType
 	} else {
@@ -160,14 +160,32 @@ func (c *DataLocalityCollector) detectAndSetNodeTopology(node *v1.Node, labels m
 		}
 	}
 
-	if region, exists := node.Labels[RegionLabel]; exists {
+	if region, exists := node.Labels[RegionLabel]; exists && region != "" {
 		c.region = region
 		labels[RegionLabel] = region
+	} else {
+		regionFromName := extractRegionFromName(node.Name)
+		if regionFromName != "" {
+			c.region = regionFromName
+			labels[RegionLabel] = regionFromName
+			klog.Infof("Set region %s for node %s based on node name", regionFromName, node.Name)
+		} else {
+			klog.Warningf("Could not determine region for node %s, topology-aware scheduling will be limited", node.Name)
+		}
 	}
 
-	if zone, exists := node.Labels[ZoneLabel]; exists {
+	if zone, exists := node.Labels[ZoneLabel]; exists && zone != "" {
 		c.zone = zone
 		labels[ZoneLabel] = zone
+	} else {
+		zoneFromName := extractZoneFromName(node.Name)
+		if zoneFromName != "" {
+			c.zone = zoneFromName
+			labels[ZoneLabel] = zoneFromName
+			klog.Infof("Set zone %s for node %s based on node name", zoneFromName, node.Name)
+		} else {
+			klog.Warningf("Could not determine zone for node %s, topology-aware scheduling will be limited", node.Name)
+		}
 	}
 }
 
@@ -317,4 +335,42 @@ func isNodeReady(node *v1.Node) bool {
 		}
 	}
 	return false
+}
+
+func extractRegionFromName(nodeName string) string {
+	regionPatterns := []string{"region-", "-region-"}
+
+	for _, pattern := range regionPatterns {
+		if strings.Contains(nodeName, pattern) {
+			parts := strings.Split(nodeName, pattern)
+			if len(parts) > 1 {
+				regionPart := parts[1]
+				if idx := strings.Index(regionPart, "-"); idx > 0 {
+					return pattern + regionPart[:idx]
+				}
+				return pattern + regionPart
+			}
+		}
+	}
+
+	return ""
+}
+
+func extractZoneFromName(nodeName string) string {
+	zonePatterns := []string{"zone-", "-zone-"}
+
+	for _, pattern := range zonePatterns {
+		if strings.Contains(nodeName, pattern) {
+			parts := strings.Split(nodeName, pattern)
+			if len(parts) > 1 {
+				zonePart := parts[1]
+				if idx := strings.Index(zonePart, "-"); idx > 0 {
+					return pattern + zonePart[:idx]
+				}
+				return pattern + zonePart
+			}
+		}
+	}
+
+	return ""
 }
