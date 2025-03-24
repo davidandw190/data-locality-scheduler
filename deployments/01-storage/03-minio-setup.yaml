@@ -1,102 +1,92 @@
 apiVersion: v1
-kind: ConfigMap
+kind: Pod
 metadata:
-  name: minio-setup-scripts
-  namespace: data-locality-scheduler
-data:
-  setup.sh: |
-    #!/bin/bash
-    echo "Waiting for MinIO services..."
-
-    # Wait for main MinIO
-    until mc config host add main-minio http://minio:9000 minioadmin minioadmin; do
-      echo "Waiting for main MinIO service..."
-      sleep 3
-    done
-
-    # Wait for edge MinIO in region 1
-    until mc config host add edge-r1 http://minio-edge-region1:9000 minioadmin minioadmin; do
-      echo "Waiting for region-1 edge MinIO service..."
-      sleep 3
-    done
-
-    # Wait for edge MinIO in region 2 
-    until mc config host add edge-r2 http://minio-edge-region2:9000 minioadmin minioadmin; do
-      echo "Waiting for region-2 edge MinIO service..."
-      sleep 3
-    done
-
-    echo "All MinIO services are up"
-
-    # Create test buckets on main MinIO
-    echo "Creating main buckets..."
-    mc mb -p main-minio/test-bucket
-    mc mb -p main-minio/results-bucket
-    mc mb -p main-minio/eo-scenes
-    mc mb -p main-minio/cog-data
-    mc mb -p main-minio/fmask-results
-
-    # Create test buckets on edge MinIO in region 1
-    echo "Creating region-1 buckets..."
-    mc mb -p edge-r1/edge-bucket
-    mc mb -p edge-r1/region1-bucket
-
-    # Create test buckets on edge MinIO in region 2
-    echo "Creating region-2 buckets..."
-    mc mb -p edge-r2/region2-bucket
-
-    # Create test data files
-    echo "Creating test files..."
-    mkdir -p /tmp/testdata
-
-    echo '{"name":"test-data","size":1048576,"timestamp":"2025-03-22T12:00:00Z"}' > /tmp/testdata/test-data.json
-    echo '{"name":"edge-data","size":1048576,"timestamp":"2025-03-22T12:00:00Z"}' > /tmp/testdata/edge-data.json
-    echo '{"name":"region1-data","size":104857600,"timestamp":"2025-03-22T12:00:00Z"}' > /tmp/testdata/region1-data.json
-    echo '{"name":"region2-data","size":104857600,"timestamp":"2025-03-22T12:00:00Z"}' > /tmp/testdata/region2-data.json
-
-    # Create a large dummy file for EO testing
-    dd if=/dev/urandom of=/tmp/testdata/large-file.bin bs=1M count=20
-
-    # Upload to appropriate buckets
-    echo "Uploading files..."
-    mc cp /tmp/testdata/test-data.json main-minio/test-bucket/
-    mc cp /tmp/testdata/edge-data.json edge-r1/edge-bucket/
-    mc cp /tmp/testdata/region1-data.json edge-r1/region1-bucket/
-    mc cp /tmp/testdata/region2-data.json edge-r2/region2-bucket/
-    mc cp /tmp/testdata/large-file.bin main-minio/eo-scenes/LC08_L1TP_042034_20130605_20170310_01_T1.tar
-
-    # List all buckets across all MinIO instances
-    echo "Listing all buckets and files:"
-    echo "Main MinIO:"
-    mc ls main-minio
-
-    echo "Region 1 edge MinIO:"
-    mc ls edge-r1
-
-    echo "Region 2 edge MinIO:"
-    mc ls edge-r2
-
-    echo "Setup complete!"
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: minio-setup
+  name: minio-direct-setup
   namespace: data-locality-scheduler
 spec:
-  backoffLimit: 6
-  template:
-    spec:
-      containers:
-      - name: mc
-        image: minio/mc
-        command: [ "/bin/bash", "/scripts/setup.sh" ]
-        volumeMounts:
-        - name: setup-scripts
-          mountPath: /scripts
-      volumes:
-      - name: setup-scripts
-        configMap:
-          name: minio-setup-scripts
-          defaultMode: 755
-      restartPolicy: OnFailure
+  containers:
+  - name: mc
+    image: minio/mc
+    command: [ "/bin/sh", "-c" ]
+    args:
+    - |
+      # Wait for MinIO services to be ready
+      echo "Waiting for MinIO services..."
+      sleep 5
+
+      # Configure main MinIO
+      until mc config host add main-minio http://minio:9000 minioadmin minioadmin; do
+        echo "Retrying main MinIO connection..."
+        sleep 5
+      done
+
+      # Configure edge MinIO in region 1
+      until mc config host add edge-r1 http://minio-edge-region1:9000 minioadmin minioadmin; do
+        echo "Retrying region-1 edge MinIO connection..."
+        sleep 5
+      done
+
+      # Configure edge MinIO in region 2 
+      until mc config host add edge-r2 http://minio-edge-region2:9000 minioadmin minioadmin; do
+        echo "Retrying region-2 edge MinIO connection..."
+        sleep 5
+      done
+
+      echo "All MinIO services are connected"
+
+      # Create test buckets on main MinIO
+      echo "Creating main buckets..."
+      mc mb -p main-minio/test-bucket
+      mc mb -p main-minio/results-bucket
+      mc mb -p main-minio/eo-scenes
+      mc mb -p main-minio/cog-data
+      mc mb -p main-minio/fmask-results
+
+      # Create test buckets on edge MinIO in region 1
+      echo "Creating region-1 buckets..."
+      mc mb -p edge-r1/edge-bucket
+      mc mb -p edge-r1/region1-bucket
+
+      # Create test buckets on edge MinIO in region 2
+      echo "Creating region-2 buckets..."
+      mc mb -p edge-r2/region2-bucket
+
+      # Create test data files
+      echo "Creating test files..."
+      echo '{"name":"test-data","content":"test data","size":1048576}' > /tmp/test-data.json
+      echo '{"name":"edge-data","content":"edge data","size":1048576}' > /tmp/edge-data.json
+      echo '{"name":"region1-data","content":"region1 data","size":104857600}' > /tmp/region1-data.json 
+      echo '{"name":"region2-data","content":"region2 data","size":104857600}' > /tmp/region2-data.json
+
+      # Create a large dummy file for EO testing (20MB)
+      dd if=/dev/urandom of=/tmp/large-file.bin bs=1M count=20
+
+      # Upload to appropriate buckets
+      echo "Uploading files..."
+      mc cp /tmp/test-data.json main-minio/test-bucket/
+      mc cp /tmp/edge-data.json edge-r1/edge-bucket/
+      mc cp /tmp/region1-data.json edge-r1/region1-bucket/
+      mc cp /tmp/region2-data.json edge-r2/region2-bucket/
+      mc cp /tmp/large-file.bin main-minio/eo-scenes/LC08_L1TP_042034_20130605_20170310_01_T1.tar
+
+      # List all buckets across all MinIO instances
+      echo "Listing all buckets and files:"
+      echo "Main MinIO:"
+      mc ls main-minio
+
+      echo "Region 1 edge MinIO:"
+      mc ls edge-r1
+
+      echo "Region 2 edge MinIO:"
+      mc ls edge-r2
+
+      echo "Setup complete!"
+      sleep 30
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+  restartPolicy: Never

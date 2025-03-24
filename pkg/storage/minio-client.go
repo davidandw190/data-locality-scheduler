@@ -12,7 +12,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// MinioClient integrates with MinIO instances for data discovery
+// integrates with MinIO instances for data discovery
 type MinioClient struct {
 	clientset    kubernetes.Interface
 	storageIndex *StorageIndex

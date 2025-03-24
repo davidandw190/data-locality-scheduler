@@ -1,4 +1,3 @@
-// pkg/storage/minio/indexer.go
 package minio
 
 import (
@@ -14,7 +13,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Indexer discovers and indexes Minio storage nodes and their contents
+// discovers and indexes Minio storage nodes and their contents
 type Indexer struct {
 	storageIndex    *storage.StorageIndex
 	clients         map[string]*Client // node name -> client
@@ -68,27 +67,26 @@ func (i *Indexer) refreshNodeIndex(ctx context.Context, nodeName string, client 
 
 	storageNode, exists := i.storageIndex.GetStorageNode(nodeName)
 	if !exists {
-		// Create new storage node entry
+		// new storage node entry
 		storageNode = &storage.StorageNode{
 			Name:        nodeName,
-			NodeType:    storage.StorageTypeCloud, // Default
+			NodeType:    storage.StorageTypeCloud, // default val
 			ServiceType: storage.StorageServiceMinio,
 			Buckets:     buckets,
 			LastUpdated: time.Now(),
 		}
 	} else {
-		// Update existing node
+		// update existing
 		storageNode.Buckets = buckets
 		storageNode.ServiceType = storage.StorageServiceMinio
 		storageNode.LastUpdated = time.Now()
 	}
 
-	// Register updated node
 	i.storageIndex.RegisterOrUpdateStorageNode(storageNode)
 
-	// Register buckets and objects
+	// register buckets and objects
 	for _, bucket := range buckets {
-		// Register bucket
+		// bucket
 		bucketNodes := i.storageIndex.GetBucketNodes(bucket)
 		if bucketNodes == nil {
 			bucketNodes = []string{nodeName}
@@ -97,14 +95,13 @@ func (i *Indexer) refreshNodeIndex(ctx context.Context, nodeName string, client 
 		}
 		i.storageIndex.RegisterBucket(bucket, bucketNodes)
 
-		// List and register objects
+		// objects
 		objects, err := client.ListObjects(ctx, bucket)
 		if err != nil {
 			klog.Warningf("Failed to list objects in bucket %s on node %s: %v", bucket, nodeName, err)
 			continue
 		}
 
-		// Register each object
 		for _, obj := range objects {
 			dataItem := &storage.DataItem{
 				URN:          fmt.Sprintf("%s/%s", bucket, obj.Key),
@@ -141,7 +138,6 @@ func (i *Indexer) StartRefresher(ctx context.Context) {
 }
 
 func (i *Indexer) DiscoverMinioNodesFromKubernetes(ctx context.Context, clientset kubernetes.Interface) error {
-	// Find Minio pods
 	pods, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		LabelSelector: "app=minio",
 	})
@@ -162,7 +158,7 @@ func (i *Indexer) DiscoverMinioNodesFromKubernetes(ctx context.Context, clientse
 			continue
 		}
 
-		// Find the API port
+		// find the API port
 		port := 9000
 		for _, container := range pod.Spec.Containers {
 			for _, containerPort := range container.Ports {
@@ -175,7 +171,6 @@ func (i *Indexer) DiscoverMinioNodesFromKubernetes(ctx context.Context, clientse
 
 		endpoint := fmt.Sprintf("%s:%d", podIP, port)
 
-		// Register the Minio node with default credentials
 		i.RegisterMinioNode(nodeName, endpoint, false)
 		discoveredCount++
 	}
