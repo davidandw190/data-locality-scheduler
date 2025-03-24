@@ -1,4 +1,3 @@
-# deployments/00-core/03-scheduler.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +18,7 @@ spec:
       serviceAccountName: data-locality-scheduler
       containers:
       - name: scheduler
-        image: localhost:5000/data-locality-scheduler:latest
+        image: davidandw190/node-daemon:0.0.9
         imagePullPolicy: IfNotPresent
         args:
         - "--scheduler-name=data-locality-scheduler"

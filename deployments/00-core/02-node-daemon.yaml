@@ -1,4 +1,3 @@
-# deployments/00-core/02-node-daemon.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -20,23 +19,16 @@ spec:
       serviceAccountName: node-daemon
       containers:
       - name: node-capability-daemon
-        image: localhost:5000/node-daemon:latest
-        imagePullPolicy: IfNotPresent
+        image: davidandw190/node-daemon:0.0.9
+        imagePullPolicy: Always
         args:
         - "--collection-interval=60"
         - "--enable-data-locality=true"
         - "--health-port=8080"
+        - "--kube-config=true"
         - "--v=4"
         env:
         - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: NODE_REGION
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: NODE_ZONE
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
@@ -47,14 +39,14 @@ spec:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 20
+          initialDelaySeconds: 30
+          periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
+          initialDelaySeconds: 10
+          periodSeconds: 15
         resources:
           requests:
             cpu: 50m
@@ -62,26 +54,6 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
-        volumeMounts:
-        - name: sys
-          mountPath: /sys
-          readOnly: true
-        - name: dev
-          mountPath: /dev
-          readOnly: false
-        - name: proc
-          mountPath: /proc
-          readOnly: true
-      volumes:
-      - name: sys
-        hostPath:
-          path: /sys
-      - name: dev
-        hostPath:
-          path: /dev
-      - name: proc
-        hostPath:
-          path: /proc
       tolerations:
       - operator: "Exists"
         effect: "NoSchedule"
