@@ -25,7 +25,6 @@ spec:
         - "--collection-interval=60"
         - "--enable-data-locality=true"
         - "--health-port=8080"
-        - "--kube-config=true"
         - "--v=4"
         env:
         - name: NODE_NAME
