@@ -18,8 +18,8 @@ spec:
       serviceAccountName: data-locality-scheduler
       containers:
       - name: scheduler
-        image: davidandw190/data-locality-scheduler:0.0.9
-        imagePullPolicy: IfNotPresent
+        image: davidandw190/data-locality-scheduler:0.1.0
+        imagePullPolicy: Always
         args:
         - "--scheduler-name=data-locality-scheduler"
         - "--enable-data-locality=true"

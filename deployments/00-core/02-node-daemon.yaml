@@ -19,7 +19,7 @@ spec:
       serviceAccountName: node-daemon
       containers:
       - name: node-capability-daemon
-        image: davidandw190/node-daemon:0.0.9
+        image: davidandw190/node-daemon:0.1.0
         imagePullPolicy: Always
         args:
         - "--collection-interval=60"

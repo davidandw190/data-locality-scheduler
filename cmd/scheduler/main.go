@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	version   = "0.0.9"
-	buildTime = "2025-03-24"
+	version   = "0.1.0"
+	buildTime = "2025-03-25"
 )
 
 func main() {
