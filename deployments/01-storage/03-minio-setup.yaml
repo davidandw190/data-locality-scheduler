@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: minio-direct-setup
+  name: minio-setup
   namespace: data-locality-scheduler
 spec:
   containers:
@@ -12,9 +12,9 @@ spec:
     - |
       # Wait for MinIO services to be ready
       echo "Waiting for MinIO services..."
-      sleep 5
+      sleep 10
 
-      # Configure main MinIO
+      # Configure central MinIO
       until mc config host add main-minio http://minio:9000 minioadmin minioadmin; do
         echo "Retrying main MinIO connection..."
         sleep 5
@@ -26,7 +26,7 @@ spec:
         sleep 5
       done
 
-      # Configure edge MinIO in region 2 
+      # Configure edge MinIO in region 2
       until mc config host add edge-r2 http://minio-edge-region2:9000 minioadmin minioadmin; do
         echo "Retrying region-2 edge MinIO connection..."
         sleep 5
@@ -55,10 +55,10 @@ spec:
       echo "Creating test files..."
       echo '{"name":"test-data","content":"test data","size":1048576}' > /tmp/test-data.json
       echo '{"name":"edge-data","content":"edge data","size":1048576}' > /tmp/edge-data.json
-      echo '{"name":"region1-data","content":"region1 data","size":104857600}' > /tmp/region1-data.json 
+      echo '{"name":"region1-data","content":"region1 data","size":104857600}' > /tmp/region1-data.json
       echo '{"name":"region2-data","content":"region2 data","size":104857600}' > /tmp/region2-data.json
 
-      # Create a large dummy file for EO testing (20MB)
+      # Create a large dummy file for testing (20MB)
       dd if=/dev/urandom of=/tmp/large-file.bin bs=1M count=20
 
       # Upload to appropriate buckets
@@ -67,7 +67,7 @@ spec:
       mc cp /tmp/edge-data.json edge-r1/edge-bucket/
       mc cp /tmp/region1-data.json edge-r1/region1-bucket/
       mc cp /tmp/region2-data.json edge-r2/region2-bucket/
-      mc cp /tmp/large-file.bin main-minio/eo-scenes/LC08_L1TP_042034_20130605_20170310_01_T1.tar
+      mc cp /tmp/large-file.bin main-minio/eo-scenes/sample-data.bin
 
       # List all buckets across all MinIO instances
       echo "Listing all buckets and files:"
@@ -81,7 +81,7 @@ spec:
       mc ls edge-r2
 
       echo "Setup complete!"
-      sleep 30
+      sleep 60
     resources:
       requests:
         cpu: "100m"
