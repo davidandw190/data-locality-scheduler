@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -67,59 +68,115 @@ func (d *VolumeDetector) DetectLocalVolumes(ctx context.Context) ([]VolumeInfo, 
 
 func (d *VolumeDetector) detectMountedVolumes() ([]VolumeInfo, error) {
 	var volumes []VolumeInfo
+	var err error
 
-	cmd := exec.Command("df", "-B1", "--output=source,target,size,avail,fstype")
-	output, err := cmd.Output()
+	output, err := exec.Command("df", "-B1", "--output=source,target,size,avail,fstype").Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute df command: %w", err)
+		klog.Warningf("Failed to execute df command: %v", err)
+		output, err = exec.Command("mount").Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get mount information: %w", err)
+		}
 	}
 
 	lines := strings.Split(string(output), "\n")
 	for i, line := range lines {
-		// skip header and empty line
 		if i == 0 || len(strings.TrimSpace(line)) == 0 {
 			continue
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 5 {
+		if len(fields) < 3 {
 			continue
 		}
 
-		source := fields[0]
-		mountPoint := fields[1]
-		sizeStr := fields[2]
-		availStr := fields[3]
-		fsType := fields[4]
+		var source, mountPoint, fsType string
+		var size, avail int64
 
-		// skip pseudo filesystems
+		if strings.Contains(line, "avail") {
+			if len(fields) < 5 {
+				continue
+			}
+			source = fields[0]
+			mountPoint = fields[1]
+			sizeStr := fields[2]
+			availStr := fields[3]
+			fsType = fields[4]
+
+			size, _ = strconv.ParseInt(sizeStr, 10, 64)
+			avail, _ = strconv.ParseInt(availStr, 10, 64)
+		} else {
+			parts := strings.SplitN(line, " ", 4)
+			if len(parts) < 3 {
+				continue
+			}
+			source = parts[0]
+			mountPoint = parts[2]
+
+			if strings.Contains(line, "type") {
+				typeMatch := regexp.MustCompile(`type=(\w+)`).FindStringSubmatch(line)
+				if len(typeMatch) > 1 {
+					fsType = typeMatch[1]
+				}
+			}
+
+			sizeOutput, _ := exec.Command("df", "-B1", "--output=size,avail", mountPoint).Output()
+			sizeLines := strings.Split(string(sizeOutput), "\n")
+			if len(sizeLines) > 1 {
+				sizeFields := strings.Fields(sizeLines[1])
+				if len(sizeFields) >= 2 {
+					size, _ = strconv.ParseInt(sizeFields[0], 10, 64)
+					avail, _ = strconv.ParseInt(sizeFields[1], 10, 64)
+				}
+			}
+		}
+
+		// we skip pseudo filesystems and system directories
 		if fsType == "tmpfs" || fsType == "devtmpfs" || fsType == "sysfs" || fsType == "proc" {
 			continue
 		}
-
-		// skip system directories
 		if strings.HasPrefix(mountPoint, "/sys") || strings.HasPrefix(mountPoint, "/proc") ||
 			strings.HasPrefix(mountPoint, "/dev") || mountPoint == "/" {
 			continue
 		}
 
-		size, _ := strconv.ParseInt(sizeStr, 10, 64)
-		avail, _ := strconv.ParseInt(availStr, 10, 64)
-
-		storageTech, _ := d.detectStorageTechnology(source)
+		isKubeVolume := strings.Contains(mountPoint, "/var/lib/kubelet/pods") ||
+			strings.Contains(mountPoint, "/var/lib/rancher") ||
+			strings.Contains(mountPoint, "/mnt/k8s-volumes")
 
 		volume := VolumeInfo{
 			Type:              "local",
 			Path:              mountPoint,
 			CapacityBytes:     size,
 			AvailableBytes:    avail,
-			StorageTechnology: storageTech,
+			StorageTechnology: "unknown",
 			Labels:            make(map[string]string),
 		}
 
-		// Add additional labels
 		volume.Labels["filesystem"] = fsType
 		volume.Labels["device"] = source
+
+		if isKubeVolume {
+			volume.Labels["kubernetes-volume"] = "true"
+
+			if strings.Contains(mountPoint, "pvc-") {
+				volume.Type = "pvc"
+
+				pvcMatch := regexp.MustCompile(`pvc-([0-9a-f-]+)`).FindStringSubmatch(mountPoint)
+				if len(pvcMatch) > 1 {
+					volume.Labels["pvc-id"] = pvcMatch[1]
+				}
+			} else if strings.Contains(mountPoint, "configmap") {
+				volume.Type = "configmap"
+			} else if strings.Contains(mountPoint, "secret") {
+				volume.Type = "secret"
+			}
+
+			storageTech, _ := d.detectStorageTechnology(source)
+			if storageTech != "unknown" {
+				volume.StorageTechnology = storageTech
+			}
+		}
 
 		volumes = append(volumes, volume)
 	}

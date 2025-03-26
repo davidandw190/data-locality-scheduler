@@ -96,6 +96,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		klog.Warningf("Continuing with limited storage awareness")
 	}
 
+	s.storageIndex.PerformMaintenance()
+	klog.Info("Initial storage index maintenance complete")
+
 	if s.enableMockData {
 		klog.Info("Creating mock storage data for testing")
 		s.storageIndex.MockMinioData()
@@ -292,6 +295,9 @@ func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
 	ticker := time.NewTicker(storageRefreshInterval)
 	defer ticker.Stop()
 
+	maintenanceTicker := time.NewTicker(storageRefreshInterval * 4)
+	defer maintenanceTicker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -456,6 +462,12 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 	s.storageIndex.PruneStaleBuckets()
 	s.storageIndex.PruneStaleDataItems()
 	s.storageIndex.MarkRefreshed()
+
+	maintenanceStart := time.Now()
+	s.storageIndex.PerformMaintenance()
+
+	klog.V(3).Infof("Storage maintenance completed in %v",
+		time.Since(maintenanceStart))
 
 	klog.V(4).Info("Storage refresh complete")
 	return nil
@@ -1157,6 +1169,25 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		s.storageMutex.RUnlock()
 
 		w.Write([]byte(summary))
+	})
+
+	mux.HandleFunc("/perform-maintenance", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		klog.Info("Maintenance requested via API")
+
+		s.storageMutex.Lock()
+		start := time.Now()
+		s.storageIndex.PerformMaintenance()
+		duration := time.Since(start)
+		s.storageMutex.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"success","duration":"%v"}`, duration)
 	})
 
 	server := &http.Server{

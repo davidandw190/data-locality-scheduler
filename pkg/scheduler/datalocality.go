@@ -237,6 +237,7 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 
 	var totalWeight float64
 	var weightedScore float64
+	var bestStorageNodes = make(map[string]string)
 
 	for _, data := range inputData {
 		weight := calculateDataWeight(data)
@@ -250,7 +251,15 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		}
 
 		if len(storageNodes) == 0 {
+			klog.V(3).Infof("No storage nodes found for %s, using default score", data.URN)
 			weightedScore += float64(p.config.DefaultScore) * weight
+			totalWeight += weight
+			continue
+		}
+
+		if containsString(storageNodes, nodeName) {
+			klog.V(4).Infof("Data %s is co-located on node %s - optimal score", data.URN, nodeName)
+			weightedScore += float64(p.config.MaxScore) * weight
 			totalWeight += weight
 			continue
 		}
@@ -258,25 +267,36 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		bestTransferTime := float64(1e12)
 		var bestStorageNode string
 
-		for _, storageNode := range storageNodes {
-			if storageNode == nodeName {
-				bestTransferTime = 0.001
-				bestStorageNode = storageNode
-				break
+		if cachedNode, exists := bestStorageNodes[data.URN]; exists {
+			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(cachedNode, nodeName, data.SizeBytes)
+			bestTransferTime = transferTime
+			bestStorageNode = cachedNode
+		} else {
+			for _, storageNode := range storageNodes {
+				transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(storageNode, nodeName, data.SizeBytes)
+				if transferTime < bestTransferTime {
+					bestTransferTime = transferTime
+					bestStorageNode = storageNode
+				}
 			}
-
-			// otherwise we calculate transfer time
-			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(storageNode, nodeName, data.SizeBytes)
-			if transferTime < bestTransferTime {
-				bestTransferTime = transferTime
-				bestStorageNode = storageNode
+			if bestStorageNode != "" {
+				bestStorageNodes[data.URN] = bestStorageNode
 			}
 		}
 
-		klog.V(5).Infof("For pod input data %s: best storage node is %s with transfer time %.2f ms",
-			data.URN, bestStorageNode, bestTransferTime*1000)
+		klog.V(5).Infof("For data %s (size: %d): best storage node is %s with transfer time %.2f s",
+			data.URN, data.SizeBytes, bestStorageNode, bestTransferTime)
 
 		score := calculateScoreFromTransferTime(bestTransferTime, p.config.MaxScore)
+
+		// opt
+		sizeFactor := 1.0
+		if data.SizeBytes > 100*1024*1024 { // 100MB
+			sizeFactor = 1.5 // 50% more important for large files
+		}
+
+		weight *= sizeFactor
+		//
 
 		weightedScore += float64(score) * weight
 		totalWeight += weight
@@ -286,7 +306,10 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		return p.config.DefaultScore
 	}
 
-	return int(weightedScore / totalWeight)
+	finalScore := int(weightedScore / totalWeight)
+	klog.V(4).Infof("Final input data score for node %s: %d", nodeName, finalScore)
+
+	return finalScore
 }
 
 func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDependency, nodeName string) int {
