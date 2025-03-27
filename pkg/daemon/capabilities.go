@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -11,16 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"maps"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
-
-func (c *NodeCapabilityCollector) Name() string {
-	return "NodeCapabilityCollector"
-}
 
 type NodeCapabilityCollector struct {
 	nodeName      string
@@ -28,6 +23,10 @@ type NodeCapabilityCollector struct {
 	capabilities  map[string]string
 	metricCache   map[string]interface{}
 	lastCollected time.Time
+}
+
+func (c *NodeCapabilityCollector) Name() string {
+	return "NodeCapabilityCollector"
 }
 
 func NewNodeCapabilityCollector(nodeName string, clientset kubernetes.Interface) *NodeCapabilityCollector {
@@ -452,7 +451,7 @@ func (c *NodeCapabilityCollector) collectStorageCapabilities() error {
 				fields := strings.Fields(line)
 				if len(fields) >= 3 && fields[2] == "/" {
 					primaryDisk = filepath.Base(fields[0])
-					primaryDisk = strings.TrimLeft(primaryDisk, "/dev/")
+					primaryDisk = strings.TrimPrefix(primaryDisk, "/dev/")
 					primaryDisk = strings.TrimSuffix(primaryDisk, "1")
 					primaryDisk = strings.TrimSuffix(primaryDisk, "2")
 					primaryDisk = strings.TrimSuffix(primaryDisk, "3")

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -536,6 +537,81 @@ func (si *StorageIndex) MockMinioData() {
 
 	klog.Infof("Added mock MinIO data with %d buckets and %d data items",
 		len(buckets), len(mockItems))
+}
+
+func (si *StorageIndex) GetAllDataItems() map[string]*DataItem {
+	si.mu.RLock()
+	defer si.mu.RUnlock()
+
+	result := make(map[string]*DataItem, len(si.dataItems))
+	for key, item := range si.dataItems {
+		itemCopy := &DataItem{
+			URN:          item.URN,
+			Size:         item.Size,
+			Locations:    make([]string, len(item.Locations)),
+			LastModified: item.LastModified,
+			ContentType:  item.ContentType,
+		}
+		copy(itemCopy.Locations, item.Locations)
+
+		if item.Metadata != nil {
+			itemCopy.Metadata = make(map[string]string)
+			for k, v := range item.Metadata {
+				itemCopy.Metadata[k] = v
+			}
+		}
+
+		result[key] = itemCopy
+	}
+
+	return result
+}
+
+func (si *StorageIndex) ValidateBucketNodeAssociations(ctx context.Context) int {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
+	fixCount := 0
+	for bucket, nodes := range si.bucketNodes {
+		var validNodes []string
+		for _, nodeName := range nodes {
+			node, exists := si.storageNodes[nodeName]
+			if !exists {
+				fixCount++
+				continue
+			}
+
+			hasBucket := false
+			for _, nodeBucket := range node.Buckets {
+				if nodeBucket == bucket {
+					hasBucket = true
+					break
+				}
+			}
+
+			if hasBucket {
+				validNodes = append(validNodes, nodeName)
+			} else {
+				fixCount++
+			}
+		}
+
+		if len(validNodes) == 0 {
+			klog.Warningf("Bucket %s has no valid storage nodes but keeping original list", bucket)
+		} else if len(validNodes) != len(nodes) {
+			si.bucketNodes[bucket] = validNodes
+		}
+	}
+
+	return fixCount
+}
+
+func (si *StorageIndex) PerformMaintenance() {
+	si.PruneStaleBuckets()
+	si.PruneStaleDataItems()
+	fixCount := si.ValidateBucketNodeAssociations(context.Background())
+
+	klog.V(3).Infof("Storage index maintenance completed: fixed %d invalid bucket-node associations", fixCount)
 }
 
 func (si *StorageIndex) PrintSummary() string {

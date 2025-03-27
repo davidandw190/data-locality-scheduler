@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -50,6 +51,7 @@ type Scheduler struct {
 	storageMutex         sync.RWMutex
 	priorityFuncs        []PriorityFunc
 	dataLocalityPriority *DataLocalityPriority
+	enableMockData       bool
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
@@ -95,8 +97,23 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		klog.Warningf("Continuing with limited storage awareness")
 	}
 
-	s.storageIndex.MockMinioData()
-	s.bandwidthGraph.MockNetworkPaths()
+	if err := s.discoverAndRegisterMinioServices(ctx); err != nil {
+		klog.Warningf("Failed to discover MinIO services: %v", err)
+		klog.Warningf("Continuing with limited MinIO awareness")
+	} else {
+		klog.Info("Successfully initialized MinIO service discovery")
+	}
+
+	s.storageIndex.PerformMaintenance()
+	klog.Info("Initial storage index maintenance complete")
+
+	if s.enableMockData {
+		klog.Info("Creating mock storage data for testing")
+		s.storageIndex.MockMinioData()
+		s.bandwidthGraph.MockNetworkPaths()
+	} else {
+		klog.Info("Mock data creation disabled, using only real storage detection")
+	}
 
 	go s.refreshStorageDataPeriodically(ctx)
 	go s.startHealthCheckServer(ctx)
@@ -286,6 +303,9 @@ func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
 	ticker := time.NewTicker(storageRefreshInterval)
 	defer ticker.Stop()
 
+	maintenanceTicker := time.NewTicker(storageRefreshInterval * 4)
+	defer maintenanceTicker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -451,7 +471,73 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 	s.storageIndex.PruneStaleDataItems()
 	s.storageIndex.MarkRefreshed()
 
+	maintenanceStart := time.Now()
+	s.storageIndex.PerformMaintenance()
+
+	klog.V(3).Infof("Storage maintenance completed in %v",
+		time.Since(maintenanceStart))
+
 	klog.V(4).Info("Storage refresh complete")
+	return nil
+}
+
+func (s *Scheduler) SetEnableMockData(enable bool) {
+	s.enableMockData = enable
+}
+
+// discoverAndRegisterMinioServices discovers MinIO services and indexes their contents
+func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
+	klog.Info("Discovering and registering MinIO services...")
+	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
+
+	if err := minioIndexer.DiscoverMinioNodesFromKubernetes(ctx, s.clientset); err != nil {
+		klog.Warningf("Failed to discover MinIO nodes from Kubernetes: %v", err)
+	}
+
+	if err := minioIndexer.DiscoverMinioServicesFromKubernetes(ctx, s.clientset); err != nil {
+		klog.Warningf("Failed to discover MinIO services from Kubernetes: %v", err)
+	}
+
+	if err := minioIndexer.RefreshIndex(ctx); err != nil {
+		klog.Warningf("Failed to refresh MinIO index: %v", err)
+	}
+
+	s.storageMutex.RLock()
+	dataItemCount := len(s.storageIndex.GetAllDataItems())
+	s.storageMutex.RUnlock()
+
+	klog.Infof("Initial MinIO discovery found %d data items", dataItemCount)
+
+	if dataItemCount == 0 {
+		klog.Info("No data items found, attempting more aggressive discovery...")
+		time.Sleep(2 * time.Second)
+
+		serviceNames := []struct {
+			name     string
+			endpoint string
+		}{
+			{"minio", "minio.data-locality-scheduler.svc.cluster.local:9000"},
+			{"minio-edge-region1", "minio-edge-region1.data-locality-scheduler.svc.cluster.local:9000"},
+			{"minio-edge-region2", "minio-edge-region2.data-locality-scheduler.svc.cluster.local:9000"},
+		}
+
+		for _, svc := range serviceNames {
+			minioIndexer.RegisterMinioService(svc.name, svc.endpoint, false)
+		}
+
+		if err := minioIndexer.RefreshIndex(ctx); err != nil {
+			klog.Warningf("Failed to refresh MinIO index in second attempt: %v", err)
+		}
+
+		s.storageMutex.RLock()
+		dataItemCount = len(s.storageIndex.GetAllDataItems())
+		s.storageMutex.RUnlock()
+
+		klog.Infof("After aggressive discovery: found %d data items", dataItemCount)
+	}
+
+	minioIndexer.StartRefresher(ctx)
+
 	return nil
 }
 
@@ -893,16 +979,22 @@ func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, er
 
 	preferEdge := false
 	preferCloud := false
+	preferredRegion := ""
 
 	if pod.Annotations != nil {
 		_, preferEdge = pod.Annotations["scheduler.thesis/prefer-edge"]
 		_, preferCloud = pod.Annotations["scheduler.thesis/prefer-cloud"]
+
+		if regionValue, ok := pod.Annotations["scheduler.thesis/prefer-region"]; ok {
+			preferredRegion = regionValue
+		}
 	}
 
 	for _, node := range nodes {
 		score := 50
 
 		isEdge := isEdgeNode(&node)
+		nodeRegion := node.Labels["topology.kubernetes.io/region"]
 
 		if preferEdge && isEdge {
 			score = 100
@@ -911,6 +1003,13 @@ func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, er
 		} else if preferCloud && !isEdge {
 			score = 100
 		} else if preferCloud && isEdge {
+			score = 0
+		}
+
+		// TODO: handle this properly using MCDM approaches
+		if preferredRegion != "" && nodeRegion == preferredRegion {
+			score = 100
+		} else if preferredRegion != "" && nodeRegion != preferredRegion {
 			score = 0
 		}
 
@@ -1147,6 +1246,25 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		s.storageMutex.RUnlock()
 
 		w.Write([]byte(summary))
+	})
+
+	mux.HandleFunc("/perform-maintenance", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		klog.Info("Maintenance requested via API")
+
+		s.storageMutex.Lock()
+		start := time.Now()
+		s.storageIndex.PerformMaintenance()
+		duration := time.Since(start)
+		s.storageMutex.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"success","duration":"%v"}`, duration)
 	})
 
 	server := &http.Server{

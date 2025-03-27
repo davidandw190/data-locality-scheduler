@@ -18,15 +18,15 @@ spec:
       serviceAccountName: data-locality-scheduler
       containers:
       - name: scheduler
-        image: data-locality-scheduler:latest # TODO: replace with image reference
-        imagePullPolicy: IfNotPresent
+        image: davidandw190/data-locality-scheduler:latest
+        imagePullPolicy: Always
         args:
         - "--scheduler-name=data-locality-scheduler"
         - "--enable-data-locality=true"
         - "--same-zone-bandwidth-mbps=500"
         - "--same-region-bandwidth-mbps=200"
         - "--edge-cloud-bandwidth-mbps=25"
-        - "--v=2"
+        - "--v=4"
         ports:
         - containerPort: 8080
           name: http

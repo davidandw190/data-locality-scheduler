@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-test-configmap
+  namespace: data-locality-scheduler
+data:
+  test-data.json: |
+    {
+      "name": "test-data",
+      "size": 1048576,
+      "metadata": { 
+        "type": "test", 
+        "created": "2025-03-22"
+      }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-consumer-pod
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "test-bucket/test-data.json,1048576,5,3,json"
+    data.scheduler.thesis/output-1: "results-bucket/result-data.json,2097152,0,4,json"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: data-processor
+    image: python:3.9
+    command: [ "python", "-c", "import time; print('Processing data...'); time.sleep(3600)" ]
+    volumeMounts:
+    - name: test-data
+      mountPath: /data
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  volumes:
+  - name: test-data
+    configMap:
+      name: data-test-configmap
+  restartPolicy: Never

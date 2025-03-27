@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os/exec"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -51,14 +51,7 @@ func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string,
 	startTime := time.Now()
 
 	defer func() {
-		klog.V(4).Infof("Storage capability collection took %v", time.Since(startTime))
-	}()
-
-	defer func() {
-		if r := recover(); r != nil {
-			klog.Errorf("Recovered from panic in CollectStorageCapabilities: %v", r)
-			debug.PrintStack()
-		}
+		klog.V(4).Infof("Data locality collection took %v", time.Since(startTime))
 	}()
 
 	node, err := c.clientset.CoreV1().Nodes().Get(ctx, c.nodeName, metav1.GetOptions{})
@@ -68,39 +61,31 @@ func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string,
 
 	c.detectAndSetNodeTopology(node, labels)
 
-	detectionCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	storageIndex := storage.NewStorageIndex()
+	minioIndexer := minio.NewIndexer(storageIndex, 5*time.Minute)
 
-	hasMinio, minioBuckets, storageCapacity, err := c.detectStorageService(detectionCtx)
+	detector := NewMinioDetector(c.clientset, c.nodeName, minioIndexer)
+	hasMinio, minioBuckets, err := detector.DetectLocalMinioService(ctx)
+
 	if err != nil {
-		klog.Warningf("Error detecting storage service: %v, continuing with partial information", err)
+		klog.Warningf("Error detecting Minio: %v", err)
 	}
 
 	if hasMinio {
-		labels[StorageNodeLabel] = "true"
-		labels[StorageTypeLabel] = "object"
-
-		if storageCapacity > 0 {
-			labels[StorageCapacityLabel] = strconv.FormatInt(storageCapacity, 10)
-		}
-
-		// register buckets
-		for _, bucket := range minioBuckets {
-			labels[BucketLabelPrefix+bucket] = "true"
-		}
-
-		// detect storage technology (SSD, HDD, etc.) with better error handling
-		storageTech, err := c.detectStorageTechnology()
-		if err == nil && storageTech != "" {
-			labels[StorageTechLabel] = storageTech
-		} else {
-			klog.V(4).Infof("Could not determine storage technology: %v", err)
-		}
+		detector.AddMinioLabelsToNode(labels, minioBuckets)
+		klog.V(2).Infof("Detected Minio on node %s with %d buckets", c.nodeName, len(minioBuckets))
 	} else {
-		c.detectAndLabelLocalStorage(ctx, labels)
+		volumeDetector := NewVolumeDetector(c.clientset, c.nodeName)
+		volumes, err := volumeDetector.DetectLocalVolumes(ctx)
+
+		if err != nil {
+			klog.Warningf("Error detecting volumes: %v", err)
+		} else if len(volumes) > 0 {
+			volumeDetector.AddVolumeLabelsToNode(volumes, labels)
+			klog.V(2).Infof("Detected %d volumes on node %s", len(volumes), c.nodeName)
+		}
 	}
 
-	// network measurements
 	if time.Since(c.lastBandwidthUpdate) > DefaultBandwidthMeasurementInterval {
 		networkCtx, networkCancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer networkCancel()
@@ -124,31 +109,24 @@ func (c *DataLocalityCollector) Collect(ctx context.Context) (map[string]string,
 	return labels, nil
 }
 
-func (c *DataLocalityCollector) detectAndLabelLocalStorage(ctx context.Context, labels map[string]string) {
-	hasLocalStorage, localCapacity := c.detectLocalStorage(ctx)
-	if hasLocalStorage {
-		labels[StorageNodeLabel] = "true"
-		labels[StorageTypeLabel] = "local"
+func (c *DataLocalityCollector) GetCapabilities() map[string]string {
+	c.bandwidthCacheMutex.RLock()
+	defer c.bandwidthCacheMutex.RUnlock()
 
-		if localCapacity > 0 {
-			labels[StorageCapacityLabel] = strconv.FormatInt(localCapacity, 10)
-		}
-
-		storageTech, err := c.detectStorageTechnology()
-		if err == nil && storageTech != "" {
-			labels[StorageTechLabel] = storageTech
-		} else {
-			klog.V(4).Infof("Could not determine storage technology for local storage: %v", err)
-		}
-	} else {
-		// we clear storage labels if they previously existed
-		labels[StorageNodeLabel] = ""
-		labels[StorageTypeLabel] = ""
+	result := make(map[string]string)
+	for nodeName, bandwidth := range c.bandwidthCache {
+		result[BandwidthPrefix+nodeName] = strconv.FormatInt(bandwidth, 10)
 	}
+
+	for nodeName, latency := range c.bandwidthLatencyCache {
+		result[LatencyPrefix+nodeName] = strconv.FormatFloat(latency, 'f', 2, 64)
+	}
+
+	return result
 }
 
 func (c *DataLocalityCollector) detectAndSetNodeTopology(node *v1.Node, labels map[string]string) {
-	if nodeType, exists := node.Labels[EdgeNodeLabel]; exists {
+	if nodeType, exists := node.Labels[EdgeNodeLabel]; exists && (nodeType == EdgeNodeValue || nodeType == CloudNodeValue) {
 		c.nodeType = nodeType
 		labels[EdgeNodeLabel] = nodeType
 	} else {
@@ -182,164 +160,33 @@ func (c *DataLocalityCollector) detectAndSetNodeTopology(node *v1.Node, labels m
 		}
 	}
 
-	if region, exists := node.Labels[RegionLabel]; exists {
+	if region, exists := node.Labels[RegionLabel]; exists && region != "" {
 		c.region = region
 		labels[RegionLabel] = region
+	} else {
+		regionFromName := extractRegionFromName(node.Name)
+		if regionFromName != "" {
+			c.region = regionFromName
+			labels[RegionLabel] = regionFromName
+			klog.Infof("Set region %s for node %s based on node name", regionFromName, node.Name)
+		} else {
+			klog.Warningf("Could not determine region for node %s, topology-aware scheduling will be limited", node.Name)
+		}
 	}
 
-	if zone, exists := node.Labels[ZoneLabel]; exists {
+	if zone, exists := node.Labels[ZoneLabel]; exists && zone != "" {
 		c.zone = zone
 		labels[ZoneLabel] = zone
-	}
-}
-
-func (c *DataLocalityCollector) detectStorageService(ctx context.Context) (bool, []string, int64, error) {
-	fieldSelector := fmt.Sprintf("spec.nodeName=%s", c.nodeName)
-
-	pods, err := c.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector,
-	})
-
-	if err != nil {
-		return false, nil, 0, fmt.Errorf("failed to list pods: %w", err)
-	}
-
-	var minioPods []v1.Pod
-	for _, pod := range pods.Items {
-		if strings.Contains(strings.ToLower(pod.Name), "minio") ||
-			(pod.Labels != nil && pod.Labels["app"] == "minio") {
-			minioPods = append(minioPods, pod)
+	} else {
+		zoneFromName := extractZoneFromName(node.Name)
+		if zoneFromName != "" {
+			c.zone = zoneFromName
+			labels[ZoneLabel] = zoneFromName
+			klog.Infof("Set zone %s for node %s based on node name", zoneFromName, node.Name)
+		} else {
+			klog.Warningf("Could not determine zone for node %s, topology-aware scheduling will be limited", node.Name)
 		}
 	}
-
-	if len(minioPods) == 0 {
-		return false, nil, 0, nil
-	}
-
-	buckets := []string{"eo-scenes", "cog-data", "fmask-results", "data", "models"}
-
-	var storageCapacity int64
-	for _, pod := range minioPods {
-		for _, volume := range pod.Spec.Volumes {
-			if volume.PersistentVolumeClaim != nil {
-				pvcName := volume.PersistentVolumeClaim.ClaimName
-				pvc, err := c.clientset.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(ctx, pvcName, metav1.GetOptions{})
-				if err == nil {
-					if storage, exists := pvc.Status.Capacity["storage"]; exists {
-						storageCapacity = storage.Value()
-						break
-					}
-				}
-			}
-		}
-
-		if storageCapacity > 0 {
-			break
-		}
-	}
-
-	return true, buckets, storageCapacity, nil
-}
-
-func (c *DataLocalityCollector) detectLocalStorage(ctx context.Context) (bool, int64) {
-	pvs, err := c.clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.Warningf("Failed to list PersistentVolumes: %v", err)
-		return false, 0
-	}
-
-	var totalCapacity int64
-	hasLocalStorage := false
-
-	for _, pv := range pvs.Items {
-		if c.isPVAttachedToNode(pv, c.nodeName) {
-			hasLocalStorage = true
-
-			if capacity, exists := pv.Spec.Capacity["storage"]; exists {
-				totalCapacity += capacity.Value()
-			}
-		}
-	}
-
-	return hasLocalStorage, totalCapacity
-}
-
-func (c *DataLocalityCollector) isPVAttachedToNode(pv v1.PersistentVolume, nodeName string) bool {
-	if pv.Spec.NodeAffinity != nil && pv.Spec.NodeAffinity.Required != nil {
-		for _, term := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms {
-			for _, expr := range term.MatchExpressions {
-				if expr.Key == "kubernetes.io/hostname" && expr.Operator == "In" {
-					for _, value := range expr.Values {
-						if value == nodeName {
-							return true
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if pv.Spec.Local != nil {
-		return true
-	}
-
-	if boundNode, exists := pv.Annotations["volume.kubernetes.io/selected-node"]; exists {
-		return boundNode == nodeName
-	}
-
-	return false
-}
-
-func (c *DataLocalityCollector) detectStorageTechnology() (string, error) {
-	cmd := exec.Command("ls", "/dev/nvme*")
-	output, err := cmd.CombinedOutput()
-	if err == nil && len(output) > 0 {
-		return "nvme", nil
-	}
-
-	// rotational status of primary disk
-	cmd = exec.Command("lsblk", "-d", "-n", "-o", "NAME,ROTA")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-		for _, line := range lines {
-			fields := strings.Fields(line)
-			if len(fields) >= 2 && !strings.HasPrefix(fields[0], "loop") {
-				// ROTA=0 = non-rotational (SSD), ROTA=1 = rotational (HDD)
-				if fields[1] == "0" {
-					return "ssd", nil
-				} else if fields[1] == "1" {
-					return "hdd", nil
-				}
-			}
-		}
-	}
-
-	// we have to check if the root partition is mounted on SSD or HDD
-	cmd = exec.Command("findmnt", "-n", "-o", "SOURCE", "/")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		source := strings.TrimSpace(string(output))
-		if strings.HasPrefix(source, "/dev/") {
-
-			device := strings.TrimPrefix(source, "/dev/")
-			device = strings.Split(device, "p")[0] // removing partition number
-			device = strings.TrimRight(device, "0123456789")
-
-			rotaPath := fmt.Sprintf("/sys/block/%s/queue/rotational", device)
-			cmd = exec.Command("cat", rotaPath)
-			output, err = cmd.CombinedOutput()
-			if err == nil {
-				if strings.TrimSpace(string(output)) == "0" {
-					return "ssd", nil
-				} else {
-					return "hdd", nil
-				}
-			}
-		}
-	}
-
-	return "unknown", fmt.Errorf("could not determine storage technology")
 }
 
 // collectNetworkMeasurements measures network bandwidth between nodes
@@ -458,7 +305,7 @@ func (c *DataLocalityCollector) mockBandwidthMeasurement(node v1.Node) (int64, f
 			bandwidth = int64(float64(200000000) * jitter) // 200 MB/s edge-edge
 			latency = 5.0 / jitter                         // 5ms
 		} else if c.nodeType == CloudNodeValue && targetType == CloudNodeValue {
-			bandwidth = int64(float64(500000000) * jitter) // 500 MB/s  cloud-cloud
+			bandwidth = int64(float64(500000000) * jitter) // 500 MB/s cloud-cloud
 			latency = 2.0 / jitter                         // 2ms
 		} else {
 			bandwidth = int64(float64(100000000) * jitter) // 100 MB/s edge-cloud
@@ -473,7 +320,7 @@ func (c *DataLocalityCollector) mockBandwidthMeasurement(node v1.Node) (int64, f
 			bandwidth = int64(float64(100000000) * jitter) // 100 MB/s cloud-cloud
 			latency = 20.0 / jitter                        // 20ms
 		} else {
-			bandwidth = int64(float64(20000000) * jitter) // 20 MB/s  edge-cloud
+			bandwidth = int64(float64(20000000) * jitter) // 20 MB/s edge-cloud
 			latency = 100.0 / jitter                      // 100ms
 		}
 	}
@@ -490,18 +337,40 @@ func isNodeReady(node *v1.Node) bool {
 	return false
 }
 
-func (c *DataLocalityCollector) GetCapabilities() map[string]string {
-	c.bandwidthCacheMutex.RLock()
-	defer c.bandwidthCacheMutex.RUnlock()
+func extractRegionFromName(nodeName string) string {
+	regionPatterns := []string{"region-", "-region-"}
 
-	result := make(map[string]string)
-	for nodeName, bandwidth := range c.bandwidthCache {
-		result[BandwidthPrefix+nodeName] = strconv.FormatInt(bandwidth, 10)
+	for _, pattern := range regionPatterns {
+		if strings.Contains(nodeName, pattern) {
+			parts := strings.Split(nodeName, pattern)
+			if len(parts) > 1 {
+				regionPart := parts[1]
+				if idx := strings.Index(regionPart, "-"); idx > 0 {
+					return pattern + regionPart[:idx]
+				}
+				return pattern + regionPart
+			}
+		}
 	}
 
-	for nodeName, latency := range c.bandwidthLatencyCache {
-		result[LatencyPrefix+nodeName] = strconv.FormatFloat(latency, 'f', 2, 64)
+	return ""
+}
+
+func extractZoneFromName(nodeName string) string {
+	zonePatterns := []string{"zone-", "-zone-"}
+
+	for _, pattern := range zonePatterns {
+		if strings.Contains(nodeName, pattern) {
+			parts := strings.Split(nodeName, pattern)
+			if len(parts) > 1 {
+				zonePart := parts[1]
+				if idx := strings.Index(zonePart, "-"); idx > 0 {
+					return pattern + zonePart[:idx]
+				}
+				return pattern + zonePart
+			}
+		}
 	}
 
-	return result
+	return ""
 }
