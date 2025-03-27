@@ -320,7 +320,6 @@ func startHealthServer(port int, collectors []daemon.NodeCollector) *http.Server
 		w.Write([]byte("\n}\n"))
 	})
 
-	// Version endpoint
 	mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(fmt.Appendf(nil, "{\n  \"version\": \"%s\",\n  \"buildTime\": \"%s\"\n}\n",

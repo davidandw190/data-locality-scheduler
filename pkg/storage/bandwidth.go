@@ -245,7 +245,7 @@ func (bg *BandwidthGraph) EstimateTransferTimeBetweenNodes(source, dest string, 
 		transferTime *= 1.1 // 10% overhead
 	}
 
-	// reliability factor - less reliable paths take longer in practice
+	// reliability factor - less reliable paths take longer
 	reliabilityFactor := 1.0 + (1.0-path.Reliability)*0.5
 	transferTime *= reliabilityFactor
 

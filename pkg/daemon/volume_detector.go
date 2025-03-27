@@ -334,7 +334,6 @@ func (d *VolumeDetector) getStorageTechFromPV(pv *v1.PersistentVolume) string {
 	return "unknown"
 }
 
-// getPathCapacity gets capacity of a filesystem path
 func (d *VolumeDetector) getPathCapacity(path string) (int64, int64) {
 	cmd := exec.Command("df", "-B1", "--output=size,avail", path)
 	output, err := cmd.Output()
@@ -395,7 +394,6 @@ func (d *VolumeDetector) detectStorageTechnology(devicePath string) (string, err
 	return "unknown", fmt.Errorf("could not determine storage technology")
 }
 
-// AddVolumeLabelsToNode adds volume-related labels to the node labels map
 func (d *VolumeDetector) AddVolumeLabelsToNode(volumes []VolumeInfo, labels map[string]string) {
 	if len(volumes) == 0 {
 		klog.V(4).Infof("No storage volumes detected on node %s", d.nodeName)
