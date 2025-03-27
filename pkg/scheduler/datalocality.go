@@ -69,13 +69,23 @@ func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) 
 	}
 
 	inputScore := p.calculateInputDataScore(inputData, nodeName)
-
 	outputScore := p.calculateOutputDataScore(outputData, nodeName)
 
 	var dataScore int
 	if len(inputData) > 0 && len(outputData) > 0 {
-		dataScore = int((float64(inputScore) * p.config.InputDataWeight) +
-			(float64(outputScore) * (1.0 - p.config.InputDataWeight)))
+		inputWeight := p.config.InputDataWeight
+		totalInputSize := sumDataSize(inputData)
+		totalOutputSize := sumDataSize(outputData)
+
+		if totalInputSize+totalOutputSize > 0 {
+			// we adjust weight based on relative sizes, but keep within bounds
+			adjustedWeight := float64(totalInputSize) / float64(totalInputSize+totalOutputSize)
+			// then blend with the default weight to avoid extremes
+			inputWeight = (inputWeight + adjustedWeight) / 2
+		}
+
+		dataScore = int((float64(inputScore) * inputWeight) +
+			(float64(outputScore) * (1.0 - inputWeight)))
 	} else if len(inputData) > 0 {
 		dataScore = inputScore
 	} else {
@@ -257,6 +267,7 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 			continue
 		}
 
+		// co-located data is ideal - max score
 		if containsString(storageNodes, nodeName) {
 			klog.V(4).Infof("Data %s is co-located on node %s - optimal score", data.URN, nodeName)
 			weightedScore += float64(p.config.MaxScore) * weight
@@ -287,8 +298,8 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		klog.V(5).Infof("For data %s (size: %d): best storage node is %s with transfer time %.2f s",
 			data.URN, data.SizeBytes, bestStorageNode, bestTransferTime)
 
+		// non-linear scoring for transfer time
 		score := calculateScoreFromTransferTime(bestTransferTime, p.config.MaxScore)
-
 		// opt
 		sizeFactor := 1.0
 		if data.SizeBytes > 100*1024*1024 { // 100MB
@@ -297,7 +308,6 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 
 		weight *= sizeFactor
 		//
-
 		weightedScore += float64(score) * weight
 		totalWeight += weight
 	}
@@ -337,16 +347,17 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 			continue
 		}
 
+		// if the current node is a storage node for this bucket, it's the best option
+		if containsString(storageNodes, nodeName) {
+			weightedScore += float64(p.config.MaxScore) * weight
+			totalWeight += weight
+			continue
+		}
+
 		bestTransferTime := float64(1e12)
 		var bestStorageNode string
 
 		for _, storageNode := range storageNodes {
-			if storageNode == nodeName {
-				bestTransferTime = 0.001
-				bestStorageNode = storageNode
-				break
-			}
-
 			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(nodeName, storageNode, data.SizeBytes)
 			if transferTime < bestTransferTime {
 				bestTransferTime = transferTime
@@ -358,7 +369,6 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 			data.URN, bestStorageNode, bestTransferTime*1000)
 
 		score := calculateScoreFromTransferTime(bestTransferTime, p.config.MaxScore)
-
 		weightedScore += float64(score) * weight
 		totalWeight += weight
 	}
@@ -385,11 +395,20 @@ func calculateScoreFromTransferTime(transferTime float64, maxScore int) int {
 		return maxScore
 	}
 
-	maxThreshold := 20.0
+	maxThreshold := 20.0 // seconds
 	if transferTime >= maxThreshold {
 		return 0
 	}
 
+	// exponential decay for scoring - smoother curve than linear
 	score := float64(maxScore) * math.Exp(-transferTime/5.0)
 	return int(score)
+}
+
+func sumDataSize(data []DataDependency) int64 {
+	var totalSize int64
+	for _, item := range data {
+		totalSize += item.SizeBytes
+	}
+	return totalSize
 }
