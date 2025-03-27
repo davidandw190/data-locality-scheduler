@@ -539,6 +539,34 @@ func (si *StorageIndex) MockMinioData() {
 		len(buckets), len(mockItems))
 }
 
+func (si *StorageIndex) GetAllDataItems() map[string]*DataItem {
+	si.mu.RLock()
+	defer si.mu.RUnlock()
+
+	result := make(map[string]*DataItem, len(si.dataItems))
+	for key, item := range si.dataItems {
+		itemCopy := &DataItem{
+			URN:          item.URN,
+			Size:         item.Size,
+			Locations:    make([]string, len(item.Locations)),
+			LastModified: item.LastModified,
+			ContentType:  item.ContentType,
+		}
+		copy(itemCopy.Locations, item.Locations)
+
+		if item.Metadata != nil {
+			itemCopy.Metadata = make(map[string]string)
+			for k, v := range item.Metadata {
+				itemCopy.Metadata[k] = v
+			}
+		}
+
+		result[key] = itemCopy
+	}
+
+	return result
+}
+
 func (si *StorageIndex) ValidateBucketNodeAssociations(ctx context.Context) int {
 	si.mu.Lock()
 	defer si.mu.Unlock()

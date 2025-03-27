@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
+	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -94,6 +95,13 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	if err := s.initStorageInformation(ctx); err != nil {
 		klog.Warningf("Failed to initialize storage information: %v", err)
 		klog.Warningf("Continuing with limited storage awareness")
+	}
+
+	if err := s.discoverAndRegisterMinioServices(ctx); err != nil {
+		klog.Warningf("Failed to discover MinIO services: %v", err)
+		klog.Warningf("Continuing with limited MinIO awareness")
+	} else {
+		klog.Info("Successfully initialized MinIO service discovery")
 	}
 
 	s.storageIndex.PerformMaintenance()
@@ -475,6 +483,72 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 
 func (s *Scheduler) SetEnableMockData(enable bool) {
 	s.enableMockData = enable
+}
+
+// discoverAndRegisterMinioServices discovers MinIO services and indexes their contents
+func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
+	klog.Info("Discovering and registering MinIO services...")
+
+	// Create MinIO indexer
+	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
+
+	// Discover MinIO nodes first (pod-based discovery)
+	if err := minioIndexer.DiscoverMinioNodesFromKubernetes(ctx, s.clientset); err != nil {
+		klog.Warningf("Failed to discover MinIO nodes from Kubernetes: %v", err)
+	}
+
+	// Also discover MinIO services (service-based discovery)
+	if err := minioIndexer.DiscoverMinioServicesFromKubernetes(ctx, s.clientset); err != nil {
+		klog.Warningf("Failed to discover MinIO services from Kubernetes: %v", err)
+	}
+
+	// Refresh index to get bucket and object information
+	if err := minioIndexer.RefreshIndex(ctx); err != nil {
+		klog.Warningf("Failed to refresh MinIO index: %v", err)
+	}
+
+	// Check if we found data items
+	s.storageMutex.RLock()
+	dataItemCount := len(s.storageIndex.GetAllDataItems())
+	s.storageMutex.RUnlock()
+
+	klog.Infof("Initial MinIO discovery found %d data items", dataItemCount)
+
+	// If still no data found, try one more aggressive refresh
+	if dataItemCount == 0 {
+		klog.Info("No data items found, attempting more aggressive discovery...")
+		time.Sleep(2 * time.Second) // Brief pause before retry
+
+		// Try direct service connections with explicit DNS names
+		serviceNames := []struct {
+			name     string
+			endpoint string
+		}{
+			{"minio", "minio.data-locality-scheduler.svc.cluster.local:9000"},
+			{"minio-edge-region1", "minio-edge-region1.data-locality-scheduler.svc.cluster.local:9000"},
+			{"minio-edge-region2", "minio-edge-region2.data-locality-scheduler.svc.cluster.local:9000"},
+		}
+
+		for _, svc := range serviceNames {
+			minioIndexer.RegisterMinioService(svc.name, svc.endpoint, false)
+		}
+
+		// Refresh again
+		if err := minioIndexer.RefreshIndex(ctx); err != nil {
+			klog.Warningf("Failed to refresh MinIO index in second attempt: %v", err)
+		}
+
+		s.storageMutex.RLock()
+		dataItemCount = len(s.storageIndex.GetAllDataItems())
+		s.storageMutex.RUnlock()
+
+		klog.Infof("After aggressive discovery: found %d data items", dataItemCount)
+	}
+
+	// Start periodic refresh
+	minioIndexer.StartRefresher(ctx)
+
+	return nil
 }
 
 // createPodInformer creates a pod informer to watch for unscheduled pods

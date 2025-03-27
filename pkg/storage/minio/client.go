@@ -23,6 +23,8 @@ type Client struct {
 const (
 	DefaultAccessKey = "minioadmin"
 	DefaultSecretKey = "minioadmin"
+	MaxRetries       = 3
+	RetryDelay       = 2 * time.Second
 )
 
 func NewClient(endpoint string, secure bool) *Client {
@@ -39,34 +41,60 @@ func (c *Client) Connect() error {
 		return nil
 	}
 
-	endpoint := c.endpoint
-	if !strings.Contains(endpoint, "://") {
-		if c.secure {
-			endpoint = "https://" + endpoint
-		} else {
-			endpoint = "http://" + endpoint
+	var client *minio.Client
+	var err error
+
+	for retry := 0; retry < MaxRetries; retry++ {
+		if retry > 0 {
+			time.Sleep(RetryDelay * time.Duration(retry))
+			klog.V(4).Infof("Retrying connection to MinIO at %s (attempt %d/%d)",
+				c.endpoint, retry+1, MaxRetries)
 		}
+
+		endpoint := c.endpoint
+		if !strings.Contains(endpoint, "://") {
+			if c.secure {
+				endpoint = "https://" + endpoint
+			} else {
+				endpoint = "http://" + endpoint
+			}
+		}
+
+		host := endpoint
+		if strings.Contains(endpoint, "://") {
+			parts := strings.SplitN(endpoint, "://", 2)
+			if len(parts) == 2 {
+				host = parts[1]
+			}
+		}
+
+		client, err = minio.New(host, &minio.Options{
+			Creds:  credentials.NewStaticV4(DefaultAccessKey, DefaultSecretKey, ""),
+			Secure: c.secure,
+		})
+
+		if err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_, err = client.ListBuckets(ctx)
+			cancel()
+
+			if err == nil {
+				break // successfully connected
+			}
+		}
+
+		klog.V(4).Infof("MinIO connection attempt %d failed for %s: %v",
+			retry+1, endpoint, err)
 	}
 
-	host := endpoint
-	if strings.Contains(endpoint, "://") {
-		parts := strings.SplitN(endpoint, "://", 2)
-		if len(parts) == 2 {
-			host = parts[1]
-		}
-	}
-
-	client, err := minio.New(host, &minio.Options{
-		Creds:  credentials.NewStaticV4(DefaultAccessKey, DefaultSecretKey, ""),
-		Secure: c.secure,
-	})
 	if err != nil {
-		return fmt.Errorf("failed to create Minio client: %w", err)
+		return fmt.Errorf("failed to connect to MinIO at %s after %d attempts: %w",
+			c.endpoint, MaxRetries, err)
 	}
 
 	c.client = client
 	c.connected = true
-	klog.V(2).Infof("Connected to Minio server at %s", endpoint)
+	klog.V(2).Infof("Connected to MinIO server at %s", c.endpoint)
 	return nil
 }
 
@@ -85,6 +113,8 @@ func (c *Client) ListBuckets(ctx context.Context) ([]string, error) {
 		bucketNames[i] = bucket.Name
 	}
 
+	klog.V(4).Infof("Listed %d buckets from MinIO at %s: %v",
+		len(bucketNames), c.endpoint, bucketNames)
 	return bucketNames, nil
 }
 
@@ -98,17 +128,20 @@ func (c *Client) ListObjects(ctx context.Context, bucketName string) ([]ObjectIn
 		return nil, fmt.Errorf("failed to check if bucket %s exists: %w", bucketName, err)
 	}
 	if !exists {
+		klog.V(4).Infof("Bucket %s does not exist on MinIO at %s", bucketName, c.endpoint)
 		return nil, fmt.Errorf("bucket %s does not exist", bucketName)
 	}
 
 	objectCh := c.client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
 		Recursive: true,
+		UseV1:     false,
 	})
 
 	var objects []ObjectInfo
 	for object := range objectCh {
 		if object.Err != nil {
-			klog.Warningf("Error listing object in bucket %s: %v", bucketName, object.Err)
+			klog.Warningf("Error listing object in bucket %s on %s: %v",
+				bucketName, c.endpoint, object.Err)
 			continue
 		}
 
@@ -120,6 +153,8 @@ func (c *Client) ListObjects(ctx context.Context, bucketName string) ([]ObjectIn
 		})
 	}
 
+	klog.V(4).Infof("Listed %d objects in bucket %s on %s",
+		len(objects), bucketName, c.endpoint)
 	return objects, nil
 }
 
