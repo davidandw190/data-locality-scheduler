@@ -38,14 +38,6 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: spec.nodeName
-    - name: NODE_REGION
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.labels['topology.kubernetes.io/region']
-    - name: NODE_ZONE
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.labels['topology.kubernetes.io/zone']
     volumeMounts:
     - name: tests
       mountPath: /tests
@@ -81,14 +73,6 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: spec.nodeName
-    - name: NODE_REGION
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.labels['topology.kubernetes.io/region']
-    - name: NODE_ZONE
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.labels['topology.kubernetes.io/zone']
     volumeMounts:
     - name: tests
       mountPath: /tests

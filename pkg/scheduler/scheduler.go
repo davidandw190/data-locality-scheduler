@@ -488,38 +488,30 @@ func (s *Scheduler) SetEnableMockData(enable bool) {
 // discoverAndRegisterMinioServices discovers MinIO services and indexes their contents
 func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
 	klog.Info("Discovering and registering MinIO services...")
-
-	// Create MinIO indexer
 	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
 
-	// Discover MinIO nodes first (pod-based discovery)
 	if err := minioIndexer.DiscoverMinioNodesFromKubernetes(ctx, s.clientset); err != nil {
 		klog.Warningf("Failed to discover MinIO nodes from Kubernetes: %v", err)
 	}
 
-	// Also discover MinIO services (service-based discovery)
 	if err := minioIndexer.DiscoverMinioServicesFromKubernetes(ctx, s.clientset); err != nil {
 		klog.Warningf("Failed to discover MinIO services from Kubernetes: %v", err)
 	}
 
-	// Refresh index to get bucket and object information
 	if err := minioIndexer.RefreshIndex(ctx); err != nil {
 		klog.Warningf("Failed to refresh MinIO index: %v", err)
 	}
 
-	// Check if we found data items
 	s.storageMutex.RLock()
 	dataItemCount := len(s.storageIndex.GetAllDataItems())
 	s.storageMutex.RUnlock()
 
 	klog.Infof("Initial MinIO discovery found %d data items", dataItemCount)
 
-	// If still no data found, try one more aggressive refresh
 	if dataItemCount == 0 {
 		klog.Info("No data items found, attempting more aggressive discovery...")
-		time.Sleep(2 * time.Second) // Brief pause before retry
+		time.Sleep(2 * time.Second)
 
-		// Try direct service connections with explicit DNS names
 		serviceNames := []struct {
 			name     string
 			endpoint string
@@ -533,7 +525,6 @@ func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error 
 			minioIndexer.RegisterMinioService(svc.name, svc.endpoint, false)
 		}
 
-		// Refresh again
 		if err := minioIndexer.RefreshIndex(ctx); err != nil {
 			klog.Warningf("Failed to refresh MinIO index in second attempt: %v", err)
 		}
@@ -545,7 +536,6 @@ func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error 
 		klog.Infof("After aggressive discovery: found %d data items", dataItemCount)
 	}
 
-	// Start periodic refresh
 	minioIndexer.StartRefresher(ctx)
 
 	return nil
@@ -989,16 +979,22 @@ func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, er
 
 	preferEdge := false
 	preferCloud := false
+	preferredRegion := ""
 
 	if pod.Annotations != nil {
 		_, preferEdge = pod.Annotations["scheduler.thesis/prefer-edge"]
 		_, preferCloud = pod.Annotations["scheduler.thesis/prefer-cloud"]
+
+		if regionValue, ok := pod.Annotations["scheduler.thesis/prefer-region"]; ok {
+			preferredRegion = regionValue
+		}
 	}
 
 	for _, node := range nodes {
 		score := 50
 
 		isEdge := isEdgeNode(&node)
+		nodeRegion := node.Labels["topology.kubernetes.io/region"]
 
 		if preferEdge && isEdge {
 			score = 100
@@ -1007,6 +1003,13 @@ func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, er
 		} else if preferCloud && !isEdge {
 			score = 100
 		} else if preferCloud && isEdge {
+			score = 0
+		}
+
+		// TODO: handle this properly using MCDM approaches
+		if preferredRegion != "" && nodeRegion == preferredRegion {
+			score = 100
+		} else if preferredRegion != "" && nodeRegion != preferredRegion {
 			score = 0
 		}
 
