@@ -1,0 +1,583 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fixed-scheduler-evaluation
+  namespace: data-locality-scheduler
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: scheduler-evaluation
+    spec:
+      serviceAccountName: data-locality-scheduler
+      containers:
+      - name: evaluator
+        image: alpine:3.19
+        command: [ "/bin/sh", "-c" ]
+        args:
+        - |
+          # Install required tools with verification
+          echo "Installing dependencies..."
+          apk update
+          apk add --no-cache kubectl bash coreutils jq bc curl
+
+          # Verify all required tools are installed
+          for cmd in kubectl bash bc jq; do
+            if ! command -v $cmd &> /dev/null; then
+              echo "ERROR: Required command '$cmd' not found. Retrying installation..."
+              apk add --no-cache $cmd
+              if ! command -v $cmd &> /dev/null; then
+                echo "FATAL: Failed to install '$cmd'. Exiting."
+                exit 1
+              fi
+            fi
+          done
+
+          echo "All dependencies successfully installed."
+
+          # Setup working directory
+          mkdir -p /tmp/results
+
+          # Test ID for unique labeling
+          TEST_ID=$(date +%s)
+          TIMEOUT_PER_TEST=120
+
+          echo "=== Scheduler Evaluation (ID: $TEST_ID) ==="
+
+          # Check if scheduler is running
+          SCHEDULER_CHECK=$(kubectl get pods -n data-locality-scheduler -l app=data-locality-scheduler --no-headers 2>/dev/null | grep "Running" | wc -l)
+          if [ "$SCHEDULER_CHECK" -eq 0 ]; then
+            echo "Error: Data locality scheduler is not running"
+            exit 1
+          fi
+
+          echo "Scheduler is running and ready for evaluation"
+
+          # Get scheduler pod for logs
+          SCHEDULER_POD=$(kubectl get pods -n data-locality-scheduler -l app=data-locality-scheduler -o jsonpath='{.items[0].metadata.name}')
+          echo "Using scheduler pod: $SCHEDULER_POD"
+
+          # Capture cluster information
+          TOTAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+          EDGE_NODES=$(kubectl get nodes -l "node-capability/node-type=edge" --no-headers | wc -l)
+          CLOUD_NODES=$(kubectl get nodes -l "node-capability/node-type=cloud" --no-headers | wc -l)
+          STORAGE_NODES=$(kubectl get nodes -l "node-capability/storage-service=true" --no-headers | wc -l)
+
+          echo "Cluster information:"
+          echo "- Total nodes: $TOTAL_NODES"
+          echo "- Edge nodes: $EDGE_NODES"
+          echo "- Cloud nodes: $CLOUD_NODES"
+          echo "- Storage nodes: $STORAGE_NODES"
+
+          # Get detailed node information for reference
+          echo "Detailed node capabilities:" >> /tmp/results/node_capabilities.txt
+          for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
+            echo "Node: $node" >> /tmp/results/node_capabilities.txt
+            echo "Labels:" >> /tmp/results/node_capabilities.txt
+            kubectl get node $node -o jsonpath='{.metadata.labels}' | jq . >> /tmp/results/node_capabilities.txt
+            echo "" >> /tmp/results/node_capabilities.txt
+          done
+          echo "Node capabilities saved to /tmp/results/node_capabilities.txt"
+
+          # Initialize CSV results file
+          echo "test_name,pod_name,test_type,node,node_type,region,zone,is_storage_node,scheduling_time,score,reason" > /tmp/results/eval_tests.csv
+
+          # Function to run a test and analyze results
+          run_test() {
+            local name=$1
+            local pod_name=$2
+            local test_type=$3
+            local expected_outcome=$4
+            local timeout=${5:-$TIMEOUT_PER_TEST}
+            local annotations=$6
+            
+            echo "==== Test: $name ===="
+            echo "Type: $test_type"
+            echo "Expected: $expected_outcome"
+            
+            # Create pod manifest
+            cat > /tmp/$pod_name.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: $pod_name
+            namespace: data-locality-scheduler
+            labels:
+              app: scheduler-evaluation
+              eval-test-id: "$TEST_ID"
+              eval-test-type: "$test_type"
+            annotations:
+              $annotations
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: test-container
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "echo Test running; sleep 90"]
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
+            restartPolicy: Never
+          EOF
+            
+            # Apply the pod
+            echo "Creating test pod $pod_name..."
+            creation_start=$(date +%s)
+            kubectl apply -f /tmp/$pod_name.yaml
+            if [ $? -ne 0 ]; then
+              echo "ERROR: Failed to create test pod"
+              echo "$name,$pod_name,$test_type,error,error,error,error,false,0,0,failed_to_create" >> /tmp/results/eval_tests.csv
+              return 1
+            fi
+            
+            # Wait for pod to be scheduled
+            echo "Waiting for pod to be scheduled (timeout: ${timeout}s)..."
+            local scheduled=false
+            local start_time=$(date +%s)
+            
+            while [ "$scheduled" = false ]; do
+              local current_time=$(date +%s)
+              local elapsed=$((current_time - start_time))
+              
+              # Check if pod is scheduled
+              local node_name=$(kubectl get pod $pod_name -n data-locality-scheduler -o jsonpath='{.spec.nodeName}' 2>/dev/null)
+              local pod_status=$(kubectl get pod $pod_name -n data-locality-scheduler -o jsonpath='{.status.phase}' 2>/dev/null)
+              
+              # Check for errors
+              if [ "$pod_status" = "Failed" ]; then
+                echo "ERROR: Pod failed with status: Failed"
+                echo "$name,$pod_name,$test_type,error,error,error,error,false,0,0,pod_failed" >> /tmp/results/eval_tests.csv
+                return 1
+              fi
+              
+              if [ -n "$node_name" ]; then
+                scheduled=true
+                local schedule_end=$(date +%s)
+                local schedule_time=$((schedule_end - creation_start))
+                echo "Pod scheduled in ${schedule_time}s on node $node_name"
+              elif [ "$elapsed" -gt "$timeout" ]; then
+                echo "TIMEOUT: Pod scheduling exceeded ${timeout}s limit"
+                
+                # Get pod events for debugging
+                echo "Pod events:"
+                kubectl get events --field-selector involvedObject.name=$pod_name -n data-locality-scheduler
+                
+                # Check scheduler logs for this pod
+                echo "Checking scheduler logs for pod $pod_name..."
+                kubectl logs $SCHEDULER_POD -n data-locality-scheduler | grep -i $pod_name | tail -10
+                
+                echo "$name,$pod_name,$test_type,timeout,timeout,timeout,timeout,false,0,0,scheduling_timeout" >> /tmp/results/eval_tests.csv
+                break
+              else
+                sleep 1
+              fi
+            done
+            
+            # Analyze results
+            if [ "$scheduled" = true ]; then
+              # Get scheduling details
+              local node=$(kubectl get pod $pod_name -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+              local node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null || echo "unknown")
+              local region=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}' 2>/dev/null || echo "unknown")
+              local zone=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}' 2>/dev/null || echo "unknown")
+              
+              # Check storage capabilities
+              local is_storage_node="false"
+              if kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}' 2>/dev/null | grep -q "true"; then
+                is_storage_node="true"
+              fi
+              
+              # Get additional scheduler info about this pod from logs
+              kubectl logs $SCHEDULER_POD -n data-locality-scheduler | grep -i $pod_name > /tmp/scheduler_logs_$pod_name.txt
+              
+              # Scoring based on test type
+              local score=50 # Default score
+              local result="Completed"
+              local reason="default"
+              
+              case $test_type in
+                "data-locality")
+                  if [ "$is_storage_node" = "true" ]; then
+                    score=100
+                    result="SUCCESS: Pod scheduled on storage node as expected"
+                    reason="correct_node_type"
+                  else
+                    score=20
+                    result="ISSUE: Pod not scheduled on storage node"
+                    reason="wrong_node_type"
+                  fi
+                  ;;
+                  
+                "edge-preference")
+                  if [ "$node_type" = "edge" ]; then
+                    score=100
+                    result="SUCCESS: Pod scheduled on edge node as expected"
+                    reason="correct_node_type"
+                  else
+                    score=20
+                    result="ISSUE: Pod scheduled on non-edge node ($node_type)"
+                    reason="wrong_node_type"
+                  fi
+                  ;;
+                  
+                "cloud-preference")
+                  if [ "$node_type" = "cloud" ]; then
+                    score=100
+                    result="SUCCESS: Pod scheduled on cloud node as expected"
+                    reason="correct_node_type"
+                  else
+                    score=20
+                    result="ISSUE: Pod scheduled on non-cloud node ($node_type)"
+                    reason="wrong_node_type"
+                  fi
+                  ;;
+                  
+                *)
+                  score=75
+                  result="Test completed successfully"
+                  reason="default_test"
+                  ;;
+              esac
+              
+              echo "Results:"
+              echo "- Scheduled on: $node"
+              echo "- Node type: $node_type"
+              echo "- Region: $region"
+              echo "- Zone: $zone"
+              echo "- Storage node: $is_storage_node"
+              echo "- Scheduling time: ${schedule_time}s"
+              echo "Assessment: $result"
+              echo "Score: $score/100"
+              
+              # Record to CSV
+              echo "$name,$pod_name,$test_type,$node,$node_type,$region,$zone,$is_storage_node,$schedule_time,$score,$reason" >> /tmp/results/eval_tests.csv
+              
+              # Save detailed node assignment info
+              echo "==== Detailed Node Assignment for $pod_name ====" >> /tmp/results/node_assignments.txt
+              echo "Test: $name" >> /tmp/results/node_assignments.txt
+              echo "Pod: $pod_name" >> /tmp/results/node_assignments.txt
+              echo "Node: $node" >> /tmp/results/node_assignments.txt
+              echo "Node type: $node_type" >> /tmp/results/node_assignments.txt
+              echo "Region: $region" >> /tmp/results/node_assignments.txt
+              echo "Zone: $zone" >> /tmp/results/node_assignments.txt
+              echo "Storage node: $is_storage_node" >> /tmp/results/node_assignments.txt
+              echo "Node labels:" >> /tmp/results/node_assignments.txt
+              kubectl get node $node -o jsonpath='{.metadata.labels}' | jq . >> /tmp/results/node_assignments.txt
+              echo "" >> /tmp/results/node_assignments.txt
+            else
+              echo "FAILED: Pod not scheduled within timeout period"
+              echo "Score: 0/100"
+              
+              # Additional debugging for unscheduled pods
+              echo "Checking pod status:"
+              kubectl describe pod $pod_name -n data-locality-scheduler
+            fi
+            
+            # Clean up
+            echo "Cleaning up test pod..."
+            kubectl delete pod $pod_name -n data-locality-scheduler --ignore-not-found
+            
+            echo ""
+          }
+
+          # ------------------------------------------------------------------
+          # TEST 1: Data Locality - Input Data
+          # ------------------------------------------------------------------
+          run_test "Data Locality Input Test" "eval-data-input-$TEST_ID" "data-locality" \
+            "Should prefer storage node containing test-bucket" "$TIMEOUT_PER_TEST" \
+            "scheduler.thesis/data-intensive: \"true\"\n      data.scheduler.thesis/input-1: \"test-bucket/test-data.json,209715200,5,3,json\""
+
+          # ------------------------------------------------------------------
+          # TEST 2: Edge Preference
+          # ------------------------------------------------------------------
+          if [ "$EDGE_NODES" -gt 0 ]; then
+            run_test "Edge Preference Test" "eval-edge-pref-$TEST_ID" "edge-preference" \
+              "Should prefer edge nodes" "$TIMEOUT_PER_TEST" \
+              "scheduler.thesis/prefer-edge: \"true\""
+          else
+            echo "Skipping Edge Preference Test: No edge nodes found in cluster"
+          fi
+
+          # ------------------------------------------------------------------
+          # TEST 3: Cloud Preference
+          # ------------------------------------------------------------------
+          if [ "$CLOUD_NODES" -gt 0 ]; then
+            run_test "Cloud Preference Test" "eval-cloud-pref-$TEST_ID" "cloud-preference" \
+              "Should prefer cloud nodes" "$TIMEOUT_PER_TEST" \
+              "scheduler.thesis/prefer-cloud: \"true\"\n      scheduler.thesis/compute-intensive: \"true\""
+          else
+            echo "Skipping Cloud Preference Test: No cloud nodes found in cluster"
+          fi
+
+          # ------------------------------------------------------------------
+          # TEST 4: Resource Intensive Workload
+          # ------------------------------------------------------------------
+          run_test "Resource Intensive Test" "eval-resource-$TEST_ID" "resource-intensive" \
+            "Should prefer nodes with abundant resources" "$TIMEOUT_PER_TEST" \
+            "scheduler.thesis/compute-intensive: \"true\"" 
+
+          # ------------------------------------------------------------------
+          # TEST 5: Cross-Region Data Transfer
+          # ------------------------------------------------------------------
+          run_test "Cross-Region Data Test" "eval-region-xfer-$TEST_ID" "cross-region" \
+            "Should consider both source and destination regions" "$TIMEOUT_PER_TEST" \
+            "data.scheduler.thesis/input-1: \"region1-bucket/region1-data.json,104857600,10,5,json\"\n      data.scheduler.thesis/output-1: \"region2-bucket/processed-data.json,52428800,0,3,json\""
+
+          # ------------------------------------------------------------------
+          # TEST 6: Concurrent Scheduling Test
+          # ------------------------------------------------------------------
+          echo "==== Test: Concurrent Scheduling ===="
+          echo "Creating 5 pods simultaneously to test concurrent scheduling..."
+
+          concurrent_start=$(date +%s)
+
+          # Create 5 concurrent pods
+          for i in $(seq 1 5); do
+            cat > /tmp/concurrent-$i.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: eval-concurrent-$i-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              app: scheduler-evaluation
+              eval-test-id: "$TEST_ID"
+              eval-test-type: "concurrent"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: concurrent-test
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "echo Concurrent test running; sleep 90"]
+              resources:
+                requests:
+                  memory: "$((64 + i * 16))Mi"
+                  cpu: "$((100 + i * 50))m"
+                limits:
+                  memory: "$((128 + i * 32))Mi"
+                  cpu: "$((200 + i * 100))m"
+            restartPolicy: Never
+          EOF
+            
+            kubectl apply -f /tmp/concurrent-$i.yaml
+          done
+
+          # Wait for pods to be scheduled
+          echo "Waiting for all concurrent pods to be scheduled..."
+
+          scheduled_count=0
+          start_time=$(date +%s)
+
+          # Maximum wait time for concurrent test
+          concurrent_timeout=180
+
+          # Track individual pod scheduling times
+          declare -A concurrent_pod_times
+          declare -A concurrent_pod_nodes
+
+          while [ $scheduled_count -lt 5 ]; do
+            current_time=$(date +%s)
+            elapsed=$((current_time - start_time))
+            
+            if [ $elapsed -gt $concurrent_timeout ]; then
+              echo "Timeout reached for concurrent scheduling test."
+              break
+            fi
+            
+            # Check each pod individually for more accurate tracking
+            for i in $(seq 1 5); do
+              pod_name="eval-concurrent-$i-$TEST_ID"
+              
+              # Skip already scheduled pods
+              if [ -n "${concurrent_pod_times[$i]}" ]; then
+                continue
+              fi
+              
+              # Check if pod is scheduled
+              node_name=$(kubectl get pod $pod_name -n data-locality-scheduler -o jsonpath='{.spec.nodeName}' 2>/dev/null)
+              
+              if [ -n "$node_name" ]; then
+                cur_time=$(date +%s)
+                concurrent_pod_times[$i]=$((cur_time - concurrent_start))
+                concurrent_pod_nodes[$i]=$node_name
+                scheduled_count=$((scheduled_count + 1))
+                echo "Pod $pod_name scheduled on $node_name in ${concurrent_pod_times[$i]}s"
+              fi
+            done
+            
+            sleep 2
+          done
+
+          concurrent_end=$(date +%s)
+          total_time=$((concurrent_end - concurrent_start))
+
+          # Calculate concurrent scheduling metrics
+          if [ $scheduled_count -gt 0 ]; then
+            # Calculate sum of scheduling times and find min/max
+            total_pod_time=0
+            min_time=9999999
+            max_time=0
+            
+            for i in $(seq 1 5); do
+              if [ -n "${concurrent_pod_times[$i]}" ]; then
+                pod_time=${concurrent_pod_times[$i]}
+                total_pod_time=$((total_pod_time + pod_time))
+                
+                if [ $pod_time -lt $min_time ]; then
+                  min_time=$pod_time
+                fi
+                
+                if [ $pod_time -gt $max_time ]; then
+                  max_time=$pod_time
+                fi
+              fi
+            done
+            
+            avg_time=$((total_pod_time / scheduled_count))
+            pods_per_second=$(echo "scale=2; $scheduled_count / $total_time" | bc)
+            
+            echo "Results:"
+            echo "- Pods scheduled: $scheduled_count/5"
+            echo "- Total test time: ${total_time}s"
+            echo "- Average scheduling time: ${avg_time}s per pod"
+            echo "- Min scheduling time: ${min_time}s"
+            echo "- Max scheduling time: ${max_time}s"
+            echo "- Concurrent scheduling rate: ${pods_per_second} pods/second"
+            
+            # Score based on performance
+            if (( $(echo "$pods_per_second > 0.5" | bc -l) )); then
+              score=100
+              reason="excellent_performance"
+              echo "Assessment: EXCELLENT: Scheduler handled concurrent workload efficiently"
+            elif (( $(echo "$pods_per_second > 0.2" | bc -l) )); then
+              score=75
+              reason="good_performance"
+              echo "Assessment: GOOD: Scheduler handled concurrent workload reasonably well"
+            else
+              score=50
+              reason="mediocre_performance"
+              echo "Assessment: MEDIOCRE: Scheduler handled concurrent workload but performance was slow"
+            fi
+            
+            echo "Score: $score/100"
+            
+            # Record to CSV (one representative entry for the concurrent test)
+            node=$(kubectl get pod eval-concurrent-1-$TEST_ID -n data-locality-scheduler -o jsonpath='{.spec.nodeName}' 2>/dev/null || echo "unknown")
+            node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null || echo "unknown")
+            region=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}' 2>/dev/null || echo "unknown")
+            zone=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}' 2>/dev/null || echo "unknown")
+            
+            is_storage_node="false"
+            if kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}' 2>/dev/null | grep -q "true"; then
+              is_storage_node="true"
+            fi
+            
+            echo "Concurrent Test,eval-concurrent,concurrent,$node,$node_type,$region,$zone,$is_storage_node,$avg_time,$score,$reason" >> /tmp/results/eval_tests.csv
+            
+            # Save detailed individual pod data
+            echo "==== Concurrent Test Individual Pod Data ====" >> /tmp/results/concurrent_pod_data.txt
+            for i in $(seq 1 5); do
+              if [ -n "${concurrent_pod_times[$i]}" ]; then
+                pod_name="eval-concurrent-$i-$TEST_ID"
+                node=${concurrent_pod_nodes[$i]}
+                node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null || echo "unknown")
+                
+                echo "Pod: $pod_name" >> /tmp/results/concurrent_pod_data.txt
+                echo "  Scheduling time: ${concurrent_pod_times[$i]}s" >> /tmp/results/concurrent_pod_data.txt
+                echo "  Node: $node" >> /tmp/results/concurrent_pod_data.txt
+                echo "  Node type: $node_type" >> /tmp/results/concurrent_pod_data.txt
+                echo "" >> /tmp/results/concurrent_pod_data.txt
+              fi
+            done
+          else
+            echo "No pods were scheduled successfully in the concurrent test."
+            echo "Score: 0/100"
+            echo "Concurrent Test,eval-concurrent,concurrent,error,error,error,error,false,0,0,no_pods_scheduled" >> /tmp/results/eval_tests.csv
+          fi
+
+          # Clean up concurrent test pods
+          for i in $(seq 1 5); do
+            kubectl delete pod eval-concurrent-$i-$TEST_ID -n data-locality-scheduler --ignore-not-found
+          done
+
+          echo ""
+
+          # ------------------------------------------------------------------
+          # Compile evaluation summary
+          # ------------------------------------------------------------------
+          echo "===== SCHEDULER EVALUATION SUMMARY ====="
+          echo "Evaluation tests completed."
+
+          # Calculate overall scores if we have results
+          if [ -f "/tmp/results/eval_tests.csv" ]; then
+            # Calculate category-specific and overall scores
+            data_locality_score=$(awk -F, '($3=="data-locality"){print $10}' /tmp/results/eval_tests.csv)
+            edge_score=$(awk -F, '($3=="edge-preference"){print $10}' /tmp/results/eval_tests.csv)
+            cloud_score=$(awk -F, '($3=="cloud-preference"){print $10}' /tmp/results/eval_tests.csv)
+            resource_score=$(awk -F, '($3=="resource-intensive"){print $10}' /tmp/results/eval_tests.csv)
+            concurrent_score=$(awk -F, '($3=="concurrent"){print $10}' /tmp/results/eval_tests.csv)
+            
+            # Calculate overall score (simple average for now)
+            scores_sum=0
+            scores_count=0
+            
+            for score in $data_locality_score $edge_score $cloud_score $resource_score $concurrent_score; do
+              if [ -n "$score" ]; then
+                scores_sum=$((scores_sum + score))
+                scores_count=$((scores_count + 1))
+              fi
+            done
+            
+            if [ $scores_count -gt 0 ]; then
+              overall_score=$((scores_sum / scores_count))
+              
+              echo "Category Scores:"
+              [ -n "$data_locality_score" ] && echo "- Data Locality: $data_locality_score/100"
+              [ -n "$edge_score" ] && echo "- Edge Preference: $edge_score/100"
+              [ -n "$cloud_score" ] && echo "- Cloud Preference: $cloud_score/100"
+              [ -n "$resource_score" ] && echo "- Resource Allocation: $resource_score/100"
+              [ -n "$concurrent_score" ] && echo "- Concurrent Scheduling: $concurrent_score/100"
+              
+              echo "Overall Scheduler Score: $overall_score/100"
+              
+              # Create a qualitative assessment
+              if [ $overall_score -ge 90 ]; then
+                echo "Assessment: EXCELLENT: Scheduler demonstrates superior decision quality"
+              elif [ $overall_score -ge 75 ]; then
+                echo "Assessment: GOOD: Scheduler performs well in most scenarios"
+              elif [ $overall_score -ge 60 ]; then
+                echo "Assessment: SATISFACTORY: Scheduler meets basic requirements"
+              else
+                echo "Assessment: NEEDS IMPROVEMENT: Scheduler has issues to address"
+              fi
+            else
+              echo "No scores available to calculate overall assessment."
+            fi
+          else
+            echo "No test results found!"
+          fi
+
+          # Get scheduler statistics
+          echo "Current pod distribution:"
+          total_pods=$(kubectl get pods --all-namespaces --no-headers | wc -l)
+          scheduled_pods=$(kubectl get pods --all-namespaces --field-selector=spec.schedulerName=data-locality-scheduler --no-headers | wc -l)
+          echo "- Total pods in cluster: $total_pods"
+          echo "- Pods using our scheduler: $scheduled_pods"
+
+          echo "Evaluation complete."
+          echo "Detailed results saved to /tmp/results/eval_tests.csv"
+
+          # Bundle results into a tarball and create summary report
+          tar -czf /tmp/evaluation-results-$TEST_ID.tar.gz /tmp/results
+          echo "All results archived to /tmp/evaluation-results-$TEST_ID.tar.gz"
+
+          # Keep the container running to allow results retrieval
+          echo "Test container will remain running for 10 minutes to allow results retrieval"
+          echo "You can copy results with: kubectl cp data-locality-scheduler/POD_NAME:/tmp/evaluation-results-$TEST_ID.tar.gz ./results.tar.gz"
+          sleep 600
+      restartPolicy: Never

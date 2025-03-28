@@ -1,0 +1,653 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fixed-scheduler-stress-test
+  namespace: data-locality-scheduler
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: fixed-scheduler-stress-test
+    spec:
+      serviceAccountName: data-locality-scheduler
+      containers:
+      - name: pod-generator
+        image: alpine:3.19
+        command: [ "/bin/sh", "-c" ]
+        args:
+        - |
+          # Install required tools with verification
+          echo "Installing dependencies..."
+          apk update
+          apk add --no-cache kubectl bash coreutils jq bc curl
+
+          # Verify all required tools are installed
+          for cmd in kubectl bash bc jq; do
+            if ! command -v $cmd &> /dev/null; then
+              echo "ERROR: Required command '$cmd' not found. Retrying installation..."
+              apk add --no-cache $cmd
+              if ! command -v $cmd &> /dev/null; then
+                echo "FATAL: Failed to install '$cmd'. Exiting."
+                exit 1
+              fi
+            fi
+          done
+
+          echo "All dependencies successfully installed."
+
+          # =================================================================
+          # Fixed Scheduler Stress Test
+          # =================================================================
+
+          # Test Configuration
+          TOTAL_PODS=100
+          CREATION_DELAY=0.5
+          BATCH_SIZE=10
+          TEST_TIMEOUT=600
+          TEST_ID=$(date +%s)
+
+          # Create results directory
+          mkdir -p /tmp/results
+
+          echo "=== Starting Scheduler Stress Test (ID: $TEST_ID) ==="
+          echo "Configuration:"
+          echo "- Total pods: $TOTAL_PODS"
+          echo "- Creation delay: ${CREATION_DELAY}s"
+          echo "- Batch size: $BATCH_SIZE"
+          echo "- Timeout: ${TEST_TIMEOUT}s"
+
+          # Verify scheduler is running
+          SCHEDULER_POD=$(kubectl get pods -n data-locality-scheduler -l app=data-locality-scheduler -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if [ -z "$SCHEDULER_POD" ]; then
+            echo "Error: Data locality scheduler pod not found"
+            exit 1
+          fi
+
+          echo "Scheduler pod: $SCHEDULER_POD"
+
+          # Capture cluster information
+          TOTAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+          EDGE_NODES=$(kubectl get nodes -l "node-capability/node-type=edge" --no-headers | wc -l)
+          CLOUD_NODES=$(kubectl get nodes -l "node-capability/node-type=cloud" --no-headers | wc -l)
+          STORAGE_NODES=$(kubectl get nodes -l "node-capability/storage-service=true" --no-headers | wc -l)
+
+          echo "Cluster information:"
+          echo "- Total nodes: $TOTAL_NODES"
+          echo "- Edge nodes: $EDGE_NODES"
+          echo "- Cloud nodes: $CLOUD_NODES"
+          echo "- Storage nodes: $STORAGE_NODES"
+
+          # Initialize tracking data structures
+          declare -A pod_creation_times
+          declare -A pod_scheduled_times
+          declare -A pod_scheduled_nodes
+          declare -A pod_types
+          declare -A pod_names
+
+          # Function to generate pods of various types
+          generate_pod() {
+            local POD_NUM=$1
+            local TEST_ID=$2
+            local POD_TYPE=$(( POD_NUM % 5 ))
+            
+            case $POD_TYPE in
+              0)
+                # CPU-intensive pod
+                cat > /tmp/pod-$POD_NUM.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: stress-cpu-$POD_NUM-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              stress-test-id: "$TEST_ID"
+              stress-test-pod-num: "$POD_NUM"
+              stress-test-pod-type: "cpu-intensive"
+            annotations:
+              scheduler.thesis/compute-intensive: "true"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: stress-cpu
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "while true; do echo Computing; sleep 5; done"]
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "1"
+                  memory: "256Mi"
+            restartPolicy: Never
+          EOF
+                pod_types[$POD_NUM]="cpu-intensive"
+                pod_names[$POD_NUM]="stress-cpu-$POD_NUM-$TEST_ID"
+                ;;
+              1)
+                # Memory-intensive pod
+                cat > /tmp/pod-$POD_NUM.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: stress-mem-$POD_NUM-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              stress-test-id: "$TEST_ID"
+              stress-test-pod-num: "$POD_NUM"
+              stress-test-pod-type: "memory-intensive"
+            annotations:
+              scheduler.thesis/compute-intensive: "true"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: stress-mem
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "while true; do echo Memory-intensive; sleep 5; done"]
+              resources:
+                requests:
+                  cpu: "250m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "1Gi"
+            restartPolicy: Never
+          EOF
+                pod_types[$POD_NUM]="memory-intensive"
+                pod_names[$POD_NUM]="stress-mem-$POD_NUM-$TEST_ID"
+                ;;
+              2)
+                # Data-intensive pod with input dependency
+                cat > /tmp/pod-$POD_NUM.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: stress-data-in-$POD_NUM-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              stress-test-id: "$TEST_ID"
+              stress-test-pod-num: "$POD_NUM"
+              stress-test-pod-type: "data-in"
+            annotations:
+              scheduler.thesis/data-intensive: "true"
+              data.scheduler.thesis/input-1: "test-bucket/test-data.json,104857600,5,3,json"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: data-processor
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "while true; do echo Data processing; sleep 5; done"]
+              resources:
+                requests:
+                  cpu: "300m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "600m"
+                  memory: "512Mi"
+            restartPolicy: Never
+          EOF
+                pod_types[$POD_NUM]="data-in"
+                pod_names[$POD_NUM]="stress-data-in-$POD_NUM-$TEST_ID"
+                ;;
+              3)
+                # Data-intensive pod with output dependency
+                cat > /tmp/pod-$POD_NUM.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: stress-data-out-$POD_NUM-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              stress-test-id: "$TEST_ID"
+              stress-test-pod-num: "$POD_NUM"
+              stress-test-pod-type: "data-out"
+            annotations:
+              scheduler.thesis/data-intensive: "true"
+              data.scheduler.thesis/output-1: "results-bucket/result-$POD_NUM.json,209715200,0,4,json"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: data-generator
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "while true; do echo Generating data; sleep 5; done"]
+              resources:
+                requests:
+                  cpu: "200m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "400m"
+                  memory: "512Mi"
+            restartPolicy: Never
+          EOF
+                pod_types[$POD_NUM]="data-out"
+                pod_names[$POD_NUM]="stress-data-out-$POD_NUM-$TEST_ID"
+                ;;
+              4)
+                # Edge-preferring pod
+                cat > /tmp/pod-$POD_NUM.yaml << EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: stress-edge-$POD_NUM-$TEST_ID
+            namespace: data-locality-scheduler
+            labels:
+              stress-test-id: "$TEST_ID"
+              stress-test-pod-num: "$POD_NUM"
+              stress-test-pod-type: "edge-prefer"
+            annotations:
+              scheduler.thesis/prefer-edge: "true"
+          spec:
+            schedulerName: data-locality-scheduler
+            containers:
+            - name: edge-workload
+              image: alpine:latest
+              command: ["/bin/sh", "-c", "while true; do echo Edge workload; sleep 5; done"]
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "256Mi"
+            restartPolicy: Never
+          EOF
+                pod_types[$POD_NUM]="edge-prefer"
+                pod_names[$POD_NUM]="stress-edge-$POD_NUM-$TEST_ID"
+                ;;
+            esac
+            
+            echo "Generated pod $POD_NUM (type: ${pod_types[$POD_NUM]}, name: ${pod_names[$POD_NUM]})"
+          }
+
+          # Generate all pod manifests
+          echo "Generating pod manifests..."
+          for ((i=1; i<=TOTAL_PODS; i++)); do
+            generate_pod $i $TEST_ID
+          done
+
+          # Create pods in batches with precise timing
+          echo "Creating pods in batches..."
+          start_time=$(date +%s)
+
+          for ((i=1; i<=TOTAL_PODS; i=i+BATCH_SIZE)); do
+            echo "Creating batch $((i/BATCH_SIZE + 1)) (pods $i to $((i+BATCH_SIZE-1)))..."
+            
+            for ((j=i; j<i+BATCH_SIZE && j<=TOTAL_PODS; j++)); do
+              creation_time=$(date +%s)
+              kubectl apply -f /tmp/pod-$j.yaml
+              status=$?
+              
+              if [ $status -eq 0 ]; then
+                pod_creation_times[$j]=$creation_time
+                echo "  Created pod $j ($(date -d @${creation_time} "+%H:%M:%S"))"
+              else
+                echo "  Failed to create pod $j"
+              fi
+              
+              sleep $CREATION_DELAY
+            done
+            
+            # Wait briefly between batches
+            sleep 2
+          done
+
+          creation_end_time=$(date +%s)
+          total_creation_time=$((creation_end_time - start_time))
+
+          echo "All pods created in ${total_creation_time} seconds"
+          echo "Waiting for pods to be scheduled..."
+
+          # Track scheduling progress
+          scheduled_count=0
+
+          # Function to check if a pod is scheduled
+          check_pod_scheduled() {
+            local pod_name=$1
+            local pod_num=$2
+            
+            # Check if pod has a node name assigned
+            node_name=$(kubectl get pod $pod_name -n data-locality-scheduler -o jsonpath='{.spec.nodeName}' 2>/dev/null)
+            
+            if [ -n "$node_name" ]; then
+              current_time=$(date +%s)
+              pod_scheduled_times[$pod_num]=$current_time
+              pod_scheduled_nodes[$pod_num]=$node_name
+              
+              # Calculate individual scheduling time
+              creation_time=${pod_creation_times[$pod_num]}
+              if [ -n "$creation_time" ]; then
+                scheduling_time=$((current_time - creation_time))
+                echo "Pod $pod_name scheduled on $node_name in ${scheduling_time}s"
+              else
+                echo "Pod $pod_name scheduled on $node_name (creation time unknown)"
+              fi
+              return 0
+            fi
+            
+            return 1
+          }
+
+          # Monitor scheduling with timeout
+          monitoring_start=$(date +%s)
+          last_scheduled_time=$monitoring_start
+          last_progress_time=$monitoring_start
+
+          # Initialize CSV file for pod scheduling data
+          echo "pod_num,pod_name,pod_type,creation_time,scheduled_time,scheduling_duration,node,node_type,region,zone,storage_node" > /tmp/results/pod_scheduling_data.csv
+
+          while [ $scheduled_count -lt $TOTAL_PODS ]; do
+            current_time=$(date +%s)
+            elapsed=$((current_time - monitoring_start))
+            
+            # Check for timeout
+            if [ $elapsed -gt $TEST_TIMEOUT ]; then
+              echo "Timeout reached after ${elapsed}s. $scheduled_count/$TOTAL_PODS pods were scheduled."
+              break
+            fi
+            
+            # Check status of each pod
+            newly_scheduled=0
+            
+            for ((i=1; i<=TOTAL_PODS; i++)); do
+              # Skip pods we've already confirmed as scheduled
+              if [ -n "${pod_scheduled_times[$i]}" ]; then
+                continue
+              fi
+              
+              # Get pod name
+              pod_name="${pod_names[$i]}"
+              
+              if check_pod_scheduled "$pod_name" "$i"; then
+                scheduled_count=$((scheduled_count + 1))
+                newly_scheduled=$((newly_scheduled + 1))
+                last_scheduled_time=$current_time
+                last_progress_time=$current_time
+                
+                # Record scheduling data to CSV
+                node=${pod_scheduled_nodes[$i]}
+                node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null || echo "unknown")
+                region=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}' 2>/dev/null || echo "unknown")
+                zone=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}' 2>/dev/null || echo "unknown")
+                
+                is_storage_node="false"
+                if kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}' 2>/dev/null | grep -q "true"; then
+                  is_storage_node="true"
+                fi
+                
+                scheduling_time=$((pod_scheduled_times[$i] - pod_creation_times[$i]))
+                echo "$i,${pod_name},${pod_types[$i]},${pod_creation_times[$i]},${pod_scheduled_times[$i]},$scheduling_time,$node,$node_type,$region,$zone,$is_storage_node" >> /tmp/results/pod_scheduling_data.csv
+              fi
+            done
+            
+            # Show progress periodically
+            if [ $newly_scheduled -gt 0 ] || [ $((current_time - last_progress_time)) -ge 10 ]; then
+              echo "Progress: $scheduled_count/$TOTAL_PODS pods scheduled (elapsed: ${elapsed}s)"
+              last_progress_time=$current_time
+            fi
+            
+            # If no progress in 60 seconds, show pending pods and check scheduler logs
+            if [ $((current_time - last_scheduled_time)) -ge 60 ]; then
+              echo "No scheduling progress in 60 seconds. Listing pending pods:"
+              kubectl get pods -n data-locality-scheduler -l stress-test-id=$TEST_ID,status.phase=Pending -o custom-columns=NAME:.metadata.name,TYPE:.metadata.labels.stress-test-pod-type
+              
+              # Check scheduler logs for clues
+              echo "Checking recent scheduler logs:"
+              kubectl logs $SCHEDULER_POD -n data-locality-scheduler --tail=20
+              
+              last_scheduled_time=$current_time
+            fi
+            
+            sleep 2
+          done
+
+          end_time=$(date +%s)
+          total_time=$((end_time - start_time))
+
+          echo "=== Stress Test Results ==="
+          echo "Total pods: $TOTAL_PODS"
+          echo "Scheduled pods: $scheduled_count"
+          echo "Total test time: ${total_time}s"
+
+          # Calculate detailed statistics
+          if [ $scheduled_count -gt 0 ]; then
+            # Arrays for statistics by pod type
+            declare -A type_total_times
+            declare -A type_counts
+            declare -A type_min_times
+            declare -A type_max_times
+            
+            total_scheduling_time=0
+            min_scheduling_time=9999999
+            max_scheduling_time=0
+            
+            # Initialize type arrays
+            for type in "cpu-intensive" "memory-intensive" "data-in" "data-out" "edge-prefer"; do
+              type_total_times[$type]=0
+              type_counts[$type]=0
+              type_min_times[$type]=9999999
+              type_max_times[$type]=0
+            done
+            
+            # Node distribution tracking
+            declare -A nodes_count
+            declare -A node_types_count
+            
+            # Calculate per-pod stats
+            for ((i=1; i<=TOTAL_PODS; i++)); do
+              if [ -n "${pod_scheduled_times[$i]}" ] && [ -n "${pod_creation_times[$i]}" ]; then
+                scheduling_time=$((pod_scheduled_times[$i] - pod_creation_times[$i]))
+                total_scheduling_time=$((total_scheduling_time + scheduling_time))
+                
+                # Update min/max
+                if [ $scheduling_time -lt $min_scheduling_time ]; then
+                  min_scheduling_time=$scheduling_time
+                fi
+                
+                if [ $scheduling_time -gt $max_scheduling_time ]; then
+                  max_scheduling_time=$scheduling_time
+                fi
+                
+                # Update type-specific stats
+                pod_type=${pod_types[$i]}
+                type_total_times[$pod_type]=$((type_total_times[$pod_type] + scheduling_time))
+                type_counts[$pod_type]=$((type_counts[$pod_type] + 1))
+                
+                if [ $scheduling_time -lt ${type_min_times[$pod_type]} ]; then
+                  type_min_times[$pod_type]=$scheduling_time
+                fi
+                
+                if [ $scheduling_time -gt ${type_max_times[$pod_type]} ]; then
+                  type_max_times[$pod_type]=$scheduling_time
+                fi
+                
+                # Update node distribution
+                node=${pod_scheduled_nodes[$i]}
+                if [ -z "${nodes_count[$node]}" ]; then
+                  nodes_count[$node]=1
+                else
+                  nodes_count[$node]=$((nodes_count[$node] + 1))
+                fi
+                
+                # Get node type
+                node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null)
+                if [ -z "$node_type" ]; then
+                  node_type="unknown"
+                fi
+                
+                if [ -z "${node_types_count[$node_type]}" ]; then
+                  node_types_count[$node_type]=1
+                else
+                  node_types_count[$node_type]=$((node_types_count[$node_type] + 1))
+                fi
+              fi
+            done
+            
+            # Calculate averages
+            avg_scheduling_time=$((total_scheduling_time / scheduled_count))
+            
+            # Calculate pods per second
+            pods_per_second=$(echo "scale=2; $scheduled_count / $total_time" | bc)
+            
+            echo ""
+            echo "=== Scheduling Performance ==="
+            echo "Average scheduling time: ${avg_scheduling_time}s per pod"
+            echo "Minimum scheduling time: ${min_scheduling_time}s"
+            echo "Maximum scheduling time: ${max_scheduling_time}s"
+            echo "Scheduling rate: ${pods_per_second} pods/second"
+            
+            echo ""
+            echo "=== Pod Type Analysis ==="
+            for type in "cpu-intensive" "memory-intensive" "data-in" "data-out" "edge-prefer"; do
+              if [ ${type_counts[$type]} -gt 0 ]; then
+                type_avg=$((type_total_times[$type] / type_counts[$type]))
+                echo "$type:"
+                echo "  Count: ${type_counts[$type]}"
+                echo "  Avg scheduling time: ${type_avg}s"
+                echo "  Min scheduling time: ${type_min_times[$type]}s"
+                echo "  Max scheduling time: ${type_max_times[$type]}s"
+              fi
+            done
+            
+            echo ""
+            echo "=== Node Distribution ==="
+            for node in "${!nodes_count[@]}"; do
+              count=${nodes_count[$node]}
+              percent=$(echo "scale=1; 100 * $count / $scheduled_count" | bc)
+              
+              # Get node type
+              node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null)
+              if [ -z "$node_type" ]; then
+                node_type="unknown"
+              fi
+              
+              node_storage=""
+              if kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}' 2>/dev/null | grep -q "true"; then
+                node_storage=" (storage node)"
+              fi
+              
+              echo "$node ($node_type$node_storage): $count pods (${percent}%)"
+            done
+            
+            echo ""
+            echo "=== Node Type Distribution ==="
+            for node_type in "${!node_types_count[@]}"; do
+              count=${node_types_count[$node_type]}
+              percent=$(echo "scale=1; 100 * $count / $scheduled_count" | bc)
+              echo "$node_type: $count pods (${percent}%)"
+            done
+            
+            # Preference fulfillment analysis
+            echo ""
+            echo "=== Preference Analysis ==="
+            
+            # Edge preference
+            edge_pref_total=${type_counts["edge-prefer"]}
+            edge_pref_fulfilled=0
+            
+            for ((i=1; i<=TOTAL_PODS; i++)); do
+              if [ "${pod_types[$i]}" == "edge-prefer" ] && [ -n "${pod_scheduled_nodes[$i]}" ]; then
+                node=${pod_scheduled_nodes[$i]}
+                node_type=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null)
+                
+                if [ "$node_type" == "edge" ]; then
+                  edge_pref_fulfilled=$((edge_pref_fulfilled + 1))
+                fi
+              fi
+            done
+            
+            if [ $edge_pref_total -gt 0 ]; then
+              edge_pref_percent=$(echo "scale=1; 100 * $edge_pref_fulfilled / $edge_pref_total" | bc)
+              echo "Edge preference fulfillment: $edge_pref_fulfilled/$edge_pref_total (${edge_pref_percent}%)"
+            fi
+            
+            # Data locality analysis
+            data_pod_total=$((${type_counts["data-in"]} + ${type_counts["data-out"]}))
+            data_pod_on_storage=0
+            
+            for ((i=1; i<=TOTAL_PODS; i++)); do
+              if [[ "${pod_types[$i]}" == "data-in" || "${pod_types[$i]}" == "data-out" ]] && [ -n "${pod_scheduled_nodes[$i]}" ]; then
+                node=${pod_scheduled_nodes[$i]}
+                
+                if kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}' 2>/dev/null | grep -q "true"; then
+                  data_pod_on_storage=$((data_pod_on_storage + 1))
+                fi
+              fi
+            done
+            
+            if [ $data_pod_total -gt 0 ]; then
+              data_local_percent=$(echo "scale=1; 100 * $data_pod_on_storage / $data_pod_total" | bc)
+              echo "Data locality fulfillment: $data_pod_on_storage/$data_pod_total (${data_local_percent}%)"
+            fi
+            
+            # Generate scheduling timeline visualization data
+            echo "timestamp,scheduled_count,percentage" > /tmp/results/timeline.csv
+            earliest_creation=$(cat /tmp/results/pod_scheduling_data.csv | tail -n +2 | cut -d',' -f4 | sort -n | head -1)
+            
+            # Create timeline data points
+            timeline_points=()
+            for ((i=0; i<=total_time; i+=5)); do
+              point_time=$((earliest_creation + i))
+              count=$(cat /tmp/results/pod_scheduling_data.csv | tail -n +2 | awk -F, "\$5 <= $point_time {count++} END {print count}")
+              percentage=$(echo "scale=1; 100 * $count / $TOTAL_PODS" | bc)
+              echo "$i,$count,$percentage" >> /tmp/results/timeline.csv
+              
+              # Add to visualization array
+              timeline_points+=("$i:$count")
+            done
+            
+            # Generate a simple ASCII visualization
+            echo "" 
+            echo "=== Scheduling Timeline ==="
+            echo "Time (s) | Pods Scheduled (out of $TOTAL_PODS)"
+            echo "---------|------------------------"
+            for point in "${timeline_points[@]}"; do
+              time=$(echo $point | cut -d':' -f1)
+              count=$(echo $point | cut -d':' -f2)
+              
+              # Only show some points to keep the visualization manageable
+              if (( time % 20 == 0 )) || (( time == total_time )); then
+                # Create a simple bar
+                bar=""
+                bar_length=$((count * 30 / TOTAL_PODS))
+                for ((b=0; b<bar_length; b++)); do
+                  bar="${bar}="
+                done
+                
+                printf "%7s | %3s %-30s\n" "$time" "$count" "$bar"
+              fi
+            done
+            
+            # Export results to JSON for easier parsing/analysis
+            echo "{" > /tmp/results/stress_test_results.json
+            echo "  \"test_id\": \"$TEST_ID\"," >> /tmp/results/stress_test_results.json
+            echo "  \"total_pods\": $TOTAL_PODS," >> /tmp/results/stress_test_results.json
+            echo "  \"scheduled_pods\": $scheduled_count," >> /tmp/results/stress_test_results.json
+            echo "  \"total_time\": $total_time," >> /tmp/results/stress_test_results.json
+            echo "  \"avg_scheduling_time\": $avg_scheduling_time," >> /tmp/results/stress_test_results.json
+            echo "  \"min_scheduling_time\": $min_scheduling_time," >> /tmp/results/stress_test_results.json
+            echo "  \"max_scheduling_time\": $max_scheduling_time," >> /tmp/results/stress_test_results.json
+            echo "  \"pods_per_second\": \"$pods_per_second\"," >> /tmp/results/stress_test_results.json
+            echo "  \"edge_preference_fulfillment\": \"$edge_pref_percent%\"," >> /tmp/results/stress_test_results.json
+            echo "  \"data_locality_fulfillment\": \"$data_local_percent%\"" >> /tmp/results/stress_test_results.json
+            echo "}" >> /tmp/results/stress_test_results.json
+            
+          else
+            echo "No pods were scheduled successfully."
+          fi
+
+          # Clean up test pods or give an option to keep them
+          echo ""
+          echo "Cleaning up test pods..."
+          kubectl delete pods -n data-locality-scheduler -l stress-test-id=$TEST_ID
+
+          echo "Stress test completed!"
+
+          # Bundle results into a tarball
+          tar -czf /tmp/stress-test-results-$TEST_ID.tar.gz /tmp/results
+          echo "All results archived to /tmp/stress-test-results-$TEST_ID.tar.gz"
+
+          # Keep the container running to allow results retrieval
+          echo "Test container will remain running for 10 minutes to allow results retrieval"
+          echo "You can copy results with: kubectl cp data-locality-scheduler/POD_NAME:/tmp/stress-test-results-$TEST_ID.tar.gz ./results.tar.gz"
+          sleep 600
+      restartPolicy: Never

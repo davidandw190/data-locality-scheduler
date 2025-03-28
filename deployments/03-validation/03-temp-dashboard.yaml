@@ -1,0 +1,400 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler-dashboard
+  namespace: data-locality-scheduler
+  labels:
+    app: scheduler-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler-dashboard
+  template:
+    metadata:
+      labels:
+        app: scheduler-dashboard
+    spec:
+      serviceAccountName: data-locality-scheduler
+      containers:
+      - name: dashboard
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      - name: metrics-collector
+        image: bitnami/kubectl:latest
+        command: [ "/bin/bash", "-c" ]
+        args:
+        - |
+          # Setup html directory
+          mkdir -p /html
+
+          # Generate initial index page
+          cat > /html/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Data Locality Scheduler Dashboard</title>
+            <meta http-equiv="refresh" content="30">
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { color: #333; }
+              .card { border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+              .metrics { display: flex; flex-wrap: wrap; }
+              .metric { width: 200px; margin: 10px; padding: 15px; border: 1px solid #eee; border-radius: 4px; text-align: center; }
+              .metric h3 { margin-top: 0; color: #555; }
+              .metric .value { font-size: 24px; font-weight: bold; color: #2c3e50; }
+              table { width: 100%; border-collapse: collapse; }
+              table, th, td { border: 1px solid #ddd; }
+              th, td { padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              tr:nth-child(even) { background-color: #f9f9f9; }
+            </style>
+          </head>
+          <body>
+            <h1>Data Locality Scheduler Dashboard</h1>
+            <p>Last updated: <span id="update-time">Loading...</span></p>
+            
+            <div class="card">
+              <h2>Scheduler Performance</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Uptime</h3>
+                  <div class="value" id="uptime">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Scheduling Rate</h3>
+                  <div class="value" id="schedule-rate">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Avg Schedule Time</h3>
+                  <div class="value" id="avg-time">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Total Pods Scheduled</h3>
+                  <div class="value" id="total-scheduled">Loading...</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <h2>Cluster Resources</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Total Nodes</h3>
+                  <div class="value" id="total-nodes">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Edge Nodes</h3>
+                  <div class="value" id="edge-nodes">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Cloud Nodes</h3>
+                  <div class="value" id="cloud-nodes">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Storage Nodes</h3>
+                  <div class="value" id="storage-nodes">Loading...</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <h2>Recent Scheduling Decisions</h2>
+              <table id="recent-pods">
+                <tr>
+                  <th>Pod Name</th>
+                  <th>Namespace</th>
+                  <th>Node</th>
+                  <th>Node Type</th>
+                  <th>Schedule Time</th>
+                </tr>
+                <tr>
+                  <td colspan="5">Loading data...</td>
+                </tr>
+              </table>
+            </div>
+            
+            <div class="card">
+              <h2>Data Locality Success Rate</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Data-Intensive Pods</h3>
+                  <div class="value" id="data-intensive-count">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Data Locality Success</h3>
+                  <div class="value" id="data-locality-success">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Edge Preference Success</h3>
+                  <div class="value" id="edge-success">Loading...</div>
+                </div>
+                <div class="metric">
+                  <h3>Cloud Preference Success</h3>
+                  <div class="value" id="cloud-success">Loading...</div>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+
+          # Copy to nginx directory
+          cp /html/index.html /usr/share/nginx/html/
+
+          # Function to update metrics
+          update_metrics() {
+            # Get current time
+            current_time=$(date "+%Y-%m-%d %H:%M:%S")
+            
+            # Get scheduler pod
+            scheduler_pod=$(kubectl get pods -n data-locality-scheduler -l app=data-locality-scheduler -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+            
+            if [ -z "$scheduler_pod" ]; then
+              echo "Scheduler pod not found, waiting..."
+              return
+            fi
+            
+            # Get scheduler uptime
+            scheduler_uptime=$(kubectl exec -n data-locality-scheduler $scheduler_pod -- ps -o etimes= -p 1 2>/dev/null || echo "0")
+            scheduler_uptime_human=$(printf '%dd %dh %dm\n' $((scheduler_uptime/86400)) $((scheduler_uptime%86400/3600)) $((scheduler_uptime%3600/60)))
+            
+            # Get node statistics
+            total_nodes=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+            edge_nodes=$(kubectl get nodes -l "node-capability/node-type=edge" --no-headers 2>/dev/null | wc -l)
+            cloud_nodes=$(kubectl get nodes -l "node-capability/node-type=cloud" --no-headers 2>/dev/null | wc -l)
+            storage_nodes=$(kubectl get nodes -l "node-capability/storage-service=true" --no-headers 2>/dev/null | wc -l)
+            
+            # Get pod statistics
+            total_scheduled=$(kubectl get pods --all-namespaces --field-selector=spec.schedulerName=data-locality-scheduler --no-headers 2>/dev/null | wc -l)
+            
+            # Calculate scheduling rate from logs
+            recent_schedule_times=$(kubectl logs --tail=50 -n data-locality-scheduler $scheduler_pod 2>/dev/null | grep "Finding best node" | grep -oE "took [0-9]+\.[0-9]+s" | sed 's/took //g' | sed 's/s//g')
+            if [ -n "$recent_schedule_times" ]; then
+              avg_schedule_time=$(echo "$recent_schedule_times" | awk '{ sum += $1; n++ } END { if (n > 0) printf "%.2f", sum / n; else print "N/A"; }')
+              
+              # Estimated scheduling rate
+              if echo "$avg_schedule_time" | grep -q "^[0-9]"; then
+                schedule_rate=$(awk "BEGIN { printf \"%.2f\", 1 / $avg_schedule_time }")
+              else
+                schedule_rate="N/A"
+              fi
+            else
+              avg_schedule_time="N/A"
+              schedule_rate="N/A"
+            fi
+            
+            if [ "$schedule_rate" != "N/A" ]; then
+              schedule_rate="${schedule_rate}/s"
+            fi
+            
+            if [ "$avg_schedule_time" != "N/A" ]; then
+              avg_schedule_time="${avg_schedule_time}s"
+            fi
+            
+            # Get recent pods for table
+            recent_pods=$(kubectl get pods --all-namespaces --field-selector=spec.schedulerName=data-locality-scheduler --sort-by=.metadata.creationTimestamp -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,NODE:.spec.nodeName,CREATED:.metadata.creationTimestamp --no-headers 2>/dev/null | tail -10)
+            
+            # Build pod table HTML
+            pod_table_html="<tr><th>Pod Name</th><th>Namespace</th><th>Node</th><th>Node Type</th><th>Created</th></tr>"
+            
+            if [ -n "$recent_pods" ]; then
+              while IFS= read -r line; do
+                pod_name=$(echo "$line" | awk '{print $1}')
+                namespace=$(echo "$line" | awk '{print $2}')
+                node_name=$(echo "$line" | awk '{print $3}')
+                created=$(echo "$line" | awk '{print $4}')
+                
+                # Get node type
+                if [ -n "$node_name" ]; then
+                  node_type=$(kubectl get node "$node_name" -o jsonpath='{.metadata.labels.node-capability/node-type}' 2>/dev/null)
+                  if [ -z "$node_type" ]; then
+                    node_type="unknown"
+                  fi
+                else
+                  node_name="Pending"
+                  node_type="N/A"
+                fi
+                
+                pod_table_html+="<tr><td>${pod_name}</td><td>${namespace}</td><td>${node_name}</td><td>${node_type}</td><td>${created}</td></tr>"
+              done <<< "$recent_pods"
+            else
+              pod_table_html+="<tr><td colspan='5'>No pods found</td></tr>"
+            fi
+            
+            # Calculate data locality success rate
+            data_intensive_count=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/data-intensive" == "true") | select(.spec.nodeName != null) | .metadata.name' | wc -l)
+            
+            # Count data-intensive pods placed on storage nodes
+            data_locality_success=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/data-intensive" == "true") | select(.spec.nodeName != null) | .spec.nodeName' | xargs -I{} kubectl get node {} -o json 2>/dev/null | jq -r 'select(.metadata.labels["node-capability/storage-service"]=="true") | .metadata.name' | wc -l)
+            
+            # Calculate edge preference success rate
+            edge_pref_count=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/prefer-edge" == "true") | select(.spec.nodeName != null) | .metadata.name' | wc -l)
+            edge_pref_success=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/prefer-edge" == "true") | select(.spec.nodeName != null) | .spec.nodeName' | xargs -I{} kubectl get node {} -o json 2>/dev/null | jq -r 'select(.metadata.labels["node-capability/node-type"]=="edge") | .metadata.name' | wc -l)
+            
+            # Calculate cloud preference success rate
+            cloud_pref_count=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/prefer-cloud" == "true") | select(.spec.nodeName != null) | .metadata.name' | wc -l)
+            cloud_pref_success=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.annotations."scheduler.thesis/prefer-cloud" == "true") | select(.spec.nodeName != null) | .spec.nodeName' | xargs -I{} kubectl get node {} -o json 2>/dev/null | jq -r 'select(.metadata.labels["node-capability/node-type"]=="cloud") | .metadata.name' | wc -l)
+            
+            # Calculate success percentages
+            if [ "$data_intensive_count" -gt 0 ]; then
+              data_locality_percent=$(( (data_locality_success * 100) / data_intensive_count ))
+              data_locality_success="${data_locality_percent}%"
+            else
+              data_locality_success="N/A"
+            fi
+            
+            if [ "$edge_pref_count" -gt 0 ]; then
+              edge_success_percent=$(( (edge_pref_success * 100) / edge_pref_count ))
+              edge_success="${edge_success_percent}%"
+            else
+              edge_success="N/A"
+            fi
+            
+            if [ "$cloud_pref_count" -gt 0 ]; then
+              cloud_success_percent=$(( (cloud_pref_success * 100) / cloud_pref_count ))
+              cloud_success="${cloud_success_percent}%"
+            else
+              cloud_success="N/A"
+            fi
+            
+            # Create updated HTML file
+            cat > /html/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Data Locality Scheduler Dashboard</title>
+            <meta http-equiv="refresh" content="30">
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { color: #333; }
+              .card { border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+              .metrics { display: flex; flex-wrap: wrap; }
+              .metric { width: 200px; margin: 10px; padding: 15px; border: 1px solid #eee; border-radius: 4px; text-align: center; }
+              .metric h3 { margin-top: 0; color: #555; }
+              .metric .value { font-size: 24px; font-weight: bold; color: #2c3e50; }
+              table { width: 100%; border-collapse: collapse; }
+              table, th, td { border: 1px solid #ddd; }
+              th, td { padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              tr:nth-child(even) { background-color: #f9f9f9; }
+            </style>
+          </head>
+          <body>
+            <h1>Data Locality Scheduler Dashboard</h1>
+            <p>Last updated: <span id="update-time">${current_time}</span></p>
+            
+            <div class="card">
+              <h2>Scheduler Performance</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Uptime</h3>
+                  <div class="value" id="uptime">${scheduler_uptime_human}</div>
+                </div>
+                <div class="metric">
+                  <h3>Scheduling Rate</h3>
+                  <div class="value" id="schedule-rate">${schedule_rate}</div>
+                </div>
+                <div class="metric">
+                  <h3>Avg Schedule Time</h3>
+                  <div class="value" id="avg-time">${avg_schedule_time}</div>
+                </div>
+                <div class="metric">
+                  <h3>Total Pods Scheduled</h3>
+                  <div class="value" id="total-scheduled">${total_scheduled}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <h2>Cluster Resources</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Total Nodes</h3>
+                  <div class="value" id="total-nodes">${total_nodes}</div>
+                </div>
+                <div class="metric">
+                  <h3>Edge Nodes</h3>
+                  <div class="value" id="edge-nodes">${edge_nodes}</div>
+                </div>
+                <div class="metric">
+                  <h3>Cloud Nodes</h3>
+                  <div class="value" id="cloud-nodes">${cloud_nodes}</div>
+                </div>
+                <div class="metric">
+                  <h3>Storage Nodes</h3>
+                  <div class="value" id="storage-nodes">${storage_nodes}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <h2>Recent Scheduling Decisions</h2>
+              <table id="recent-pods">
+                ${pod_table_html}
+              </table>
+            </div>
+            
+            <div class="card">
+              <h2>Data Locality Success Rate</h2>
+              <div class="metrics">
+                <div class="metric">
+                  <h3>Data-Intensive Pods</h3>
+                  <div class="value" id="data-intensive-count">${data_intensive_count}</div>
+                </div>
+                <div class="metric">
+                  <h3>Data Locality Success</h3>
+                  <div class="value" id="data-locality-success">${data_locality_success}</div>
+                </div>
+                <div class="metric">
+                  <h3>Edge Preference Success</h3>
+                  <div class="value" id="edge-success">${edge_success}</div>
+                </div>
+                <div class="metric">
+                  <h3>Cloud Preference Success</h3>
+                  <div class="value" id="cloud-success">${cloud_success}</div>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+
+            # Copy to nginx directory
+            cp /html/index.html /usr/share/nginx/html/
+          }
+
+          # Main loop
+          echo "Starting metrics collector..."
+
+          while true; do
+            update_metrics
+            sleep 30
+          done
+        volumeMounts:
+        - name: html
+          mountPath: /html
+        - name: usr-local-bin
+          mountPath: /usr/local/bin
+      volumes:
+      - name: html
+        emptyDir: {}
+      - name: usr-local-bin
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler-dashboard
+  namespace: data-locality-scheduler
+spec:
+  selector:
+    app: scheduler-dashboard
+  ports:
+  - port: 80
+    targetPort: 80
+  type: NodePort
