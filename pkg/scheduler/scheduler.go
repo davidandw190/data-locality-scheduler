@@ -742,67 +742,115 @@ func (s *Scheduler) prioritizeNodes(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, 
 
 func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]NodeScore) []NodeScore {
 	weights := s.getWeightsForPod(pod)
+	nodeCount := len(nodes)
 
-	finalScores := make(map[string]int)
-	for _, node := range nodes {
-		finalScores[node.Name] = 0
+	if nodeCount == 0 {
+		return []NodeScore{}
 	}
 
+	nodeIndices := make(map[string]int, nodeCount)
+	for i, node := range nodes {
+		nodeIndices[node.Name] = i
+	}
+
+	normalizedScores := make([][]float64, len(scoresList))
 	for i, scores := range scoresList {
+		// find min and max scores for this criterion
+		minScore := MaxScore
+		maxScore := MinScore
+
+		for _, score := range scores {
+			if score.Score < minScore {
+				minScore = score.Score
+			}
+			if score.Score > maxScore {
+				maxScore = score.Score
+			}
+		}
+
+		// handle case where all scores are the same
+		scoreDiff := maxScore - minScore
+		if scoreDiff == 0 {
+			scoreDiff = 1
+		}
+
+		// normalize scores to 0-1 range
+		normalizedScores[i] = make([]float64, nodeCount)
+		for _, score := range scores {
+			index, exists := nodeIndices[score.Name]
+			if exists {
+				normalizedScores[i][index] = float64(score.Score-minScore) / float64(scoreDiff)
+			}
+		}
+	}
+
+	// compute weighted sum for each node
+	finalScores := make([]float64, nodeCount)
+	weightSum := 0.0
+
+	for i, normalizedScore := range normalizedScores {
 		weight := 1.0
 		if i < len(weights) {
 			weight = weights[i]
 		}
+		weightSum += weight
 
-		for _, score := range scores {
-			finalScores[score.Name] += int(float64(score.Score) * weight)
+		for j := 0; j < nodeCount; j++ {
+			finalScores[j] += normalizedScore[j] * weight
 		}
 	}
 
-	var result []NodeScore
-	for nodeName, score := range finalScores {
-		result = append(result, NodeScore{
-			Name:  nodeName,
-			Score: score,
-		})
+	// we normalize to account for variable number of criteria
+	if weightSum > 0 {
+		for j := 0; j < nodeCount; j++ {
+			finalScores[j] /= weightSum
+		}
 	}
 
-	return normalizeScores(result)
+	result := make([]NodeScore, nodeCount)
+	for j := 0; j < nodeCount; j++ {
+		result[j] = NodeScore{
+			Name:  nodes[j].Name,
+			Score: int(finalScores[j] * MaxScore),
+		}
+	}
+
+	return result
 }
 
 func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 	weights := []float64{
-		0.3, // Resource priority
-		0.2, // Node affinity
-		0.1, // Node type (edge/cloud)
-		0.1, // Node capabilities
-		0.3, // Data locality
+		DefaultResourceWeight,
+		DefaultNodeAffinityWeight,
+		DefaultNodeTypeWeight,
+		DefaultCapabilitiesWeight,
+		DefaultDataLocalityWeight,
 	}
 
-	if pod.Annotations != nil {
-		if _, ok := pod.Annotations["scheduler.thesis/data-intensive"]; ok {
-			weights = []float64{
-				0.2, // Resource priority
-				0.1, // Node affinity
-				0.1, // Node type
-				0.1, // Node capabilities
-				0.5, // Data locality (higher)
-			}
-		}
+	if pod.Annotations == nil {
+		return weights
+	}
 
-		if _, ok := pod.Annotations["scheduler.thesis/compute-intensive"]; ok {
-			weights = []float64{
-				0.5, // Resource priority (higher)
-				0.2, // Node affinity
-				0.1, // Node type
-				0.1, // Node capabilities
-				0.1, // Data locality (lower)
-			}
+	if _, ok := pod.Annotations[AnnotationDataIntensive]; ok {
+		weights = []float64{
+			DataIntensiveResourceWeight,
+			DataIntensiveNodeAffinityWeight,
+			DataIntensiveNodeTypeWeight,
+			DataIntensiveCapabilitiesWeight,
+			DataIntensiveDataLocalityWeight, // higher
 		}
+	} else if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
+		weights = []float64{
+			ComputeIntensiveResourceWeight, // higher
+			ComputeIntensiveNodeAffinityWeight,
+			ComputeIntensiveNodeTypeWeight,
+			ComputeIntensiveCapabilitiesWeight,
+			ComputeIntensiveDataLocalityWeight, // lower
+		}
+	}
 
-		if _, ok := pod.Annotations["scheduler.thesis/prefer-edge"]; ok {
-			weights[2] = 0.3
-		}
+	if _, ok := pod.Annotations[AnnotationPreferEdge]; ok {
+		weights[2] = 0.3
 	}
 
 	return weights
@@ -836,16 +884,131 @@ func normalizeScores(scores []NodeScore) []NodeScore {
 func (s *Scheduler) scoreResourcePriority(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var scores []NodeScore
 
+	var requestedCPU, requestedMemory int64
+	for _, container := range pod.Spec.Containers {
+		if container.Resources.Requests.Cpu() != nil {
+			requestedCPU += container.Resources.Requests.Cpu().MilliValue()
+		} else {
+			requestedCPU += 100 // default 100m CPU
+		}
+
+		if container.Resources.Requests.Memory() != nil {
+			requestedMemory += container.Resources.Requests.Memory().Value()
+		} else {
+			requestedMemory += 200 * 1024 * 1024 // default 200Mi memory
+		}
+	}
+
 	for _, node := range nodes {
-		score := s.calculateResourceScore(pod, &node)
+		resourceScore := s.calculateBalancedResourceScore(pod, &node, requestedCPU, requestedMemory)
+		resourceScore = s.adjustScoreForSpecialResources(resourceScore, pod, &node)
+
+		if resourceScore > MaxScore {
+			resourceScore = MaxScore
+		} else if resourceScore < MinScore {
+			resourceScore = MinScore
+		}
 
 		scores = append(scores, NodeScore{
 			Name:  node.Name,
-			Score: score,
+			Score: resourceScore,
 		})
 	}
 
 	return scores, nil
+}
+
+func (s *Scheduler) calculateBalancedResourceScore(pod *v1.Pod, node *v1.Node,
+	requestedCPU, requestedMemory int64) int {
+
+	if computeScoreStr, exists := node.Labels["node-capability/compute-score"]; exists {
+		if computeScore, err := strconv.Atoi(computeScoreStr); err == nil {
+			if memoryScoreStr, exists := node.Labels["node-capability/memory-score"]; exists {
+				if memoryScore, err := strconv.Atoi(memoryScoreStr); err == nil {
+					return (computeScore + memoryScore) / 2
+				}
+			}
+			return computeScore
+		}
+	}
+
+	allocatableCPU := node.Status.Allocatable.Cpu().MilliValue()
+	allocatableMemory := node.Status.Allocatable.Memory().Value()
+
+	if allocatableCPU == 0 {
+		allocatableCPU = 1
+	}
+	if allocatableMemory == 0 {
+		allocatableMemory = 1
+	}
+
+	cpuFraction := float64(requestedCPU) / float64(allocatableCPU)
+	memoryFraction := float64(requestedMemory) / float64(allocatableMemory)
+
+	//penalize nodes that don't have enough resources
+	if cpuFraction >= 1 || memoryFraction >= 1 {
+		return MinScore
+	}
+
+	// score based on balanced resource usage
+	// the closer the CPU and memory fractions are, the better
+	diff := math.Abs(cpuFraction - memoryFraction)
+	balance := 1 - diff
+
+	// also consider the absolute resource usage
+	// less usage is better, but we want to discourage wasting resources
+	usage := (cpuFraction + memoryFraction) / 2
+	usageScore := 1.0
+
+	// if usage is very low, slightly penalize to avoid wasting resources on large nodes
+	if usage < 0.1 {
+		usageScore = 0.9 + usage
+	} else if usage > 0.7 {
+		// if usage is high, penalize more heavily
+		usageScore = 1.0 - ((usage - 0.7) * 2)
+	}
+
+	finalScore := int((balance*0.7 + usageScore*0.3) * MaxScore)
+
+	if finalScore > MaxScore {
+		finalScore = MaxScore
+	} else if finalScore < MinScore {
+		finalScore = MinScore
+	}
+
+	return finalScore
+}
+
+// adjustScoreForSpecialResources adjusts resource score based on special requirements
+func (s *Scheduler) adjustScoreForSpecialResources(baseScore int, pod *v1.Pod, node *v1.Node) int {
+	adjustedScore := baseScore
+
+	// GPU scoring
+	if hasGPUCapability(node) {
+		if podNeedsGPU(pod) {
+			// bonus for having a GPU when required
+			adjustedScore += 20
+		} else {
+			// small penalty for wasting GPU resources
+			adjustedScore -= 5
+		}
+	} else if podNeedsGPU(pod) {
+		// major penalty for not having GPU when required
+		adjustedScore -= 50
+	}
+
+	// Fast storage scoring
+	if hasFastStorage(node) {
+		if podNeedsFastStorage(pod) {
+			// Bonus for having fast storage when required
+			adjustedScore += 15
+		}
+	} else if podNeedsFastStorage(pod) {
+		// Penalty for not having fast storage when required
+		adjustedScore -= 30
+	}
+
+	return adjustedScore
 }
 
 func (s *Scheduler) calculateResourceScore(pod *v1.Pod, node *v1.Node) int {
@@ -980,37 +1143,81 @@ func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, er
 	preferEdge := false
 	preferCloud := false
 	preferredRegion := ""
+	preferredZone := ""
 
 	if pod.Annotations != nil {
-		_, preferEdge = pod.Annotations["scheduler.thesis/prefer-edge"]
-		_, preferCloud = pod.Annotations["scheduler.thesis/prefer-cloud"]
+		_, preferEdge = pod.Annotations[AnnotationPreferEdge]
+		_, preferCloud = pod.Annotations[AnnotationPreferCloud]
 
-		if regionValue, ok := pod.Annotations["scheduler.thesis/prefer-region"]; ok {
+		if regionValue, ok := pod.Annotations[AnnotationPreferRegion]; ok {
 			preferredRegion = regionValue
+		}
+
+		if zoneValue, ok := pod.Annotations["scheduler.thesis/prefer-zone"]; ok {
+			preferredZone = zoneValue
 		}
 	}
 
 	for _, node := range nodes {
-		score := 50
+		score := DefaultScore
+		scoreFactors := make(map[string]int)
 
+		// score based on node type preference
 		isEdge := isEdgeNode(&node)
-		nodeRegion := node.Labels["topology.kubernetes.io/region"]
+		scoreFactors["nodeType"] = DefaultScore
 
 		if preferEdge && isEdge {
-			score = 100
+			scoreFactors["nodeType"] = MaxScore
 		} else if preferEdge && !isEdge {
-			score = 0
+			scoreFactors["nodeType"] = MinScore
 		} else if preferCloud && !isEdge {
-			score = 100
+			scoreFactors["nodeType"] = MaxScore
 		} else if preferCloud && isEdge {
-			score = 0
+			scoreFactors["nodeType"] = MinScore
 		}
 
-		// TODO: handle this properly using MCDM approaches
-		if preferredRegion != "" && nodeRegion == preferredRegion {
-			score = 100
-		} else if preferredRegion != "" && nodeRegion != preferredRegion {
-			score = 0
+		// score based on region/zone preference
+		nodeRegion := node.Labels[RegionLabel]
+		nodeZone := node.Labels[ZoneLabel]
+
+		scoreFactors["region"] = DefaultScore
+		if preferredRegion != "" {
+			if nodeRegion == preferredRegion {
+				scoreFactors["region"] = MaxScore
+			} else {
+				scoreFactors["region"] = MinScore
+			}
+		}
+
+		scoreFactors["zone"] = DefaultScore // Default neutral score
+		if preferredZone != "" {
+			if nodeZone == preferredZone {
+				scoreFactors["zone"] = MaxScore
+			} else {
+				scoreFactors["zone"] = MinScore
+			}
+		}
+
+		totalWeight := 0
+		weightedSum := 0
+
+		if preferEdge || preferCloud {
+			weightedSum += scoreFactors["nodeType"] * 2
+			totalWeight += 2
+		}
+
+		if preferredRegion != "" {
+			weightedSum += scoreFactors["region"] * 3
+			totalWeight += 3
+		}
+
+		if preferredZone != "" {
+			weightedSum += scoreFactors["zone"] * 4
+			totalWeight += 4
+		}
+
+		if totalWeight > 0 {
+			score = weightedSum / totalWeight
 		}
 
 		scores = append(scores, NodeScore{
