@@ -14,12 +14,17 @@ import (
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 )
 
@@ -42,6 +47,20 @@ type NodeScore struct {
 	Score int
 }
 
+type nodeResources struct {
+	usedCPU    int64
+	usedMemory int64
+	timestamp  time.Time
+}
+
+type schedulerMetrics struct {
+	schedulingLatency  prometheus.Histogram
+	schedulingAttempts prometheus.Counter
+	schedulingFailures prometheus.Counter
+	cacheHits          prometheus.Counter
+	cacheMisses        prometheus.Counter
+}
+
 type Scheduler struct {
 	clientset            kubernetes.Interface
 	schedulerName        string
@@ -50,20 +69,67 @@ type Scheduler struct {
 	bandwidthGraph       *storage.BandwidthGraph
 	storageMutex         sync.RWMutex
 	priorityFuncs        []PriorityFunc
+	nodeResourceCache    map[string]*nodeResources
+	cacheLock            sync.RWMutex
 	dataLocalityPriority *DataLocalityPriority
 	enableMockData       bool
+	metrics              schedulerMetrics
+	recorder             record.EventRecorder
+	retryCount           map[string]int
+	retryMutex           sync.Mutex
+	cacheExpiration      time.Duration
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
 
 func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Scheduler {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(
+		&typedcorev1.EventSinkImpl{
+			Interface: clientset.CoreV1().Events(""),
+		},
+	)
+
+	recorder := eventBroadcaster.NewRecorder(
+		scheme.Scheme,
+		v1.EventSource{Component: "data-locality-scheduler"},
+	)
+
 	return &Scheduler{
-		clientset:      clientset,
-		schedulerName:  schedulerName,
-		podQueue:       make(chan *v1.Pod, 100),
-		storageIndex:   storage.NewStorageIndex(),
-		bandwidthGraph: storage.NewBandwidthGraph(50 * 1024 * 1024), // 50 MB/s default
-		priorityFuncs:  make([]PriorityFunc, 0),
+		clientset:         clientset,
+		schedulerName:     schedulerName,
+		podQueue:          make(chan *v1.Pod, 100),
+		storageIndex:      storage.NewStorageIndex(),
+		bandwidthGraph:    storage.NewBandwidthGraph(50 * 1024 * 1024), // 50 MB/s default
+		priorityFuncs:     make([]PriorityFunc, 0),
+		nodeResourceCache: make(map[string]*nodeResources),
+		enableMockData:    false,
+		metrics: schedulerMetrics{
+			schedulingLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "data_locality_scheduler_latency_seconds",
+				Help:    "Scheduling latency in seconds",
+				Buckets: prometheus.DefBuckets,
+			}),
+			schedulingAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_attempts_total",
+				Help: "Total scheduling attempts",
+			}),
+			schedulingFailures: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_failures_total",
+				Help: "Total scheduling failures",
+			}),
+			cacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_cache_hits_total",
+				Help: "Total resource cache hits",
+			}),
+			cacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_cache_misses_total",
+				Help: "Total resource cache misses",
+			}),
+		},
+		recorder:        recorder,
+		retryCount:      make(map[string]int),
+		cacheExpiration: 30 * time.Second,
 	}
 }
 
@@ -1125,35 +1191,6 @@ func (s *Scheduler) scoreNodeAffinity(pod *v1.Pod, nodes []v1.Node) ([]NodeScore
 	return scores, nil
 }
 
-func (s *Scheduler) nodeSelectorMatches(node *v1.Node, selector *v1.NodeSelectorTerm) bool {
-	for _, expr := range selector.MatchExpressions {
-		switch expr.Operator {
-		case v1.NodeSelectorOpIn:
-			if !nodeHasValueForKey(node, expr.Key, expr.Values) {
-				return false
-			}
-		case v1.NodeSelectorOpNotIn:
-			if nodeHasValueForKey(node, expr.Key, expr.Values) {
-				return false
-			}
-		case v1.NodeSelectorOpExists:
-			if !nodeHasLabelKey(node, expr.Key) {
-				return false
-			}
-		case v1.NodeSelectorOpDoesNotExist:
-			if nodeHasLabelKey(node, expr.Key) {
-				return false
-			}
-		case v1.NodeSelectorOpGt, v1.NodeSelectorOpLt:
-			if !nodeMatchesNumericComparison(node, expr.Key, expr.Operator, expr.Values) {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
 func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var scores []NodeScore
 
@@ -1288,8 +1325,62 @@ func (s *Scheduler) scoreNodeCapabilities(pod *v1.Pod, nodes []v1.Node) ([]NodeS
 }
 
 func (s *Scheduler) nodeFitsResources(ctx context.Context, pod *v1.Pod, node *v1.Node) bool {
-	var requestedCPU, requestedMemory int64
+	cacheKey := fmt.Sprintf("%s-%s", node.Name, node.ResourceVersion)
 
+	s.cacheLock.RLock()
+	cachedResources, found := s.nodeResourceCache[cacheKey]
+	s.cacheLock.RUnlock()
+
+	var usedCPU, usedMemory int64
+
+	if !found {
+		// cache miss - query the current usage from API server
+		fieldSelector := fields.SelectorFromSet(fields.Set{"spec.nodeName": node.Name})
+		pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
+			FieldSelector: fieldSelector.String(),
+		})
+
+		if err != nil {
+			klog.Errorf("Error getting pods on node %s: %v", node.Name, err)
+			return false
+		}
+
+		// resource usage by pods on this node
+		for _, p := range pods.Items {
+			if p.DeletionTimestamp != nil {
+				continue
+			}
+
+			for _, container := range p.Spec.Containers {
+				if container.Resources.Requests.Cpu() != nil {
+					usedCPU += container.Resources.Requests.Cpu().MilliValue()
+				} else {
+					usedCPU += 100 // default 100m CPU
+				}
+
+				if container.Resources.Requests.Memory() != nil {
+					usedMemory += container.Resources.Requests.Memory().Value()
+				} else {
+					usedMemory += 200 * 1024 * 1024 // default 200Mi memory
+				}
+			}
+		}
+
+		// update cache
+		s.cacheLock.Lock()
+		s.nodeResourceCache[cacheKey] = &nodeResources{
+			usedCPU:    usedCPU,
+			usedMemory: usedMemory,
+			timestamp:  time.Now(),
+		}
+		s.cacheLock.Unlock()
+	} else {
+		// cache hit
+		usedCPU = cachedResources.usedCPU
+		usedMemory = cachedResources.usedMemory
+	}
+
+	var requestedCPU, requestedMemory int64
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests.Cpu() != nil {
 			requestedCPU += container.Resources.Requests.Cpu().MilliValue()
@@ -1307,39 +1398,15 @@ func (s *Scheduler) nodeFitsResources(ctx context.Context, pod *v1.Pod, node *v1
 	allocatableCPU := node.Status.Allocatable.Cpu().MilliValue()
 	allocatableMemory := node.Status.Allocatable.Memory().Value()
 
-	fieldSelector := fields.SelectorFromSet(fields.Set{"spec.nodeName": node.Name})
-	pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector.String(),
-	})
+	cpuOK := usedCPU+requestedCPU <= allocatableCPU
+	memoryOK := usedMemory+requestedMemory <= allocatableMemory
 
-	if err != nil {
-		klog.Errorf("Error getting pods on node %s: %v", node.Name, err)
-		return false
+	if !cpuOK || !memoryOK {
+		klog.V(5).Infof("Node %s has insufficient resources for pod %s/%s - CPU: %v, Memory: %v",
+			node.Name, pod.Namespace, pod.Name, cpuOK, memoryOK)
 	}
 
-	var usedCPU, usedMemory int64
-	for _, p := range pods.Items {
-		if p.DeletionTimestamp != nil {
-			continue
-		}
-
-		for _, container := range p.Spec.Containers {
-			if container.Resources.Requests.Cpu() != nil {
-				usedCPU += container.Resources.Requests.Cpu().MilliValue()
-			} else {
-				usedCPU += 100 // default 100m CPU
-			}
-
-			if container.Resources.Requests.Memory() != nil {
-				usedMemory += container.Resources.Requests.Memory().Value()
-			} else {
-				usedMemory += 200 * 1024 * 1024 // default 200Mi memory
-			}
-		}
-	}
-
-	return (usedCPU+requestedCPU <= allocatableCPU) &&
-		(usedMemory+requestedMemory <= allocatableMemory)
+	return cpuOK && memoryOK
 }
 
 func (s *Scheduler) nodeHasRequiredCapabilities(pod *v1.Pod, node *v1.Node) bool {
@@ -1350,19 +1417,51 @@ func (s *Scheduler) nodeHasRequiredCapabilities(pod *v1.Pod, node *v1.Node) bool
 	if requiredCap, exists := pod.Annotations["scheduler.thesis/required-capability"]; exists {
 		capLabel := fmt.Sprintf("node-capability/%s", requiredCap)
 		if value, ok := node.Labels[capLabel]; !ok || value != "true" {
+			klog.V(5).Infof("Node %s missing required capability %s", node.Name, requiredCap)
 			return false
 		}
 	}
 
-	if _, ok := pod.Annotations["scheduler.thesis/requires-gpu"]; ok {
+	if _, ok := pod.Annotations[AnnotationRequireGPU]; ok {
 		if !hasGPUCapability(node) {
+			klog.V(5).Infof("Node %s missing required GPU capability", node.Name)
 			return false
 		}
 	}
 
 	if _, ok := pod.Annotations["scheduler.thesis/requires-local-storage"]; ok {
 		if _, hasStorage := node.Labels[StorageNodeLabel]; !hasStorage {
+			klog.V(5).Infof("Node %s missing required storage capability", node.Name)
 			return false
+		}
+	}
+
+	if reqCapString, ok := pod.Annotations["scheduler.thesis/capability-requirements"]; ok {
+		requirements := strings.Split(reqCapString, ",")
+		for _, req := range requirements {
+			req = strings.TrimSpace(req)
+			if req == "" {
+				continue
+			}
+
+			// requirements with values (e.g., "gpu-cores=2")
+			parts := strings.Split(req, "=")
+			capName := parts[0]
+
+			if len(parts) == 1 {
+				capLabel := fmt.Sprintf("node-capability/%s", capName)
+				if value, ok := node.Labels[capLabel]; !ok || value != "true" {
+					klog.V(5).Infof("Node %s missing required capability %s", node.Name, capName)
+					return false
+				}
+			} else if len(parts) == 2 {
+				capLabel := fmt.Sprintf("node-capability/%s", capName)
+				if value, ok := node.Labels[capLabel]; !ok || value != parts[1] {
+					klog.V(5).Infof("Node %s has wrong value for capability %s: want %s, got %s",
+						node.Name, capName, parts[1], value)
+					return false
+				}
+			}
 		}
 	}
 
@@ -1375,6 +1474,7 @@ func (s *Scheduler) satisfiesNodeAffinity(pod *v1.Pod, node *v1.Node) bool {
 	}
 
 	affinity := pod.Spec.Affinity.NodeAffinity
+
 	if affinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 		nodeSelectorTerms := affinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 		if len(nodeSelectorTerms) > 0 {
@@ -1383,10 +1483,75 @@ func (s *Scheduler) satisfiesNodeAffinity(pod *v1.Pod, node *v1.Node) bool {
 					return true
 				}
 			}
+
+			klog.V(5).Infof("Node %s fails to match any node selector terms for pod", node.Name)
 			return false
 		}
 	}
 
+	return true
+}
+
+func (s *Scheduler) nodeSelectorMatches(node *v1.Node, selector *v1.NodeSelectorTerm) bool {
+	for _, expr := range selector.MatchExpressions {
+		switch expr.Operator {
+		case v1.NodeSelectorOpIn:
+			if !nodeHasValueForKey(node, expr.Key, expr.Values) {
+				return false
+			}
+		case v1.NodeSelectorOpNotIn:
+			if nodeHasValueForKey(node, expr.Key, expr.Values) {
+				return false
+			}
+		case v1.NodeSelectorOpExists:
+			if !nodeHasLabelKey(node, expr.Key) {
+				return false
+			}
+		case v1.NodeSelectorOpDoesNotExist:
+			if nodeHasLabelKey(node, expr.Key) {
+				return false
+			}
+		case v1.NodeSelectorOpGt, v1.NodeSelectorOpLt:
+			if !nodeMatchesNumericComparison(node, expr.Key, expr.Operator, expr.Values) {
+				return false
+			}
+		}
+	}
+
+	for _, expr := range selector.MatchFields {
+		if !nodeMatchesFieldExpression(node, expr) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func nodeMatchesFieldExpression(node *v1.Node, expr v1.NodeSelectorRequirement) bool {
+	if expr.Key == "metadata.name" {
+		switch expr.Operator {
+		case v1.NodeSelectorOpIn:
+			for _, value := range expr.Values {
+				if node.Name == value {
+					return true
+				}
+			}
+			return false
+		case v1.NodeSelectorOpNotIn:
+			for _, value := range expr.Values {
+				if node.Name == value {
+					return false
+				}
+			}
+			return true
+		case v1.NodeSelectorOpExists:
+			return true // name always exists
+		case v1.NodeSelectorOpDoesNotExist:
+			return false // name always exists
+		}
+	}
+
+	klog.V(4).Infof("Unsupported field selector expression for field %s", expr.Key)
 	return true
 }
 
