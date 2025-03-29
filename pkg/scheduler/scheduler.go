@@ -669,40 +669,57 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 }
 
 func (s *Scheduler) filterNodes(ctx context.Context, pod *v1.Pod, nodes []v1.Node) ([]v1.Node, error) {
-	var filteredNodes []v1.Node
+	startTime := time.Now()
+	nodeCount := len(nodes)
+
+	filteredNodes := make([]v1.Node, 0, nodeCount/2+1)
+
+	if nodeCount == 0 {
+		return filteredNodes, nil
+	}
+
+	filterReasons := make(map[string]int)
 
 	for _, node := range nodes {
 		if !isNodeReady(&node) {
-			klog.V(4).Infof("Node %s is not ready", node.Name)
+			filterReasons["NotReady"]++
 			continue
 		}
 
 		if !s.nodeFitsResources(ctx, pod, &node) {
-			klog.V(4).Infof("Node %s does not have sufficient resources", node.Name)
+			filterReasons["InsufficientResources"]++
 			continue
 		}
 
 		if !s.nodeHasRequiredCapabilities(pod, &node) {
-			klog.V(4).Infof("Node %s does not have required capabilities", node.Name)
+			filterReasons["MissingCapabilities"]++
 			continue
 		}
 
 		if !s.satisfiesNodeAffinity(pod, &node) {
-			klog.V(4).Infof("Node %s does not satisfy node affinity", node.Name)
+			filterReasons["NodeAffinityMismatch"]++
 			continue
 		}
 
 		if !s.toleratesNodeTaints(pod, &node) {
-			klog.V(4).Infof("Node %s has taints that pod does not tolerate", node.Name)
+			filterReasons["TaintNotTolerated"]++
 			continue
 		}
 
 		filteredNodes = append(filteredNodes, node)
 	}
 
+	if klog.V(4).Enabled() {
+		klog.V(4).Infof("Node filtering for pod %s/%s: started with %d nodes, filtered to %d nodes in %v",
+			pod.Namespace, pod.Name, nodeCount, len(filteredNodes), time.Since(startTime))
+
+		for reason, count := range filterReasons {
+			klog.V(4).Infof("- Filtered out %d nodes due to %s", count, reason)
+		}
+	}
+
 	return filteredNodes, nil
 }
-
 func (s *Scheduler) prioritizeNodes(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var allScores [][]NodeScore
 
