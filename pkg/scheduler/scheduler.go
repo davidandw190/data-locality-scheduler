@@ -1804,6 +1804,82 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		json.NewEncoder(w).Encode(stats)
 	})
 
+	// Data distribution
+	mux.HandleFunc("/data-distribution", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		s.storageMutex.RLock()
+		defer s.storageMutex.RUnlock()
+
+		allDataItems := s.storageIndex.GetAllDataItems()
+		storageNodes := s.storageIndex.GetAllStorageNodes()
+
+		nodeTypes := make(map[string]string)
+		nodeRegions := make(map[string]string)
+		nodeZones := make(map[string]string)
+
+		for _, node := range storageNodes {
+			nodeTypes[node.Name] = string(node.NodeType)
+			nodeRegions[node.Name] = node.Region
+			nodeZones[node.Name] = node.Zone
+		}
+
+		dataDetails := make(map[string]map[string]interface{})
+
+		buckets := make(map[string]int)
+
+		for urn, item := range allDataItems {
+			parts := strings.SplitN(urn, "/", 2)
+			bucket := ""
+			if len(parts) > 0 {
+				bucket = parts[0]
+				buckets[bucket]++
+			}
+
+			locationInfo := make([]map[string]string, 0, len(item.Locations))
+			for _, nodeName := range item.Locations {
+				locationInfo = append(locationInfo, map[string]string{
+					"node":   nodeName,
+					"type":   nodeTypes[nodeName],
+					"region": nodeRegions[nodeName],
+					"zone":   nodeZones[nodeName],
+				})
+			}
+
+			dataDetails[urn] = map[string]interface{}{
+				"size":         item.Size,
+				"contentType":  item.ContentType,
+				"bucket":       bucket,
+				"lastModified": item.LastModified.Format(time.RFC3339),
+				"nodeCount":    len(item.Locations),
+				"locations":    locationInfo,
+			}
+
+			if len(item.Metadata) > 0 {
+				dataDetails[urn]["metadata"] = item.Metadata
+			}
+		}
+
+		stats := map[string]interface{}{
+			"totalDataItems": len(allDataItems),
+			"totalNodes":     len(storageNodes),
+			"bucketCounts":   buckets,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		}
+
+		response := map[string]interface{}{
+			"summary": stats,
+			"data":    dataDetails,
+		}
+
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(response); err != nil {
+			klog.Errorf("Error encoding data distribution response: %v", err)
+			http.Error(w, "Error generating response", http.StatusInternalServerError)
+		}
+	})
+
 	// Perform maintenance
 	mux.HandleFunc("/perform-maintenance", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
