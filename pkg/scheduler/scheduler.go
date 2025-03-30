@@ -551,7 +551,6 @@ func (s *Scheduler) SetEnableMockData(enable bool) {
 	s.enableMockData = enable
 }
 
-// discoverAndRegisterMinioServices discovers MinIO services and indexes their contents
 func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
 	klog.Info("Discovering and registering MinIO services...")
 	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
@@ -676,24 +675,30 @@ func (s *Scheduler) scheduleOne(ctx context.Context) {
 		return
 	}
 
+	startTime := time.Now()
 	klog.Infof("Attempting to schedule pod: %s/%s", pod.Namespace, pod.Name)
 
 	nodeName, err := s.findBestNodeForPod(ctx, pod)
 	if err != nil {
-		klog.Errorf("Failed to find suitable node for pod %s/%s: %v",
-			pod.Namespace, pod.Name, err)
+		s.recordSchedulingFailure(ctx, pod, err)
 		return
 	}
 
 	err = s.bindPod(ctx, pod, nodeName)
 	if err != nil {
-		klog.Errorf("Failed to bind pod %s/%s to node %s: %v",
-			pod.Namespace, pod.Name, nodeName, err)
+		s.recordSchedulingFailure(ctx, pod, fmt.Errorf("binding failed: %w", err))
 		return
 	}
 
-	klog.Infof("Successfully scheduled pod %s/%s to node %s",
-		pod.Namespace, pod.Name, nodeName)
+	latency := time.Since(startTime)
+	s.metrics.schedulingLatency.Observe(latency.Seconds())
+	s.metrics.schedulingAttempts.Inc()
+
+	klog.Infof("Successfully scheduled pod %s/%s to node %s (took %v)",
+		pod.Namespace, pod.Name, nodeName, latency)
+
+	s.recorder.Eventf(pod, v1.EventTypeNormal, "Scheduled",
+		"Successfully assigned %s/%s to %s", pod.Namespace, pod.Name, nodeName)
 }
 
 func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string, error) {
@@ -706,7 +711,6 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no nodes available in the cluster")
 	}
 
-	// filter nodes based on predicates
 	filteredNodes, err := s.filterNodes(ctx, pod, nodes.Items)
 	if err != nil {
 		return "", fmt.Errorf("node filtering error: %w", err)
@@ -716,7 +720,6 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no suitable nodes found after filtering")
 	}
 
-	// scoring nodes using priority functions
 	nodeScores, err := s.prioritizeNodes(pod, filteredNodes)
 	if err != nil {
 		return "", fmt.Errorf("node prioritization error: %w", err)
@@ -726,12 +729,85 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no suitable nodes found after scoring")
 	}
 
-	// sorting nodes by score
 	sort.Slice(nodeScores, func(i, j int) bool {
 		return nodeScores[i].Score > nodeScores[j].Score
 	})
 
+	if klog.V(4).Enabled() {
+		topN := 3
+		if len(nodeScores) < topN {
+			topN = len(nodeScores)
+		}
+
+		klog.V(4).Infof("Top %d nodes for pod %s/%s:", topN, pod.Namespace, pod.Name)
+		for i := 0; i < topN; i++ {
+			klog.V(4).Infof("  %d. Node: %s, Score: %d", i+1, nodeScores[i].Name, nodeScores[i].Score)
+		}
+	}
+
 	return nodeScores[0].Name, nil
+}
+
+func (s *Scheduler) recordSchedulingFailure(ctx context.Context, pod *v1.Pod, err error) {
+	klog.Errorf("Failed to schedule pod %s/%s: %v", pod.Namespace, pod.Name, err)
+
+	s.metrics.schedulingFailures.Inc()
+
+	s.recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling",
+		"Failed to schedule pod: %v", err)
+
+	if updateErr := s.updatePodSchedulingStatus(ctx, pod, err.Error()); updateErr != nil {
+		klog.Warningf("Failed to update status for pod %s/%s: %v",
+			pod.Namespace, pod.Name, updateErr)
+	}
+
+	// reequeue the pod for later scheduling attempts (with backoff)
+	go func() {
+		retryCount, ok := s.retryCount[string(pod.UID)]
+		if !ok {
+			retryCount = 0
+		}
+
+		backoff := time.Duration(math.Pow(2, float64(retryCount))) * time.Second
+		if backoff > 60*time.Second {
+			backoff = 60 * time.Second // cap at 1 minute
+		}
+
+		s.retryCount[string(pod.UID)] = retryCount + 1
+
+		time.Sleep(backoff)
+		s.podQueue <- pod
+	}()
+}
+
+func (s *Scheduler) updatePodSchedulingStatus(ctx context.Context, pod *v1.Pod, message string) error {
+	podCopy := pod.DeepCopy()
+
+	now := metav1.Now()
+	condition := v1.PodCondition{
+		Type:               v1.PodScheduled,
+		Status:             v1.ConditionFalse,
+		LastProbeTime:      now,
+		LastTransitionTime: now,
+		Reason:             "SchedulerError",
+		Message:            message,
+	}
+
+	found := false
+	for i, podCondition := range podCopy.Status.Conditions {
+		if podCondition.Type == v1.PodScheduled {
+			podCopy.Status.Conditions[i] = condition
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		podCopy.Status.Conditions = append(podCopy.Status.Conditions, condition)
+	}
+
+	_, err := s.clientset.CoreV1().Pods(pod.Namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{})
+	return err
 }
 
 func (s *Scheduler) filterNodes(ctx context.Context, pod *v1.Pod, nodes []v1.Node) ([]v1.Node, error) {
