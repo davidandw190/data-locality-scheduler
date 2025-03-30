@@ -1631,6 +1631,42 @@ func nodeMatchesFieldExpression(node *v1.Node, expr v1.NodeSelectorRequirement) 
 	return true
 }
 
+// startCacheCleanup starts a background routine to clean up expired cache entries
+func (s *Scheduler) startCacheCleanup(ctx context.Context) {
+	ticker := time.NewTicker(s.cacheExpiration / 2)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				s.cleanupCache()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// cleanupCache removes expired cache entries
+func (s *Scheduler) cleanupCache() {
+	start := time.Now()
+
+	s.cacheLock.Lock()
+	defer s.cacheLock.Unlock()
+
+	expiredKeys := 0
+	for key, resources := range s.nodeResourceCache {
+		if time.Since(resources.timestamp) > s.cacheExpiration {
+			delete(s.nodeResourceCache, key)
+			expiredKeys++
+		}
+	}
+
+	duration := time.Since(start)
+	klog.V(4).Infof("Cache cleanup: removed %d expired entries in %v", expiredKeys, duration)
+}
+
 func (s *Scheduler) toleratesNodeTaints(pod *v1.Pod, node *v1.Node) bool {
 	if len(node.Spec.Taints) == 0 {
 		return true
@@ -1669,29 +1705,72 @@ func (s *Scheduler) bindPod(ctx context.Context, pod *v1.Pod, nodeName string) e
 func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 	mux := http.NewServeMux()
 
-	// Health check endpoint
+	// Health check
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
-	// Storage info endpoint
+	// Readiness check
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		nodes := s.storageIndex.GetAllStorageNodes()
+		if len(nodes) > 0 {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Ready"))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("Not ready - awaiting node information"))
+		}
+	})
+
+	// Storage info
 	mux.HandleFunc("/storage-info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		s.storageMutex.RLock()
 		defer s.storageMutex.RUnlock()
 
+		nodes := s.storageIndex.GetAllStorageNodes()
+		buckets := s.storageIndex.GetAllBuckets()
+
+		edgeCount := 0
+		cloudCount := 0
+		for _, node := range nodes {
+			if node.NodeType == storage.StorageTypeEdge {
+				edgeCount++
+			} else {
+				cloudCount++
+			}
+		}
+
+		regions := make(map[string]int)
+		zones := make(map[string]int)
+		for _, node := range nodes {
+			if node.Region != "" {
+				regions[node.Region]++
+			}
+			if node.Zone != "" {
+				zones[node.Zone]++
+			}
+		}
+
+		dataItems := s.storageIndex.GetAllDataItems()
+
 		report := map[string]interface{}{
-			"storageNodes": len(s.storageIndex.GetAllStorageNodes()),
-			"buckets":      s.storageIndex.GetAllBuckets(),
-			"lastUpdated":  s.storageIndex.GetLastRefreshed().Format(time.RFC3339),
+			"storageNodes":  len(nodes),
+			"edgeNodes":     edgeCount,
+			"cloudNodes":    cloudCount,
+			"buckets":       buckets,
+			"bucketCount":   len(buckets),
+			"dataItemCount": len(dataItems),
+			"regions":       regions,
+			"zones":         zones,
+			"lastUpdated":   s.storageIndex.GetLastRefreshed().Format(time.RFC3339),
 		}
 
 		json.NewEncoder(w).Encode(report)
 	})
 
-	// Storage summary endpoint
 	mux.HandleFunc("/storage-summary", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 
@@ -1702,7 +1781,7 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		w.Write([]byte(summary))
 	})
 
-	// Bandwidth summary endpoint
+	// Bandwidth summary
 	mux.HandleFunc("/bandwidth-summary", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 
@@ -1713,6 +1792,19 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		w.Write([]byte(summary))
 	})
 
+	// Scheduler stats
+	mux.HandleFunc("/scheduler-stats", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		stats := map[string]interface{}{
+			"queueLength": len(s.podQueue),
+			"cacheSize":   len(s.nodeResourceCache),
+		}
+
+		json.NewEncoder(w).Encode(stats)
+	})
+
+	// Perform maintenance
 	mux.HandleFunc("/perform-maintenance", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
