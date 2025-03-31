@@ -10,22 +10,50 @@ spec:
     command: [ "/bin/bash", "-c" ]
     args:
     - |
-      # 1. Check node topology and capabilities
-      echo -e "\n1. Node Topology Information:"
+      echo "===== Data Locality Scheduler Analysis ====="
+      echo "Analysis started at $(date)"
+
+      # Define some color codes for better visualization
+      RED='\033[0;31m'
+      GREEN='\033[0;32m'
+      YELLOW='\033[0;33m'
+      BLUE='\033[0;34m'
+      NC='\033[0m'
+
+      # 1. Node Topology and Capability Analysis
+      echo -e "\n${BLUE}1. Node Topology and Capability Analysis:${NC}"
       for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
         echo -e "\nNode: $node"
         NODE_TYPE=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/node-type}')
         REGION=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
         ZONE=$(kubectl get node $node -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}')
+        COMPUTE_SCORE=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/compute-score}')
+        MEMORY_SCORE=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/memory-score}')
+        STORAGE_SCORE=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-score}')
+        
         echo "Type: $NODE_TYPE, Region: $REGION, Zone: $ZONE"
+        echo "Compute Score: $COMPUTE_SCORE, Memory Score: $MEMORY_SCORE, Storage Score: $STORAGE_SCORE"
+        
+        IS_STORAGE=$(kubectl get node $node -o jsonpath='{.metadata.labels.node-capability/storage-service}')
+        if [[ "$IS_STORAGE" == "true" ]]; then
+          BUCKETS=$(kubectl get node $node -o jsonpath='{.metadata.labels}' | grep "storage-bucket" | wc -l)
+          echo "Storage service: Yes (hosting $BUCKETS buckets)"
+          echo "Storage capabilities:"
+          kubectl get node $node -o jsonpath='{.metadata.labels}' | grep storage | grep capability | sort
+        else
+          echo "Storage service: No"
+        fi
+        
+        echo "Network capabilities:"
+        kubectl get node $node -o jsonpath='{.metadata.labels}' | grep bandwidth | head -3
       done
 
-      # 2. Storage placement verification
-      echo -e "\n2. Storage Service Placement:"
+      # 2. Storage Service Placement
+      echo -e "\n${BLUE}2. Storage Service Placement:${NC}"
       kubectl get pods -l 'app in (minio,minio-edge)' -n data-locality-scheduler -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase
 
-      # 3. Basic test workloads
-      echo -e "\n3. Basic Test Workload Placement:"
+      # 3. Basic Test Workload Placement
+      echo -e "\n${BLUE}3. Basic Test Workload Placement:${NC}"
       for pod in data-consumer-pod edge-preferring-workload cloud-preferring-workload region2-workload region1-to-region2-transfer; do
         if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
           echo "Pod $pod not found, skipping"
@@ -42,227 +70,241 @@ spec:
         echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION, Zone: $ZONE)"
         echo "Pod annotations: $POD_ANNOTATIONS"
         
-        # Check specific behavior based on pod type
-        if [[ "$pod" == "edge-preferring-workload" ]]; then
-          if [[ "$NODE_TYPE" == "edge" ]]; then
-            echo "✅ Edge preference honored"
-          else
-            echo "❌ Edge preference NOT honored"
-          fi
-        elif [[ "$pod" == "cloud-preferring-workload" ]]; then
-          if [[ "$NODE_TYPE" == "cloud" ]]; then
-            echo "✅ Cloud preference honored"
-          else
-            echo "❌ Cloud preference NOT honored"
-          fi
-        elif [[ "$pod" == "region2-workload" ]] && [[ $(echo "$POD_ANNOTATIONS" | grep -c "prefer-region.*region-2") -gt 0 ]]; then
-          if [[ "$REGION" == "region-2" ]]; then
-            echo "✅ Region preference honored"
-          else
-            echo "❌ Region preference NOT honored"
-          fi
+        if [[ "$pod" == "edge-preferring-workload" && "$NODE_TYPE" == "edge" ]]; then
+          echo -e "${GREEN}✅ Edge preference honored${NC}"
+        elif [[ "$pod" == "edge-preferring-workload" && "$NODE_TYPE" != "edge" ]]; then
+          echo -e "${RED}❌ Edge preference NOT honored${NC}"
+        elif [[ "$pod" == "cloud-preferring-workload" && "$NODE_TYPE" == "cloud" ]]; then
+          echo -e "${GREEN}✅ Cloud preference honored${NC}"
+        elif [[ "$pod" == "cloud-preferring-workload" && "$NODE_TYPE" != "cloud" ]]; then
+          echo -e "${RED}❌ Cloud preference NOT honored${NC}"
+        elif [[ "$pod" == "region2-workload" && "$REGION" == "region-2" ]]; then
+          echo -e "${GREEN}✅ Region preference honored${NC}"
+        elif [[ "$pod" == "region2-workload" && "$REGION" != "region-2" ]]; then
+          echo -e "${RED}❌ Region preference NOT honored${NC}"
         fi
       done
 
-      # 4. ETL Pipeline Workload Analysis
-      echo -e "\n4. ETL Pipeline Workload Analysis:"
-      for pod in data-extract data-transform data-load; do
-        if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
-          echo "Pipeline pod $pod not found, skipping"
-          continue
-        fi
+      # 4. Data Locality Analysis
+      echo -e "\n${BLUE}4. Data Locality Analysis:${NC}"
+      if kubectl get pod data-consumer-pod -n data-locality-scheduler &>/dev/null; then
+        DATA_POD_NODE=$(kubectl get pod data-consumer-pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
         
-        POD_NODE=$(kubectl get pod $pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
-        REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-        
-        echo -e "\nPipeline Stage: $pod"
-        echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION)"
-      done
+        # Find MinIO pods and their nodes
+        MINIO_PODS=$(kubectl get pods -l app=minio -n data-locality-scheduler -o jsonpath='{.items[*].metadata.name}')
+        for MINIO_POD in $MINIO_PODS; do
+          MINIO_NODE=$(kubectl get pod $MINIO_POD -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+          
+          DATA_POD_ZONE=$(kubectl get node $DATA_POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}')
+          MINIO_ZONE=$(kubectl get node $MINIO_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}')
+          
+          DATA_POD_REGION=$(kubectl get node $DATA_POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+          MINIO_REGION=$(kubectl get node $MINIO_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+          
+          echo "Data consumer pod on node: $DATA_POD_NODE"
+          echo "MinIO pod on node: $MINIO_NODE"
+          
+          if [[ "$DATA_POD_NODE" == "$MINIO_NODE" ]]; then
+            echo -e "${GREEN}✅ PERFECT DATA LOCALITY: Pod and data on same node${NC}"
+          elif [[ "$DATA_POD_ZONE" == "$MINIO_ZONE" ]]; then
+            echo -e "${BLUE}👍 GOOD DATA LOCALITY: Pod and data in same zone${NC}"
+          elif [[ "$DATA_POD_REGION" == "$MINIO_REGION" ]]; then
+            echo -e "${YELLOW}👌 ACCEPTABLE DATA LOCALITY: Pod and data in same region${NC}"
+          else
+            echo -e "${RED}⚠️ POOR DATA LOCALITY: Pod and data in different regions${NC}"
+          fi
+        done
+      else
+        echo "Data consumer pod not found, skipping analysis"
+      fi
 
-      # Check pipeline locality
+      # 5. Pipeline Analysis
+      echo -e "\n${BLUE}5. Pipeline Analysis:${NC}"
+      # Check ETL pipeline placement
       if kubectl get pod data-extract -n data-locality-scheduler &>/dev/null && \
-         kubectl get pod data-transform -n data-locality-scheduler &>/dev/null; then
-         
+         kubectl get pod data-transform -n data-locality-scheduler &>/dev/null && \
+         kubectl get pod data-load -n data-locality-scheduler &>/dev/null; then
+        
         EXTRACT_NODE=$(kubectl get pod data-extract -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
         TRANSFORM_NODE=$(kubectl get pod data-transform -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        
-        if [[ "$EXTRACT_NODE" == "$TRANSFORM_NODE" ]]; then
-          echo "✅ OPTIMAL PIPELINE LOCALITY: Extract and Transform stages on same node"
-        else
-          EXTRACT_REGION=$(kubectl get node $EXTRACT_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-          TRANSFORM_REGION=$(kubectl get node $TRANSFORM_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-          
-          if [[ "$EXTRACT_REGION" == "$TRANSFORM_REGION" ]]; then
-            echo "👍 GOOD PIPELINE LOCALITY: Extract and Transform stages in same region"
-          else
-            echo "⚠️ SUB-OPTIMAL PIPELINE LOCALITY: Extract and Transform stages in different regions"
-          fi
-        fi
-      fi
-
-      if kubectl get pod data-transform -n data-locality-scheduler &>/dev/null && \
-         kubectl get pod data-load -n data-locality-scheduler &>/dev/null; then
-         
-        TRANSFORM_NODE=$(kubectl get pod data-transform -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
         LOAD_NODE=$(kubectl get pod data-load -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        LOAD_NODE_TYPE=$(kubectl get node $LOAD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
         
-        if [[ "$TRANSFORM_NODE" == "$LOAD_NODE" ]]; then
-          echo "✅ OPTIMAL PIPELINE LOCALITY: Transform and Load stages on same node"
+        EXTRACT_TYPE=$(kubectl get node $EXTRACT_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        TRANSFORM_TYPE=$(kubectl get node $TRANSFORM_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        LOAD_TYPE=$(kubectl get node $LOAD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        
+        EXTRACT_REGION=$(kubectl get node $EXTRACT_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+        TRANSFORM_REGION=$(kubectl get node $TRANSFORM_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+        LOAD_REGION=$(kubectl get node $LOAD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+        
+        echo "ETL Pipeline Analysis:"
+        echo "Extract stage: $EXTRACT_NODE ($EXTRACT_TYPE in $EXTRACT_REGION)"
+        echo "Transform stage: $TRANSFORM_NODE ($TRANSFORM_TYPE in $TRANSFORM_REGION)"
+        echo "Load stage: $LOAD_NODE ($LOAD_TYPE in $LOAD_REGION)"
+        
+        if [[ "$EXTRACT_NODE" == "$TRANSFORM_NODE" && "$TRANSFORM_NODE" == "$LOAD_NODE" ]]; then
+          echo -e "${GREEN}✅ OPTIMAL PIPELINE LOCALITY: All stages on same node${NC}"
+        elif [[ "$EXTRACT_REGION" == "$TRANSFORM_REGION" && "$TRANSFORM_REGION" == "$LOAD_REGION" ]]; then
+          echo -e "${BLUE}👍 GOOD PIPELINE LOCALITY: All stages in same region${NC}"
         else
-          if [[ "$LOAD_NODE_TYPE" == "cloud" ]]; then
-            echo "✅ LOAD PREFERENCE HONORED: Final stage properly placed on cloud node"
-          else
-            echo "❌ LOAD PREFERENCE NOT HONORED: Final stage should be on cloud node"
-          fi
+          echo -e "${RED}⚠️ SUB-OPTIMAL PIPELINE LOCALITY: Stages in different regions${NC}"
         fi
       fi
 
-      # 5. Multi-Source Aggregation Analysis
-      echo -e "\n5. Multi-Source Aggregation Analysis:"
-      for pod in edge-source-aggregator multi-region-aggregator; do
-        if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
-          echo "Aggregator pod $pod not found, skipping"
-          continue
+      # Check Earth Observation workflow
+      if kubectl get pod eo-band-extraction -n data-locality-scheduler &>/dev/null && \
+         kubectl get pod eo-fmask-processor -n data-locality-scheduler &>/dev/null; then
+        
+        EXT_NODE=$(kubectl get pod eo-band-extraction -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        PROC_NODE=$(kubectl get pod eo-fmask-processor -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        
+        EXT_NODE_TYPE=$(kubectl get node $EXT_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        PROC_NODE_TYPE=$(kubectl get node $PROC_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        
+        echo "Earth Observation Workflow Analysis:"
+        echo "Band extraction pod running on: $EXT_NODE (type: $EXT_NODE_TYPE)"
+        echo "Processing pod running on: $PROC_NODE (type: $PROC_NODE_TYPE)"
+        
+        if [[ "$EXT_NODE" == "$PROC_NODE" ]]; then
+          echo -e "${GREEN}✅ OPTIMAL WORKFLOW LOCALITY: Both steps running on same node${NC}"
+        elif [[ "$EXT_NODE_TYPE" == "$PROC_NODE_TYPE" ]]; then
+          echo -e "${BLUE}👍 GOOD WORKFLOW LOCALITY: Both steps running on same node type${NC}"
+        else
+          echo -e "${RED}⚠️ SUB-OPTIMAL WORKFLOW LOCALITY: Steps running on different node types${NC}"
+        fi
+      fi
+
+      # 6. Resource-Intensive Workload Analysis
+      echo -e "\n${BLUE}6. Resource-Intensive Workload Analysis:${NC}"
+      # Check compute-intensive workload
+      if kubectl get pod compute-intensive-processor -n data-locality-scheduler &>/dev/null; then
+        COMPUTE_NODE=$(kubectl get pod compute-intensive-processor -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        COMPUTE_NODE_TYPE=$(kubectl get node $COMPUTE_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        COMPUTE_SCORE=$(kubectl get node $COMPUTE_NODE -o jsonpath='{.metadata.labels.node-capability/compute-score}')
+        
+        echo "Compute-intensive processor on: $COMPUTE_NODE (type: $COMPUTE_NODE_TYPE, compute score: $COMPUTE_SCORE)"
+        
+        if [[ "$COMPUTE_NODE_TYPE" == "cloud" || "$COMPUTE_SCORE" -ge "80" ]]; then
+          echo -e "${GREEN}✅ CORRECTLY PLACED: Compute-intensive workload on high-compute node${NC}"
+        else
+          echo -e "${RED}❌ SUB-OPTIMAL PLACEMENT: Compute-intensive workload on low-compute node${NC}"
+        fi
+      fi
+
+      # Check memory-intensive workload
+      if kubectl get pod memory-intensive-processor -n data-locality-scheduler &>/dev/null; then
+        MEM_NODE=$(kubectl get pod memory-intensive-processor -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        MEM_NODE_TYPE=$(kubectl get node $MEM_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        MEM_SCORE=$(kubectl get node $MEM_NODE -o jsonpath='{.metadata.labels.node-capability/memory-score}')
+        
+        echo "Memory-intensive processor on: $MEM_NODE (type: $MEM_NODE_TYPE, memory score: $MEM_SCORE)"
+        
+        if [[ "$MEM_SCORE" -ge "70" ]]; then
+          echo -e "${GREEN}✅ CORRECTLY PLACED: Memory-intensive workload on high-memory node${NC}"
+        else
+          echo -e "${RED}❌ SUB-OPTIMAL PLACEMENT: Memory-intensive workload on low-memory node${NC}"
+        fi
+      fi
+
+      # 7. Edge-Cloud Streaming Analysis
+      echo -e "\n${BLUE}7. Edge-Cloud Streaming Analysis:${NC}"
+      if kubectl get pod edge-stream-ingestor -n data-locality-scheduler &>/dev/null && \
+         kubectl get pod stream-analyzer -n data-locality-scheduler &>/dev/null; then
+        
+        INGESTOR_NODE=$(kubectl get pod edge-stream-ingestor -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        ANALYZER_NODE=$(kubectl get pod stream-analyzer -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        
+        INGESTOR_TYPE=$(kubectl get node $INGESTOR_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        ANALYZER_TYPE=$(kubectl get node $ANALYZER_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        
+        echo "Stream ingestor running on: $INGESTOR_NODE (type: $INGESTOR_TYPE)"
+        echo "Stream analyzer running on: $ANALYZER_NODE (type: $ANALYZER_TYPE)"
+        
+        if [[ "$INGESTOR_TYPE" == "edge" ]]; then
+          echo -e "${GREEN}✅ CORRECTLY PLACED: Stream ingestor on edge node${NC}"
+        else
+          echo -e "${RED}❌ POORLY PLACED: Stream ingestor should be on edge node${NC}"
         fi
         
-        POD_NODE=$(kubectl get pod $pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
-        REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-        
-        echo -e "\nAggregator: $pod"
-        echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION)"
-        
-        if [[ "$pod" == "edge-source-aggregator" ]]; then
-          if [[ "$NODE_TYPE" == "edge" ]]; then
-            echo "✅ Edge preference honored for edge data aggregation"
-          else
-            echo "❌ Edge preference NOT honored for edge data aggregation"
-          fi
-        elif [[ "$pod" == "multi-region-aggregator" ]]; then
-          if [[ "$NODE_TYPE" == "cloud" ]]; then
-            echo "✅ Cloud preference honored for multi-region aggregation"
-          else
-            echo "❌ Cloud preference NOT honored for multi-region aggregation"
-          fi
+        if [[ "$ANALYZER_TYPE" == "cloud" ]]; then
+          echo -e "${GREEN}✅ CORRECTLY PLACED: Stream analyzer on cloud node${NC}"
+        else
+          echo -e "${RED}❌ POORLY PLACED: Stream analyzer should be on cloud node${NC}"
         fi
-      done
+      fi
 
-      # 6. Resource vs Locality Tradeoff Analysis
-      echo -e "\n6. Resource vs Locality Tradeoff Analysis:"
-      for pod in compute-intensive-processor balanced-data-processor memory-intensive-processor; do
-        if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
-          echo "Processor pod $pod not found, skipping"
-          continue
+      # 8. Cross-Region Transfer Analysis
+      echo -e "\n${BLUE}8. Cross-Region Transfer Analysis:${NC}"
+      if kubectl get pod region1-to-region2-transfer -n data-locality-scheduler &>/dev/null; then
+        POD_NODE=$(kubectl get pod region1-to-region2-transfer -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        NODE_REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
+        
+        echo "Region1-to-Region2 transfer pod running on node: $POD_NODE in region: $NODE_REGION"
+        if [[ "$NODE_REGION" == "region-1" ]]; then
+          echo -e "${GREEN}✅ Pod correctly placed in source region (region-1) for efficient data retrieval${NC}"
+        elif [[ "$NODE_REGION" == "region-2" ]]; then
+          echo -e "${GREEN}✅ Pod correctly placed in destination region (region-2) for efficient data storage${NC}"
+        else 
+          echo -e "${RED}⚠️ Pod placed in unexpected region${NC}"
         fi
-        
-        POD_NODE=$(kubectl get pod $pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
-        REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-        
-        echo -e "\nProcessor: $pod"
-        echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION)"
-        
-        case "$pod" in
-          compute-intensive-processor)
-            if [[ "$NODE_TYPE" == "cloud" ]]; then
-              echo "✅ CORRECTLY PLACED: Compute-intensive workload on cloud node"
-            else
-              echo "⚠️ UNEXPECTED PLACEMENT: Compute-intensive workload should be on cloud node"
-            fi
-            ;;
-          balanced-data-processor)
-            # Check if this pod was placed near its data source (region-2)
-            if [[ "$REGION" == "region-2" ]]; then
-              echo "✅ CORRECTLY PLACED: Data-intensive workload near data source"
-            else
-              echo "⚠️ SUB-OPTIMAL PLACEMENT: Data workload not near its data source"
-            fi
-            ;;
-          memory-intensive-processor)
-            if [[ "$NODE_TYPE" == "edge" ]]; then
-              echo "✅ EDGE PREFERENCE HONORED: Memory-intensive workload on edge"
-            else
-              echo "❌ EDGE PREFERENCE NOT HONORED: Workload should be on edge node"
-            fi
-            ;;
-        esac
-      done
+      fi
 
-      # 7. Data Migration Analysis
-      echo -e "\n7. Data Migration Analysis:"
-      for pod in large-data-migration incremental-data-sync; do
-        if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
-          echo "Migration pod $pod not found, skipping"
-          continue
+      # 9. Data Size Variation Analysis
+      echo -e "\n${BLUE}9. Data Size Variation Analysis:${NC}"
+      # Check if we have small-data-intensive and large-data-intensive pods
+      if kubectl get pod small-data-intensive -n data-locality-scheduler &>/dev/null && \
+         kubectl get pod large-data-intensive -n data-locality-scheduler &>/dev/null; then
+         
+        SMALL_NODE=$(kubectl get pod small-data-intensive -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        LARGE_NODE=$(kubectl get pod large-data-intensive -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
+        
+        SMALL_NODE_TYPE=$(kubectl get node $SMALL_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        LARGE_NODE_TYPE=$(kubectl get node $LARGE_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
+        
+        echo "Small data job running on: $SMALL_NODE (type: $SMALL_NODE_TYPE)"
+        echo "Large data job running on: $LARGE_NODE (type: $LARGE_NODE_TYPE)"
+        
+        if [[ "$SMALL_NODE_TYPE" == "edge" && "$LARGE_NODE_TYPE" == "cloud" ]]; then
+          echo -e "${GREEN}✅ OPTIMAL SIZE-BASED PLACEMENT: Small job on edge, large job on cloud${NC}"
+        elif [[ "$SMALL_NODE" == "$LARGE_NODE" ]]; then
+          echo -e "${YELLOW}⚠️ SIZE INSENSITIVE PLACEMENT: Both jobs on same node regardless of size${NC}"
+        else
+          echo -e "${BLUE}👍 DIFFERENT PLACEMENT: Jobs placed on different nodes${NC}"
         fi
-        
-        POD_NODE=$(kubectl get pod $pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
-        REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-        
-        echo -e "\nMigration Job: $pod"
-        echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION)"
-        
-        case "$pod" in
-          large-data-migration)
-            if [[ "$REGION" == "region-1" ]]; then
-              echo "✅ CORRECTLY PLACED: Large data migration near source data"
-            else
-              echo "❌ POORLY PLACED: Large migration should be near source data"
-            fi
-            ;;
-          incremental-data-sync)
-            if [[ "$REGION" == "region-2" ]]; then
-              echo "✅ CORRECTLY PLACED: Incremental sync near target location"
-            else
-              echo "❌ POORLY PLACED: Incremental sync should be near target location"
-            fi
-            ;;
-        esac
-      done
+      fi
 
-      # 8. Edge Streaming Analysis
-      echo -e "\n8. Edge Streaming Analysis:"
-      for pod in edge-stream-ingestor stream-analyzer; do
-        if ! kubectl get pod $pod -n data-locality-scheduler &>/dev/null; then
-          echo "Streaming pod $pod not found, skipping"
-          continue
-        fi
+      # 10. Scheduler Decision Logs
+      echo -e "\n${BLUE}10. Scheduler Decision Logs:${NC}"
+      SCHEDULER_POD=$(kubectl get pods -n data-locality-scheduler -l app=data-locality-scheduler -o jsonpath='{.items[0].metadata.name}')
+      if [[ -n "$SCHEDULER_POD" ]]; then
+        echo "Recent scheduling decisions:"
+        kubectl logs $SCHEDULER_POD -n data-locality-scheduler | grep -i "scheduling pod" | tail -5
         
-        POD_NODE=$(kubectl get pod $pod -n data-locality-scheduler -o jsonpath='{.spec.nodeName}')
-        NODE_TYPE=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.node-capability/node-type}')
-        REGION=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/region}')
-        
-        echo -e "\nStreaming Component: $pod"
-        echo "Scheduled on: $POD_NODE (Type: $NODE_TYPE, Region: $REGION)"
-        
-        case "$pod" in
-          edge-stream-ingestor)
-            if [[ "$NODE_TYPE" == "edge" ]]; then
-              echo "✅ CORRECTLY PLACED: Stream ingestor on edge node"
-            else
-              echo "❌ POORLY PLACED: Stream ingestor should be on edge node"
-            fi
-            ;;
-          stream-analyzer)
-            if [[ "$NODE_TYPE" == "cloud" ]]; then
-              echo "✅ CORRECTLY PLACED: Stream analyzer on cloud node"
-            else
-              echo "❌ POORLY PLACED: Stream analyzer should be on cloud node"
-            fi
-            ;;
-        esac
-      done
+        echo -e "\nScheduling success logs:"
+        kubectl logs $SCHEDULER_POD -n data-locality-scheduler | grep -i "successfully scheduled" | tail -5
+      else
+        echo "Scheduler pod not found, skipping log analysis"
+      fi
 
-      # 9. Overall Scheduler Performance
-      echo -e "\n9. Overall Scheduler Performance Assessment:"
+      # 11. Overall Statistics
+      echo -e "\n${BLUE}11. Overall Scheduler Performance:${NC}"
+      TOTAL_PODS=$(kubectl get pods -n data-locality-scheduler | grep -v "node-capability-daemon" | grep -v "minio" | grep -v "data-locality-scheduler" | grep -v "scheduler-analysis" | wc -l)
+      EDGE_PODS=$(kubectl get pods -n data-locality-scheduler -o json | jq -r '.items[] | select(.spec.nodeName != null) | select(.metadata.name != "scheduler-analysis" and .metadata.name != "minio-setup") | .spec.nodeName' | xargs -I{} kubectl get node {} -o jsonpath='{.metadata.labels.node-capability/node-type}' | grep -c "edge" || echo 0)
+      CLOUD_PODS=$(kubectl get pods -n data-locality-scheduler -o json | jq -r '.items[] | select(.spec.nodeName != null) | select(.metadata.name != "scheduler-analysis" and .metadata.name != "minio-setup") | .spec.nodeName' | xargs -I{} kubectl get node {} -o jsonpath='{.metadata.labels.node-capability/node-type}' | grep -c "cloud" || echo 0)
 
-      TOTAL_PODS=$(kubectl get pods -n data-locality-scheduler --field-selector=status.phase=Running | grep -v "node-capability-daemon" | wc -l)
+      echo "Total scheduled workloads: $TOTAL_PODS"
+      echo "Workloads on edge nodes: $EDGE_PODS"
+      echo "Workloads on cloud nodes: $CLOUD_PODS"
 
-      echo "Total managed workloads: $TOTAL_PODS"
-      echo "Data locality checks completed"
+      # Calculate percentages if there are any pods
+      if [[ $TOTAL_PODS -gt 0 ]]; then
+        EDGE_PERCENT=$((EDGE_PODS * 100 / TOTAL_PODS))
+        CLOUD_PERCENT=$((CLOUD_PODS * 100 / TOTAL_PODS))
+        echo "Edge utilization: $EDGE_PERCENT%, Cloud utilization: $CLOUD_PERCENT%"
+      fi
+
+      echo -e "\nAnalysis completed at $(date)"
+
     resources:
       requests:
         cpu: "250m"

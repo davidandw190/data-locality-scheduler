@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resource-test-config
+  namespace: data-locality-scheduler
+data:
+  resource-test.py: |
+    import time
+    import os
+    import socket
+
+    workload_type = os.environ.get("WORKLOAD_TYPE", "generic")
+    print(f"Starting {workload_type} workload...")
+    print(f"Running on node: {os.environ.get('NODE_NAME', 'unknown')}")
+
+    # Stay running
+    time.sleep(3600)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compute-intensive-processor
+  namespace: data-locality-scheduler
+  annotations:
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: compute-processor
+    image: python:3.9
+    command: [ "python", "/config/resource-test.py" ]
+    env:
+    - name: WORKLOAD_TYPE
+      value: "compute-intensive"
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "800m"
+      limits:
+        memory: "512Mi"
+        cpu: "1500m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: resource-test-config
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-intensive-processor
+  namespace: data-locality-scheduler
+  annotations:
+    scheduler.thesis/memory-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: memory-processor
+    image: python:3.9
+    command: [ "python", "/config/resource-test.py" ]
+    env:
+    - name: WORKLOAD_TYPE
+      value: "memory-intensive"
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "200m"
+      limits:
+        memory: "6Gi"
+        cpu: "400m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: resource-test-config
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: balanced-data-processor
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "balanced-test/input-data.json,52428800,10,5,json"
+    data.scheduler.thesis/output-1: "balanced-test/output-data.json,52428800,0,5,json"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: balanced-processor
+    image: python:3.9
+    command: [ "python", "/config/resource-test.py" ]
+    env:
+    - name: WORKLOAD_TYPE
+      value: "balanced"
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: resource-test-config
+  restartPolicy: Never

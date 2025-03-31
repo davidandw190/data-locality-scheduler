@@ -22,12 +22,18 @@ metadata:
   annotations:
     data.scheduler.thesis/input-1: "test-bucket/test-data.json,1048576,5,3,json"
     data.scheduler.thesis/output-1: "results-bucket/result-data.json,2097152,0,4,json"
+    scheduler.thesis/prefer-edge: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
   - name: data-processor
     image: python:3.9
-    command: [ "python", "-c", "import time; print('Processing data...'); time.sleep(3600)" ]
+    command: [ "python", "-c", "import time, os; print(f'Processing data on {os.environ.get(\"NODE_NAME\", \"unknown\")}'); time.sleep(3600)" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
     volumeMounts:
     - name: test-data
       mountPath: /data
