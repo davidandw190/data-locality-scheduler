@@ -123,6 +123,10 @@ func main() {
 	}
 
 	if configFile != "" {
+		if err := config.LoadFromFile(configFile); err != nil {
+			klog.Fatalf("Failed to load configuration from file %s: %v", configFile, err)
+		}
+
 		if wasFlagPassed("local-bandwidth-mbps") {
 			config.LocalBandwidth = localBandwidthMBps * 1e6
 		}

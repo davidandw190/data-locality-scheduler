@@ -61,7 +61,7 @@ spec:
         args:
         - "--config=/etc/scheduler/scheduler-config.yaml"
         - "--verbose=true"
-        - "ls -la /etc/scheduler && cat /etc/scheduler/scheduler-config.yaml && exec /app/data-locality-scheduler --config=/etc/scheduler/scheduler-config.yaml --verbose=true"
+        # - "ls -la /etc/scheduler && cat /etc/scheduler/scheduler-config.yaml && exec /app/data-locality-scheduler --config=/etc/scheduler/scheduler-config.yaml --verbose=true"
         env:
         - name: POD_NAMESPACE
           valueFrom:
