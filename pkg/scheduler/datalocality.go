@@ -57,12 +57,17 @@ type DataLocalityPriority struct {
 
 func NewDataLocalityPriority(
 	storageIndex *storage.StorageIndex,
-	bandwidthGraph *storage.BandwidthGraph) *DataLocalityPriority {
+	bandwidthGraph *storage.BandwidthGraph,
+	config *DataLocalityConfig) *DataLocalityPriority {
+
+	if config == nil {
+		config = NewDataLocalityConfig()
+	}
 
 	return &DataLocalityPriority{
 		storageIndex:   storageIndex,
 		bandwidthGraph: bandwidthGraph,
-		config:         NewDataLocalityConfig(),
+		config:         config,
 	}
 }
 
@@ -99,8 +104,8 @@ func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) 
 
 	if dataScore > p.config.MaxScore {
 		dataScore = p.config.MaxScore
-	} else if dataScore < MinScore {
-		dataScore = MinScore
+	} else if dataScore < 0 {
+		dataScore = 0
 	}
 
 	klog.V(4).Infof("DataLocalityPriority: Pod %s/%s on node %s - Input score: %d, Output score: %d, Final score: %d",
@@ -438,6 +443,8 @@ func calculateScoreFromTransferTime(transferTime float64, maxScore int) int {
 	if transferTime <= 0.01 {
 		return maxScore
 	}
+
+	//TODO: maybe this can be set as a config parameter
 
 	maxThreshold := 20.0 // 20 seconds is considered very slow
 	if transferTime >= maxThreshold {

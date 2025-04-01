@@ -84,7 +84,6 @@ type SchedulerConfig struct {
 	EnableAPIEndpoint bool `yaml:"enableAPIEndpoint"`
 }
 
-// NewDefaultConfig creates a scheduler configuration with default values
 func NewDefaultConfig() *SchedulerConfig {
 	return &SchedulerConfig{
 		// Basic settings
@@ -167,10 +166,18 @@ func (c *SchedulerConfig) LoadFromFile(filepath string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	klog.V(4).Infof("Raw config content: %s", string(data))
+
+	klog.V(4).Infof("Before unmarshaling: percentageOfNodesToScore=%d",
+		c.PercentageOfNodesToScore)
+
 	err = yaml.Unmarshal(data, c)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
+
+	klog.V(4).Infof("After unmarshaling: percentageOfNodesToScore=%d",
+		c.PercentageOfNodesToScore)
 
 	klog.Infof("Loaded configuration from file: %s", filepath)
 	return nil
@@ -366,6 +373,18 @@ func (c *SchedulerConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (c *SchedulerConfig) DumpEffectiveConfig() {
+	configStr := c.String()
+
+	lines := strings.Split(configStr, "\n")
+	klog.Info("Effective configuration:")
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			klog.Info(line)
+		}
+	}
 }
 
 func (c *SchedulerConfig) String() string {

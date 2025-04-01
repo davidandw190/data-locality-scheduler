@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"net/http"
@@ -78,11 +79,16 @@ type Scheduler struct {
 	retryCount           map[string]int
 	retryMutex           sync.Mutex
 	cacheExpiration      time.Duration
+	config               *SchedulerConfig
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
 
-func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Scheduler {
+func NewScheduler(clientset kubernetes.Interface, config *SchedulerConfig) *Scheduler {
+	if config == nil {
+		config = NewDefaultConfig()
+	}
+
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(
 		&typedcorev1.EventSinkImpl{
@@ -92,18 +98,23 @@ func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Schedul
 
 	recorder := eventBroadcaster.NewRecorder(
 		scheme.Scheme,
-		v1.EventSource{Component: "data-locality-scheduler"},
+		v1.EventSource{Component: config.SchedulerName},
 	)
 
-	return &Scheduler{
+	if config.VerboseLogging {
+		flag.Set("v", "4")
+	}
+
+	scheduler := &Scheduler{
 		clientset:         clientset,
-		schedulerName:     schedulerName,
-		podQueue:          make(chan *v1.Pod, 100),
+		schedulerName:     config.SchedulerName,
+		podQueue:          make(chan *v1.Pod, config.PodQueueSize),
 		storageIndex:      storage.NewStorageIndex(),
-		bandwidthGraph:    storage.NewBandwidthGraph(50 * 1024 * 1024), // 50 MB/s default
+		bandwidthGraph:    storage.NewBandwidthGraph(config.SameRegionBandwidth), // Default bandwidth
 		priorityFuncs:     make([]PriorityFunc, 0),
 		nodeResourceCache: make(map[string]*nodeResources),
-		enableMockData:    false,
+		config:            config,
+		enableMockData:    config.EnableMockData,
 		metrics: schedulerMetrics{
 			schedulingLatency: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name:    "data_locality_scheduler_latency_seconds",
@@ -127,10 +138,38 @@ func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Schedul
 				Help: "Total resource cache misses",
 			}),
 		},
-		recorder:        recorder,
-		retryCount:      make(map[string]int),
-		cacheExpiration: 30 * time.Second,
+		recorder:   recorder,
+		retryCount: make(map[string]int),
 	}
+
+	scheduler.bandwidthGraph.SetTopologyDefaults(
+		config.LocalBandwidth, config.LocalLatency,
+		config.SameZoneBandwidth, config.SameZoneLatency,
+		config.SameRegionBandwidth, config.SameRegionLatency,
+		config.EdgeCloudBandwidth, config.EdgeCloudLatency,
+	)
+
+	dataLocalityConfig := &DataLocalityConfig{
+		InputDataWeight:      0.7, // 70% weight for input data
+		OutputDataWeight:     0.3, // 30% weight for output data
+		DataTransferWeight:   0.8, // 80% weight for data transfer time
+		MaxScore:             config.MaxResourceScore,
+		DefaultScore:         config.DefaultScore,
+		LocalBandwidth:       config.LocalBandwidth,
+		SameZoneBandwidth:    config.SameZoneBandwidth,
+		SameRegionBandwidth:  config.SameRegionBandwidth,
+		CrossRegionBandwidth: config.CrossRegionBandwidth,
+	}
+
+	scheduler.dataLocalityPriority = NewDataLocalityPriority(
+		scheduler.storageIndex,
+		scheduler.bandwidthGraph,
+		dataLocalityConfig,
+	)
+
+	scheduler.initPriorityFunctions()
+
+	return scheduler
 }
 
 func (s *Scheduler) SetStorageIndex(idx *storage.StorageIndex) {
@@ -149,7 +188,6 @@ func (s *Scheduler) SetBandwidthGraph(graph *storage.BandwidthGraph) {
 
 func (s *Scheduler) Run(ctx context.Context) error {
 	s.initPriorityFunctions()
-	s.dataLocalityPriority = NewDataLocalityPriority(s.storageIndex, s.bandwidthGraph)
 
 	podInformer := s.createPodInformer(ctx)
 	go podInformer.Run(ctx.Done())
@@ -165,25 +203,23 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 	if err := s.discoverAndRegisterMinioServices(ctx); err != nil {
 		klog.Warningf("Failed to discover MinIO services: %v", err)
-		klog.Warningf("Continuing with limited MinIO awareness")
-	} else {
-		klog.Info("Successfully initialized MinIO service discovery")
 	}
 
-	s.storageIndex.PerformMaintenance()
-	klog.Info("Initial storage index maintenance complete")
+	if s.config.ResourceCacheEnabled {
+		go s.startCacheCleanup(ctx)
+	}
 
-	if s.enableMockData {
+	if s.config.EnableMockData {
 		klog.Info("Creating mock storage data for testing")
 		s.storageIndex.MockMinioData()
 		s.bandwidthGraph.MockNetworkPaths()
-	} else {
-		klog.Info("Mock data creation disabled, using only real storage detection")
 	}
 
 	go s.refreshStorageDataPeriodically(ctx)
+
 	go s.startHealthCheckServer(ctx)
-	go wait.UntilWithContext(ctx, s.scheduleOne, schedulerInterval)
+
+	go wait.UntilWithContext(ctx, s.scheduleOne, s.config.SchedulerInterval)
 
 	klog.Infof("Scheduler %s started successfully", s.schedulerName)
 	<-ctx.Done()
@@ -366,10 +402,10 @@ func (s *Scheduler) initBandwidthInformation(nodes []v1.Node) {
 }
 
 func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
-	ticker := time.NewTicker(storageRefreshInterval)
+	ticker := time.NewTicker(s.config.RefreshInterval)
 	defer ticker.Stop()
 
-	maintenanceTicker := time.NewTicker(storageRefreshInterval * 4)
+	maintenanceTicker := time.NewTicker(s.config.RefreshInterval * 4)
 	defer maintenanceTicker.Stop()
 
 	for {
@@ -378,6 +414,11 @@ func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
 			if err := s.refreshStorageInformation(ctx); err != nil {
 				klog.Warningf("Failed to refresh storage information: %v", err)
 			}
+		case <-maintenanceTicker.C:
+			s.storageMutex.Lock()
+			s.storageIndex.PerformMaintenance()
+			s.storageMutex.Unlock()
+			klog.V(3).Info("Scheduled storage maintenance completed")
 		case <-ctx.Done():
 			klog.Info("Stopping storage refresh loop")
 			return
@@ -716,11 +757,24 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("node filtering error: %w", err)
 	}
 
-	if len(filteredNodes) == 0 {
-		return "", fmt.Errorf("no suitable nodes found after filtering")
+	nodesToScore := filteredNodes
+	if len(filteredNodes) > 1 && s.config.PercentageOfNodesToScore < 100 {
+		numNodes := len(filteredNodes) * s.config.PercentageOfNodesToScore / 100
+		if numNodes < 1 {
+			numNodes = 1
+		}
+		if numNodes > s.config.MinFeasibleNodesToFind {
+			numNodes = s.config.MinFeasibleNodesToFind
+		}
+
+		if numNodes < len(filteredNodes) {
+			nodesToScore = filteredNodes[:numNodes]
+			klog.V(4).Infof("Limiting scoring to %d nodes (%.0f%% of %d filtered nodes)",
+				numNodes, float64(s.config.PercentageOfNodesToScore), len(filteredNodes))
+		}
 	}
 
-	nodeScores, err := s.prioritizeNodes(pod, filteredNodes)
+	nodeScores, err := s.prioritizeNodes(pod, nodesToScore)
 	if err != nil {
 		return "", fmt.Errorf("node prioritization error: %w", err)
 	}
@@ -979,11 +1033,11 @@ func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]N
 
 func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 	weights := []float64{
-		DefaultResourceWeight,
-		DefaultNodeAffinityWeight,
-		DefaultNodeTypeWeight,
-		DefaultCapabilitiesWeight,
-		DefaultDataLocalityWeight,
+		s.config.ResourceWeight,
+		s.config.NodeAffinityWeight,
+		s.config.NodeTypeWeight,
+		s.config.CapabilitiesWeight,
+		s.config.DataLocalityWeight,
 	}
 
 	if pod.Annotations == nil {
@@ -992,19 +1046,19 @@ func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 
 	if _, ok := pod.Annotations[AnnotationDataIntensive]; ok {
 		weights = []float64{
-			DataIntensiveResourceWeight,
-			DataIntensiveNodeAffinityWeight,
-			DataIntensiveNodeTypeWeight,
-			DataIntensiveCapabilitiesWeight,
-			DataIntensiveDataLocalityWeight, // higher
+			s.config.DataIntensiveResourceWeight,
+			s.config.DataIntensiveNodeAffinityWeight,
+			s.config.DataIntensiveNodeTypeWeight,
+			s.config.DataIntensiveCapabilitiesWeight,
+			s.config.DataIntensiveDataLocalityWeight,
 		}
 	} else if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
 		weights = []float64{
-			ComputeIntensiveResourceWeight, // higher
-			ComputeIntensiveNodeAffinityWeight,
-			ComputeIntensiveNodeTypeWeight,
-			ComputeIntensiveCapabilitiesWeight,
-			ComputeIntensiveDataLocalityWeight, // lower
+			s.config.ComputeIntensiveResourceWeight,
+			s.config.ComputeIntensiveNodeAffinityWeight,
+			s.config.ComputeIntensiveNodeTypeWeight,
+			s.config.ComputeIntensiveCapabilitiesWeight,
+			s.config.ComputeIntensiveDataLocalityWeight,
 		}
 	}
 
@@ -1633,7 +1687,7 @@ func nodeMatchesFieldExpression(node *v1.Node, expr v1.NodeSelectorRequirement) 
 
 // startCacheCleanup starts a background routine to clean up expired cache entries
 func (s *Scheduler) startCacheCleanup(ctx context.Context) {
-	ticker := time.NewTicker(s.cacheExpiration / 2)
+	ticker := time.NewTicker(s.config.ResourceCacheExpiration / 2)
 	defer ticker.Stop()
 
 	go func() {
@@ -1648,7 +1702,6 @@ func (s *Scheduler) startCacheCleanup(ctx context.Context) {
 	}()
 }
 
-// cleanupCache removes expired cache entries
 func (s *Scheduler) cleanupCache() {
 	start := time.Now()
 
@@ -1657,7 +1710,7 @@ func (s *Scheduler) cleanupCache() {
 
 	expiredKeys := 0
 	for key, resources := range s.nodeResourceCache {
-		if time.Since(resources.timestamp) > s.cacheExpiration {
+		if time.Since(resources.timestamp) > s.config.ResourceCacheExpiration {
 			delete(s.nodeResourceCache, key)
 			expiredKeys++
 		}
@@ -1901,12 +1954,12 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 	})
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", s.config.HealthServerPort),
 		Handler: mux,
 	}
 
 	go func() {
-		klog.Info("Starting health check server on :8080")
+		klog.Infof("Starting health check server on port %d", s.config.HealthServerPort)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			klog.Errorf("Health check server failed: %v", err)
 		}
