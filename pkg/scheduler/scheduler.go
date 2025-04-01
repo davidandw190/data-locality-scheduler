@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"net/http"
@@ -14,12 +15,17 @@ import (
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 )
 
@@ -42,6 +48,20 @@ type NodeScore struct {
 	Score int
 }
 
+type nodeResources struct {
+	usedCPU    int64
+	usedMemory int64
+	timestamp  time.Time
+}
+
+type schedulerMetrics struct {
+	schedulingLatency  prometheus.Histogram
+	schedulingAttempts prometheus.Counter
+	schedulingFailures prometheus.Counter
+	cacheHits          prometheus.Counter
+	cacheMisses        prometheus.Counter
+}
+
 type Scheduler struct {
 	clientset            kubernetes.Interface
 	schedulerName        string
@@ -50,21 +70,106 @@ type Scheduler struct {
 	bandwidthGraph       *storage.BandwidthGraph
 	storageMutex         sync.RWMutex
 	priorityFuncs        []PriorityFunc
+	nodeResourceCache    map[string]*nodeResources
+	cacheLock            sync.RWMutex
 	dataLocalityPriority *DataLocalityPriority
 	enableMockData       bool
+	metrics              schedulerMetrics
+	recorder             record.EventRecorder
+	retryCount           map[string]int
+	retryMutex           sync.Mutex
+	cacheExpiration      time.Duration
+	config               *SchedulerConfig
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
 
-func NewScheduler(clientset kubernetes.Interface, schedulerName string) *Scheduler {
-	return &Scheduler{
-		clientset:      clientset,
-		schedulerName:  schedulerName,
-		podQueue:       make(chan *v1.Pod, 100),
-		storageIndex:   storage.NewStorageIndex(),
-		bandwidthGraph: storage.NewBandwidthGraph(50 * 1024 * 1024), // 50 MB/s default
-		priorityFuncs:  make([]PriorityFunc, 0),
+func NewScheduler(clientset kubernetes.Interface, config *SchedulerConfig) *Scheduler {
+	if config == nil {
+		config = NewDefaultConfig()
 	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(
+		&typedcorev1.EventSinkImpl{
+			Interface: clientset.CoreV1().Events(""),
+		},
+	)
+
+	recorder := eventBroadcaster.NewRecorder(
+		scheme.Scheme,
+		v1.EventSource{Component: config.SchedulerName},
+	)
+
+	if config.VerboseLogging {
+		flag.Set("v", "4")
+	}
+
+	scheduler := &Scheduler{
+		clientset:         clientset,
+		schedulerName:     config.SchedulerName,
+		podQueue:          make(chan *v1.Pod, config.PodQueueSize),
+		storageIndex:      storage.NewStorageIndex(),
+		bandwidthGraph:    storage.NewBandwidthGraph(config.SameRegionBandwidth), // Default bandwidth
+		priorityFuncs:     make([]PriorityFunc, 0),
+		nodeResourceCache: make(map[string]*nodeResources),
+		config:            config,
+		enableMockData:    config.EnableMockData,
+		metrics: schedulerMetrics{
+			schedulingLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "data_locality_scheduler_latency_seconds",
+				Help:    "Scheduling latency in seconds",
+				Buckets: prometheus.DefBuckets,
+			}),
+			schedulingAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_attempts_total",
+				Help: "Total scheduling attempts",
+			}),
+			schedulingFailures: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_failures_total",
+				Help: "Total scheduling failures",
+			}),
+			cacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_cache_hits_total",
+				Help: "Total resource cache hits",
+			}),
+			cacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "data_locality_scheduler_cache_misses_total",
+				Help: "Total resource cache misses",
+			}),
+		},
+		recorder:   recorder,
+		retryCount: make(map[string]int),
+	}
+
+	scheduler.bandwidthGraph.SetTopologyDefaults(
+		config.LocalBandwidth, config.LocalLatency,
+		config.SameZoneBandwidth, config.SameZoneLatency,
+		config.SameRegionBandwidth, config.SameRegionLatency,
+		config.EdgeCloudBandwidth, config.EdgeCloudLatency,
+	)
+
+	dataLocalityConfig := &DataLocalityConfig{
+		InputDataWeight:      0.7, // 70% weight for input data
+		OutputDataWeight:     0.3, // 30% weight for output data
+		DataTransferWeight:   0.8, // 80% weight for data transfer time
+		MaxScore:             config.MaxResourceScore,
+		DefaultScore:         config.DefaultScore,
+		LocalBandwidth:       config.LocalBandwidth,
+		SameZoneBandwidth:    config.SameZoneBandwidth,
+		SameRegionBandwidth:  config.SameRegionBandwidth,
+		CrossRegionBandwidth: config.CrossRegionBandwidth,
+	}
+
+	scheduler.dataLocalityPriority = NewDataLocalityPriority(
+		scheduler.storageIndex,
+		scheduler.bandwidthGraph,
+		dataLocalityConfig,
+	)
+
+	scheduler.initPriorityFunctions()
+
+	return scheduler
 }
 
 func (s *Scheduler) SetStorageIndex(idx *storage.StorageIndex) {
@@ -83,7 +188,6 @@ func (s *Scheduler) SetBandwidthGraph(graph *storage.BandwidthGraph) {
 
 func (s *Scheduler) Run(ctx context.Context) error {
 	s.initPriorityFunctions()
-	s.dataLocalityPriority = NewDataLocalityPriority(s.storageIndex, s.bandwidthGraph)
 
 	podInformer := s.createPodInformer(ctx)
 	go podInformer.Run(ctx.Done())
@@ -99,25 +203,23 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 	if err := s.discoverAndRegisterMinioServices(ctx); err != nil {
 		klog.Warningf("Failed to discover MinIO services: %v", err)
-		klog.Warningf("Continuing with limited MinIO awareness")
-	} else {
-		klog.Info("Successfully initialized MinIO service discovery")
 	}
 
-	s.storageIndex.PerformMaintenance()
-	klog.Info("Initial storage index maintenance complete")
+	if s.config.ResourceCacheEnabled {
+		go s.startCacheCleanup(ctx)
+	}
 
-	if s.enableMockData {
+	if s.config.EnableMockData {
 		klog.Info("Creating mock storage data for testing")
 		s.storageIndex.MockMinioData()
 		s.bandwidthGraph.MockNetworkPaths()
-	} else {
-		klog.Info("Mock data creation disabled, using only real storage detection")
 	}
 
 	go s.refreshStorageDataPeriodically(ctx)
+
 	go s.startHealthCheckServer(ctx)
-	go wait.UntilWithContext(ctx, s.scheduleOne, schedulerInterval)
+
+	go wait.UntilWithContext(ctx, s.scheduleOne, s.config.SchedulerInterval)
 
 	klog.Infof("Scheduler %s started successfully", s.schedulerName)
 	<-ctx.Done()
@@ -300,10 +402,10 @@ func (s *Scheduler) initBandwidthInformation(nodes []v1.Node) {
 }
 
 func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
-	ticker := time.NewTicker(storageRefreshInterval)
+	ticker := time.NewTicker(s.config.RefreshInterval)
 	defer ticker.Stop()
 
-	maintenanceTicker := time.NewTicker(storageRefreshInterval * 4)
+	maintenanceTicker := time.NewTicker(s.config.RefreshInterval * 4)
 	defer maintenanceTicker.Stop()
 
 	for {
@@ -312,6 +414,11 @@ func (s *Scheduler) refreshStorageDataPeriodically(ctx context.Context) {
 			if err := s.refreshStorageInformation(ctx); err != nil {
 				klog.Warningf("Failed to refresh storage information: %v", err)
 			}
+		case <-maintenanceTicker.C:
+			s.storageMutex.Lock()
+			s.storageIndex.PerformMaintenance()
+			s.storageMutex.Unlock()
+			klog.V(3).Info("Scheduled storage maintenance completed")
 		case <-ctx.Done():
 			klog.Info("Stopping storage refresh loop")
 			return
@@ -485,7 +592,6 @@ func (s *Scheduler) SetEnableMockData(enable bool) {
 	s.enableMockData = enable
 }
 
-// discoverAndRegisterMinioServices discovers MinIO services and indexes their contents
 func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
 	klog.Info("Discovering and registering MinIO services...")
 	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
@@ -610,24 +716,30 @@ func (s *Scheduler) scheduleOne(ctx context.Context) {
 		return
 	}
 
+	startTime := time.Now()
 	klog.Infof("Attempting to schedule pod: %s/%s", pod.Namespace, pod.Name)
 
 	nodeName, err := s.findBestNodeForPod(ctx, pod)
 	if err != nil {
-		klog.Errorf("Failed to find suitable node for pod %s/%s: %v",
-			pod.Namespace, pod.Name, err)
+		s.recordSchedulingFailure(ctx, pod, err)
 		return
 	}
 
 	err = s.bindPod(ctx, pod, nodeName)
 	if err != nil {
-		klog.Errorf("Failed to bind pod %s/%s to node %s: %v",
-			pod.Namespace, pod.Name, nodeName, err)
+		s.recordSchedulingFailure(ctx, pod, fmt.Errorf("binding failed: %w", err))
 		return
 	}
 
-	klog.Infof("Successfully scheduled pod %s/%s to node %s",
-		pod.Namespace, pod.Name, nodeName)
+	latency := time.Since(startTime)
+	s.metrics.schedulingLatency.Observe(latency.Seconds())
+	s.metrics.schedulingAttempts.Inc()
+
+	klog.Infof("Successfully scheduled pod %s/%s to node %s (took %v)",
+		pod.Namespace, pod.Name, nodeName, latency)
+
+	s.recorder.Eventf(pod, v1.EventTypeNormal, "Scheduled",
+		"Successfully assigned %s/%s to %s", pod.Namespace, pod.Name, nodeName)
 }
 
 func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string, error) {
@@ -640,18 +752,29 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no nodes available in the cluster")
 	}
 
-	// filter nodes based on predicates
 	filteredNodes, err := s.filterNodes(ctx, pod, nodes.Items)
 	if err != nil {
 		return "", fmt.Errorf("node filtering error: %w", err)
 	}
 
-	if len(filteredNodes) == 0 {
-		return "", fmt.Errorf("no suitable nodes found after filtering")
+	nodesToScore := filteredNodes
+	if len(filteredNodes) > 1 && s.config.PercentageOfNodesToScore < 100 {
+		numNodes := len(filteredNodes) * s.config.PercentageOfNodesToScore / 100
+		if numNodes < 1 {
+			numNodes = 1
+		}
+		if numNodes > s.config.MinFeasibleNodesToFind {
+			numNodes = s.config.MinFeasibleNodesToFind
+		}
+
+		if numNodes < len(filteredNodes) {
+			nodesToScore = filteredNodes[:numNodes]
+			klog.V(4).Infof("Limiting scoring to %d nodes (%.0f%% of %d filtered nodes)",
+				numNodes, float64(s.config.PercentageOfNodesToScore), len(filteredNodes))
+		}
 	}
 
-	// scoring nodes using priority functions
-	nodeScores, err := s.prioritizeNodes(pod, filteredNodes)
+	nodeScores, err := s.prioritizeNodes(pod, nodesToScore)
 	if err != nil {
 		return "", fmt.Errorf("node prioritization error: %w", err)
 	}
@@ -660,49 +783,139 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no suitable nodes found after scoring")
 	}
 
-	// sorting nodes by score
 	sort.Slice(nodeScores, func(i, j int) bool {
 		return nodeScores[i].Score > nodeScores[j].Score
 	})
 
+	if klog.V(4).Enabled() {
+		topN := 3
+		if len(nodeScores) < topN {
+			topN = len(nodeScores)
+		}
+
+		klog.V(4).Infof("Top %d nodes for pod %s/%s:", topN, pod.Namespace, pod.Name)
+		for i := 0; i < topN; i++ {
+			klog.V(4).Infof("  %d. Node: %s, Score: %d", i+1, nodeScores[i].Name, nodeScores[i].Score)
+		}
+	}
+
 	return nodeScores[0].Name, nil
 }
 
+func (s *Scheduler) recordSchedulingFailure(ctx context.Context, pod *v1.Pod, err error) {
+	klog.Errorf("Failed to schedule pod %s/%s: %v", pod.Namespace, pod.Name, err)
+
+	s.metrics.schedulingFailures.Inc()
+
+	s.recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling",
+		"Failed to schedule pod: %v", err)
+
+	if updateErr := s.updatePodSchedulingStatus(ctx, pod, err.Error()); updateErr != nil {
+		klog.Warningf("Failed to update status for pod %s/%s: %v",
+			pod.Namespace, pod.Name, updateErr)
+	}
+
+	// reequeue the pod for later scheduling attempts (with backoff)
+	go func() {
+		retryCount, ok := s.retryCount[string(pod.UID)]
+		if !ok {
+			retryCount = 0
+		}
+
+		backoff := time.Duration(math.Pow(2, float64(retryCount))) * time.Second
+		if backoff > 60*time.Second {
+			backoff = 60 * time.Second // cap at 1 minute
+		}
+
+		s.retryCount[string(pod.UID)] = retryCount + 1
+
+		time.Sleep(backoff)
+		s.podQueue <- pod
+	}()
+}
+
+func (s *Scheduler) updatePodSchedulingStatus(ctx context.Context, pod *v1.Pod, message string) error {
+	podCopy := pod.DeepCopy()
+
+	now := metav1.Now()
+	condition := v1.PodCondition{
+		Type:               v1.PodScheduled,
+		Status:             v1.ConditionFalse,
+		LastProbeTime:      now,
+		LastTransitionTime: now,
+		Reason:             "SchedulerError",
+		Message:            message,
+	}
+
+	found := false
+	for i, podCondition := range podCopy.Status.Conditions {
+		if podCondition.Type == v1.PodScheduled {
+			podCopy.Status.Conditions[i] = condition
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		podCopy.Status.Conditions = append(podCopy.Status.Conditions, condition)
+	}
+
+	_, err := s.clientset.CoreV1().Pods(pod.Namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{})
+	return err
+}
+
 func (s *Scheduler) filterNodes(ctx context.Context, pod *v1.Pod, nodes []v1.Node) ([]v1.Node, error) {
-	var filteredNodes []v1.Node
+	startTime := time.Now()
+	nodeCount := len(nodes)
+
+	filteredNodes := make([]v1.Node, 0, nodeCount/2+1)
+
+	if nodeCount == 0 {
+		return filteredNodes, nil
+	}
+
+	filterReasons := make(map[string]int)
 
 	for _, node := range nodes {
 		if !isNodeReady(&node) {
-			klog.V(4).Infof("Node %s is not ready", node.Name)
+			filterReasons["NotReady"]++
 			continue
 		}
 
 		if !s.nodeFitsResources(ctx, pod, &node) {
-			klog.V(4).Infof("Node %s does not have sufficient resources", node.Name)
+			filterReasons["InsufficientResources"]++
 			continue
 		}
 
 		if !s.nodeHasRequiredCapabilities(pod, &node) {
-			klog.V(4).Infof("Node %s does not have required capabilities", node.Name)
+			filterReasons["MissingCapabilities"]++
 			continue
 		}
 
 		if !s.satisfiesNodeAffinity(pod, &node) {
-			klog.V(4).Infof("Node %s does not satisfy node affinity", node.Name)
+			filterReasons["NodeAffinityMismatch"]++
 			continue
 		}
 
 		if !s.toleratesNodeTaints(pod, &node) {
-			klog.V(4).Infof("Node %s has taints that pod does not tolerate", node.Name)
+			filterReasons["TaintNotTolerated"]++
 			continue
 		}
 
 		filteredNodes = append(filteredNodes, node)
 	}
 
+	if klog.V(4).Enabled() {
+		klog.V(4).Infof("Node filtering for pod %s/%s: started with %d nodes, filtered to %d nodes in %v",
+			pod.Namespace, pod.Name, nodeCount, len(filteredNodes), time.Since(startTime))
+
+		for reason, count := range filterReasons {
+			klog.V(4).Infof("- Filtered out %d nodes due to %s", count, reason)
+		}
+	}
+
 	return filteredNodes, nil
 }
-
 func (s *Scheduler) prioritizeNodes(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var allScores [][]NodeScore
 
@@ -742,67 +955,115 @@ func (s *Scheduler) prioritizeNodes(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, 
 
 func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]NodeScore) []NodeScore {
 	weights := s.getWeightsForPod(pod)
+	nodeCount := len(nodes)
 
-	finalScores := make(map[string]int)
-	for _, node := range nodes {
-		finalScores[node.Name] = 0
+	if nodeCount == 0 {
+		return []NodeScore{}
 	}
 
+	nodeIndices := make(map[string]int, nodeCount)
+	for i, node := range nodes {
+		nodeIndices[node.Name] = i
+	}
+
+	normalizedScores := make([][]float64, len(scoresList))
 	for i, scores := range scoresList {
+		// find min and max scores for this criterion
+		minScore := MaxScore
+		maxScore := MinScore
+
+		for _, score := range scores {
+			if score.Score < minScore {
+				minScore = score.Score
+			}
+			if score.Score > maxScore {
+				maxScore = score.Score
+			}
+		}
+
+		// handle case where all scores are the same
+		scoreDiff := maxScore - minScore
+		if scoreDiff == 0 {
+			scoreDiff = 1
+		}
+
+		// normalize scores to 0-1 range
+		normalizedScores[i] = make([]float64, nodeCount)
+		for _, score := range scores {
+			index, exists := nodeIndices[score.Name]
+			if exists {
+				normalizedScores[i][index] = float64(score.Score-minScore) / float64(scoreDiff)
+			}
+		}
+	}
+
+	// compute weighted sum for each node
+	finalScores := make([]float64, nodeCount)
+	weightSum := 0.0
+
+	for i, normalizedScore := range normalizedScores {
 		weight := 1.0
 		if i < len(weights) {
 			weight = weights[i]
 		}
+		weightSum += weight
 
-		for _, score := range scores {
-			finalScores[score.Name] += int(float64(score.Score) * weight)
+		for j := 0; j < nodeCount; j++ {
+			finalScores[j] += normalizedScore[j] * weight
 		}
 	}
 
-	var result []NodeScore
-	for nodeName, score := range finalScores {
-		result = append(result, NodeScore{
-			Name:  nodeName,
-			Score: score,
-		})
+	// we normalize to account for variable number of criteria
+	if weightSum > 0 {
+		for j := 0; j < nodeCount; j++ {
+			finalScores[j] /= weightSum
+		}
 	}
 
-	return normalizeScores(result)
+	result := make([]NodeScore, nodeCount)
+	for j := 0; j < nodeCount; j++ {
+		result[j] = NodeScore{
+			Name:  nodes[j].Name,
+			Score: int(finalScores[j] * MaxScore),
+		}
+	}
+
+	return result
 }
 
 func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 	weights := []float64{
-		0.3, // Resource priority
-		0.2, // Node affinity
-		0.1, // Node type (edge/cloud)
-		0.1, // Node capabilities
-		0.3, // Data locality
+		s.config.ResourceWeight,
+		s.config.NodeAffinityWeight,
+		s.config.NodeTypeWeight,
+		s.config.CapabilitiesWeight,
+		s.config.DataLocalityWeight,
 	}
 
-	if pod.Annotations != nil {
-		if _, ok := pod.Annotations["scheduler.thesis/data-intensive"]; ok {
-			weights = []float64{
-				0.2, // Resource priority
-				0.1, // Node affinity
-				0.1, // Node type
-				0.1, // Node capabilities
-				0.5, // Data locality (higher)
-			}
-		}
+	if pod.Annotations == nil {
+		return weights
+	}
 
-		if _, ok := pod.Annotations["scheduler.thesis/compute-intensive"]; ok {
-			weights = []float64{
-				0.5, // Resource priority (higher)
-				0.2, // Node affinity
-				0.1, // Node type
-				0.1, // Node capabilities
-				0.1, // Data locality (lower)
-			}
+	if _, ok := pod.Annotations[AnnotationDataIntensive]; ok {
+		weights = []float64{
+			s.config.DataIntensiveResourceWeight,
+			s.config.DataIntensiveNodeAffinityWeight,
+			s.config.DataIntensiveNodeTypeWeight,
+			s.config.DataIntensiveCapabilitiesWeight,
+			s.config.DataIntensiveDataLocalityWeight,
 		}
+	} else if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
+		weights = []float64{
+			s.config.ComputeIntensiveResourceWeight,
+			s.config.ComputeIntensiveNodeAffinityWeight,
+			s.config.ComputeIntensiveNodeTypeWeight,
+			s.config.ComputeIntensiveCapabilitiesWeight,
+			s.config.ComputeIntensiveDataLocalityWeight,
+		}
+	}
 
-		if _, ok := pod.Annotations["scheduler.thesis/prefer-edge"]; ok {
-			weights[2] = 0.3
-		}
+	if _, ok := pod.Annotations[AnnotationPreferEdge]; ok {
+		weights[2] = 0.3
 	}
 
 	return weights
@@ -836,16 +1097,131 @@ func normalizeScores(scores []NodeScore) []NodeScore {
 func (s *Scheduler) scoreResourcePriority(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var scores []NodeScore
 
+	var requestedCPU, requestedMemory int64
+	for _, container := range pod.Spec.Containers {
+		if container.Resources.Requests.Cpu() != nil {
+			requestedCPU += container.Resources.Requests.Cpu().MilliValue()
+		} else {
+			requestedCPU += 100 // default 100m CPU
+		}
+
+		if container.Resources.Requests.Memory() != nil {
+			requestedMemory += container.Resources.Requests.Memory().Value()
+		} else {
+			requestedMemory += 200 * 1024 * 1024 // default 200Mi memory
+		}
+	}
+
 	for _, node := range nodes {
-		score := s.calculateResourceScore(pod, &node)
+		resourceScore := s.calculateBalancedResourceScore(pod, &node, requestedCPU, requestedMemory)
+		resourceScore = s.adjustScoreForSpecialResources(resourceScore, pod, &node)
+
+		if resourceScore > MaxScore {
+			resourceScore = MaxScore
+		} else if resourceScore < MinScore {
+			resourceScore = MinScore
+		}
 
 		scores = append(scores, NodeScore{
 			Name:  node.Name,
-			Score: score,
+			Score: resourceScore,
 		})
 	}
 
 	return scores, nil
+}
+
+func (s *Scheduler) calculateBalancedResourceScore(pod *v1.Pod, node *v1.Node,
+	requestedCPU, requestedMemory int64) int {
+
+	if computeScoreStr, exists := node.Labels["node-capability/compute-score"]; exists {
+		if computeScore, err := strconv.Atoi(computeScoreStr); err == nil {
+			if memoryScoreStr, exists := node.Labels["node-capability/memory-score"]; exists {
+				if memoryScore, err := strconv.Atoi(memoryScoreStr); err == nil {
+					return (computeScore + memoryScore) / 2
+				}
+			}
+			return computeScore
+		}
+	}
+
+	allocatableCPU := node.Status.Allocatable.Cpu().MilliValue()
+	allocatableMemory := node.Status.Allocatable.Memory().Value()
+
+	if allocatableCPU == 0 {
+		allocatableCPU = 1
+	}
+	if allocatableMemory == 0 {
+		allocatableMemory = 1
+	}
+
+	cpuFraction := float64(requestedCPU) / float64(allocatableCPU)
+	memoryFraction := float64(requestedMemory) / float64(allocatableMemory)
+
+	//penalize nodes that don't have enough resources
+	if cpuFraction >= 1 || memoryFraction >= 1 {
+		return MinScore
+	}
+
+	// score based on balanced resource usage
+	// the closer the CPU and memory fractions are, the better
+	diff := math.Abs(cpuFraction - memoryFraction)
+	balance := 1 - diff
+
+	// also consider the absolute resource usage
+	// less usage is better, but we want to discourage wasting resources
+	usage := (cpuFraction + memoryFraction) / 2
+	usageScore := 1.0
+
+	// if usage is very low, slightly penalize to avoid wasting resources on large nodes
+	if usage < 0.1 {
+		usageScore = 0.9 + usage
+	} else if usage > 0.7 {
+		// if usage is high, penalize more heavily
+		usageScore = 1.0 - ((usage - 0.7) * 2)
+	}
+
+	finalScore := int((balance*0.7 + usageScore*0.3) * MaxScore)
+
+	if finalScore > MaxScore {
+		finalScore = MaxScore
+	} else if finalScore < MinScore {
+		finalScore = MinScore
+	}
+
+	return finalScore
+}
+
+// adjustScoreForSpecialResources adjusts resource score based on special requirements
+func (s *Scheduler) adjustScoreForSpecialResources(baseScore int, pod *v1.Pod, node *v1.Node) int {
+	adjustedScore := baseScore
+
+	// GPU scoring
+	if hasGPUCapability(node) {
+		if podNeedsGPU(pod) {
+			// bonus for having a GPU when required
+			adjustedScore += 20
+		} else {
+			// small penalty for wasting GPU resources
+			adjustedScore -= 5
+		}
+	} else if podNeedsGPU(pod) {
+		// major penalty for not having GPU when required
+		adjustedScore -= 50
+	}
+
+	// Fast storage scoring
+	if hasFastStorage(node) {
+		if podNeedsFastStorage(pod) {
+			// Bonus for having fast storage when required
+			adjustedScore += 15
+		}
+	} else if podNeedsFastStorage(pod) {
+		// Penalty for not having fast storage when required
+		adjustedScore -= 30
+	}
+
+	return adjustedScore
 }
 
 func (s *Scheduler) calculateResourceScore(pod *v1.Pod, node *v1.Node) int {
@@ -945,72 +1321,87 @@ func (s *Scheduler) scoreNodeAffinity(pod *v1.Pod, nodes []v1.Node) ([]NodeScore
 	return scores, nil
 }
 
-func (s *Scheduler) nodeSelectorMatches(node *v1.Node, selector *v1.NodeSelectorTerm) bool {
-	for _, expr := range selector.MatchExpressions {
-		switch expr.Operator {
-		case v1.NodeSelectorOpIn:
-			if !nodeHasValueForKey(node, expr.Key, expr.Values) {
-				return false
-			}
-		case v1.NodeSelectorOpNotIn:
-			if nodeHasValueForKey(node, expr.Key, expr.Values) {
-				return false
-			}
-		case v1.NodeSelectorOpExists:
-			if !nodeHasLabelKey(node, expr.Key) {
-				return false
-			}
-		case v1.NodeSelectorOpDoesNotExist:
-			if nodeHasLabelKey(node, expr.Key) {
-				return false
-			}
-		case v1.NodeSelectorOpGt, v1.NodeSelectorOpLt:
-			if !nodeMatchesNumericComparison(node, expr.Key, expr.Operator, expr.Values) {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
 func (s *Scheduler) scoreNodeType(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error) {
 	var scores []NodeScore
 
 	preferEdge := false
 	preferCloud := false
 	preferredRegion := ""
+	preferredZone := ""
 
 	if pod.Annotations != nil {
-		_, preferEdge = pod.Annotations["scheduler.thesis/prefer-edge"]
-		_, preferCloud = pod.Annotations["scheduler.thesis/prefer-cloud"]
+		_, preferEdge = pod.Annotations[AnnotationPreferEdge]
+		_, preferCloud = pod.Annotations[AnnotationPreferCloud]
 
-		if regionValue, ok := pod.Annotations["scheduler.thesis/prefer-region"]; ok {
+		if regionValue, ok := pod.Annotations[AnnotationPreferRegion]; ok {
 			preferredRegion = regionValue
+		}
+
+		if zoneValue, ok := pod.Annotations["scheduler.thesis/prefer-zone"]; ok {
+			preferredZone = zoneValue
 		}
 	}
 
 	for _, node := range nodes {
-		score := 50
+		score := DefaultScore
+		scoreFactors := make(map[string]int)
 
+		// score based on node type preference
 		isEdge := isEdgeNode(&node)
-		nodeRegion := node.Labels["topology.kubernetes.io/region"]
+		scoreFactors["nodeType"] = DefaultScore
 
 		if preferEdge && isEdge {
-			score = 100
+			scoreFactors["nodeType"] = MaxScore
 		} else if preferEdge && !isEdge {
-			score = 0
+			scoreFactors["nodeType"] = MinScore
 		} else if preferCloud && !isEdge {
-			score = 100
+			scoreFactors["nodeType"] = MaxScore
 		} else if preferCloud && isEdge {
-			score = 0
+			scoreFactors["nodeType"] = MinScore
 		}
 
-		// TODO: handle this properly using MCDM approaches
-		if preferredRegion != "" && nodeRegion == preferredRegion {
-			score = 100
-		} else if preferredRegion != "" && nodeRegion != preferredRegion {
-			score = 0
+		// score based on region/zone preference
+		nodeRegion := node.Labels[RegionLabel]
+		nodeZone := node.Labels[ZoneLabel]
+
+		scoreFactors["region"] = DefaultScore
+		if preferredRegion != "" {
+			if nodeRegion == preferredRegion {
+				scoreFactors["region"] = MaxScore
+			} else {
+				scoreFactors["region"] = MinScore
+			}
+		}
+
+		scoreFactors["zone"] = DefaultScore // Default neutral score
+		if preferredZone != "" {
+			if nodeZone == preferredZone {
+				scoreFactors["zone"] = MaxScore
+			} else {
+				scoreFactors["zone"] = MinScore
+			}
+		}
+
+		totalWeight := 0
+		weightedSum := 0
+
+		if preferEdge || preferCloud {
+			weightedSum += scoreFactors["nodeType"] * 2
+			totalWeight += 2
+		}
+
+		if preferredRegion != "" {
+			weightedSum += scoreFactors["region"] * 3
+			totalWeight += 3
+		}
+
+		if preferredZone != "" {
+			weightedSum += scoreFactors["zone"] * 4
+			totalWeight += 4
+		}
+
+		if totalWeight > 0 {
+			score = weightedSum / totalWeight
 		}
 
 		scores = append(scores, NodeScore{
@@ -1064,8 +1455,62 @@ func (s *Scheduler) scoreNodeCapabilities(pod *v1.Pod, nodes []v1.Node) ([]NodeS
 }
 
 func (s *Scheduler) nodeFitsResources(ctx context.Context, pod *v1.Pod, node *v1.Node) bool {
-	var requestedCPU, requestedMemory int64
+	cacheKey := fmt.Sprintf("%s-%s", node.Name, node.ResourceVersion)
 
+	s.cacheLock.RLock()
+	cachedResources, found := s.nodeResourceCache[cacheKey]
+	s.cacheLock.RUnlock()
+
+	var usedCPU, usedMemory int64
+
+	if !found {
+		// cache miss - query the current usage from API server
+		fieldSelector := fields.SelectorFromSet(fields.Set{"spec.nodeName": node.Name})
+		pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
+			FieldSelector: fieldSelector.String(),
+		})
+
+		if err != nil {
+			klog.Errorf("Error getting pods on node %s: %v", node.Name, err)
+			return false
+		}
+
+		// resource usage by pods on this node
+		for _, p := range pods.Items {
+			if p.DeletionTimestamp != nil {
+				continue
+			}
+
+			for _, container := range p.Spec.Containers {
+				if container.Resources.Requests.Cpu() != nil {
+					usedCPU += container.Resources.Requests.Cpu().MilliValue()
+				} else {
+					usedCPU += 100 // default 100m CPU
+				}
+
+				if container.Resources.Requests.Memory() != nil {
+					usedMemory += container.Resources.Requests.Memory().Value()
+				} else {
+					usedMemory += 200 * 1024 * 1024 // default 200Mi memory
+				}
+			}
+		}
+
+		// update cache
+		s.cacheLock.Lock()
+		s.nodeResourceCache[cacheKey] = &nodeResources{
+			usedCPU:    usedCPU,
+			usedMemory: usedMemory,
+			timestamp:  time.Now(),
+		}
+		s.cacheLock.Unlock()
+	} else {
+		// cache hit
+		usedCPU = cachedResources.usedCPU
+		usedMemory = cachedResources.usedMemory
+	}
+
+	var requestedCPU, requestedMemory int64
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests.Cpu() != nil {
 			requestedCPU += container.Resources.Requests.Cpu().MilliValue()
@@ -1083,39 +1528,15 @@ func (s *Scheduler) nodeFitsResources(ctx context.Context, pod *v1.Pod, node *v1
 	allocatableCPU := node.Status.Allocatable.Cpu().MilliValue()
 	allocatableMemory := node.Status.Allocatable.Memory().Value()
 
-	fieldSelector := fields.SelectorFromSet(fields.Set{"spec.nodeName": node.Name})
-	pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector.String(),
-	})
+	cpuOK := usedCPU+requestedCPU <= allocatableCPU
+	memoryOK := usedMemory+requestedMemory <= allocatableMemory
 
-	if err != nil {
-		klog.Errorf("Error getting pods on node %s: %v", node.Name, err)
-		return false
+	if !cpuOK || !memoryOK {
+		klog.V(5).Infof("Node %s has insufficient resources for pod %s/%s - CPU: %v, Memory: %v",
+			node.Name, pod.Namespace, pod.Name, cpuOK, memoryOK)
 	}
 
-	var usedCPU, usedMemory int64
-	for _, p := range pods.Items {
-		if p.DeletionTimestamp != nil {
-			continue
-		}
-
-		for _, container := range p.Spec.Containers {
-			if container.Resources.Requests.Cpu() != nil {
-				usedCPU += container.Resources.Requests.Cpu().MilliValue()
-			} else {
-				usedCPU += 100 // default 100m CPU
-			}
-
-			if container.Resources.Requests.Memory() != nil {
-				usedMemory += container.Resources.Requests.Memory().Value()
-			} else {
-				usedMemory += 200 * 1024 * 1024 // default 200Mi memory
-			}
-		}
-	}
-
-	return (usedCPU+requestedCPU <= allocatableCPU) &&
-		(usedMemory+requestedMemory <= allocatableMemory)
+	return cpuOK && memoryOK
 }
 
 func (s *Scheduler) nodeHasRequiredCapabilities(pod *v1.Pod, node *v1.Node) bool {
@@ -1126,19 +1547,51 @@ func (s *Scheduler) nodeHasRequiredCapabilities(pod *v1.Pod, node *v1.Node) bool
 	if requiredCap, exists := pod.Annotations["scheduler.thesis/required-capability"]; exists {
 		capLabel := fmt.Sprintf("node-capability/%s", requiredCap)
 		if value, ok := node.Labels[capLabel]; !ok || value != "true" {
+			klog.V(5).Infof("Node %s missing required capability %s", node.Name, requiredCap)
 			return false
 		}
 	}
 
-	if _, ok := pod.Annotations["scheduler.thesis/requires-gpu"]; ok {
+	if _, ok := pod.Annotations[AnnotationRequireGPU]; ok {
 		if !hasGPUCapability(node) {
+			klog.V(5).Infof("Node %s missing required GPU capability", node.Name)
 			return false
 		}
 	}
 
 	if _, ok := pod.Annotations["scheduler.thesis/requires-local-storage"]; ok {
 		if _, hasStorage := node.Labels[StorageNodeLabel]; !hasStorage {
+			klog.V(5).Infof("Node %s missing required storage capability", node.Name)
 			return false
+		}
+	}
+
+	if reqCapString, ok := pod.Annotations["scheduler.thesis/capability-requirements"]; ok {
+		requirements := strings.Split(reqCapString, ",")
+		for _, req := range requirements {
+			req = strings.TrimSpace(req)
+			if req == "" {
+				continue
+			}
+
+			// requirements with values (e.g., "gpu-cores=2")
+			parts := strings.Split(req, "=")
+			capName := parts[0]
+
+			if len(parts) == 1 {
+				capLabel := fmt.Sprintf("node-capability/%s", capName)
+				if value, ok := node.Labels[capLabel]; !ok || value != "true" {
+					klog.V(5).Infof("Node %s missing required capability %s", node.Name, capName)
+					return false
+				}
+			} else if len(parts) == 2 {
+				capLabel := fmt.Sprintf("node-capability/%s", capName)
+				if value, ok := node.Labels[capLabel]; !ok || value != parts[1] {
+					klog.V(5).Infof("Node %s has wrong value for capability %s: want %s, got %s",
+						node.Name, capName, parts[1], value)
+					return false
+				}
+			}
 		}
 	}
 
@@ -1151,6 +1604,7 @@ func (s *Scheduler) satisfiesNodeAffinity(pod *v1.Pod, node *v1.Node) bool {
 	}
 
 	affinity := pod.Spec.Affinity.NodeAffinity
+
 	if affinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 		nodeSelectorTerms := affinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 		if len(nodeSelectorTerms) > 0 {
@@ -1159,11 +1613,111 @@ func (s *Scheduler) satisfiesNodeAffinity(pod *v1.Pod, node *v1.Node) bool {
 					return true
 				}
 			}
+
+			klog.V(5).Infof("Node %s fails to match any node selector terms for pod", node.Name)
 			return false
 		}
 	}
 
 	return true
+}
+
+func (s *Scheduler) nodeSelectorMatches(node *v1.Node, selector *v1.NodeSelectorTerm) bool {
+	for _, expr := range selector.MatchExpressions {
+		switch expr.Operator {
+		case v1.NodeSelectorOpIn:
+			if !nodeHasValueForKey(node, expr.Key, expr.Values) {
+				return false
+			}
+		case v1.NodeSelectorOpNotIn:
+			if nodeHasValueForKey(node, expr.Key, expr.Values) {
+				return false
+			}
+		case v1.NodeSelectorOpExists:
+			if !nodeHasLabelKey(node, expr.Key) {
+				return false
+			}
+		case v1.NodeSelectorOpDoesNotExist:
+			if nodeHasLabelKey(node, expr.Key) {
+				return false
+			}
+		case v1.NodeSelectorOpGt, v1.NodeSelectorOpLt:
+			if !nodeMatchesNumericComparison(node, expr.Key, expr.Operator, expr.Values) {
+				return false
+			}
+		}
+	}
+
+	for _, expr := range selector.MatchFields {
+		if !nodeMatchesFieldExpression(node, expr) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func nodeMatchesFieldExpression(node *v1.Node, expr v1.NodeSelectorRequirement) bool {
+	if expr.Key == "metadata.name" {
+		switch expr.Operator {
+		case v1.NodeSelectorOpIn:
+			for _, value := range expr.Values {
+				if node.Name == value {
+					return true
+				}
+			}
+			return false
+		case v1.NodeSelectorOpNotIn:
+			for _, value := range expr.Values {
+				if node.Name == value {
+					return false
+				}
+			}
+			return true
+		case v1.NodeSelectorOpExists:
+			return true // name always exists
+		case v1.NodeSelectorOpDoesNotExist:
+			return false // name always exists
+		}
+	}
+
+	klog.V(4).Infof("Unsupported field selector expression for field %s", expr.Key)
+	return true
+}
+
+// startCacheCleanup starts a background routine to clean up expired cache entries
+func (s *Scheduler) startCacheCleanup(ctx context.Context) {
+	ticker := time.NewTicker(s.config.ResourceCacheExpiration / 2)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				s.cleanupCache()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (s *Scheduler) cleanupCache() {
+	start := time.Now()
+
+	s.cacheLock.Lock()
+	defer s.cacheLock.Unlock()
+
+	expiredKeys := 0
+	for key, resources := range s.nodeResourceCache {
+		if time.Since(resources.timestamp) > s.config.ResourceCacheExpiration {
+			delete(s.nodeResourceCache, key)
+			expiredKeys++
+		}
+	}
+
+	duration := time.Since(start)
+	klog.V(4).Infof("Cache cleanup: removed %d expired entries in %v", expiredKeys, duration)
 }
 
 func (s *Scheduler) toleratesNodeTaints(pod *v1.Pod, node *v1.Node) bool {
@@ -1204,29 +1758,72 @@ func (s *Scheduler) bindPod(ctx context.Context, pod *v1.Pod, nodeName string) e
 func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 	mux := http.NewServeMux()
 
-	// Health check endpoint
+	// Health check
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
-	// Storage info endpoint
+	// Readiness check
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		nodes := s.storageIndex.GetAllStorageNodes()
+		if len(nodes) > 0 {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Ready"))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("Not ready - awaiting node information"))
+		}
+	})
+
+	// Storage info
 	mux.HandleFunc("/storage-info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		s.storageMutex.RLock()
 		defer s.storageMutex.RUnlock()
 
+		nodes := s.storageIndex.GetAllStorageNodes()
+		buckets := s.storageIndex.GetAllBuckets()
+
+		edgeCount := 0
+		cloudCount := 0
+		for _, node := range nodes {
+			if node.NodeType == storage.StorageTypeEdge {
+				edgeCount++
+			} else {
+				cloudCount++
+			}
+		}
+
+		regions := make(map[string]int)
+		zones := make(map[string]int)
+		for _, node := range nodes {
+			if node.Region != "" {
+				regions[node.Region]++
+			}
+			if node.Zone != "" {
+				zones[node.Zone]++
+			}
+		}
+
+		dataItems := s.storageIndex.GetAllDataItems()
+
 		report := map[string]interface{}{
-			"storageNodes": len(s.storageIndex.GetAllStorageNodes()),
-			"buckets":      s.storageIndex.GetAllBuckets(),
-			"lastUpdated":  s.storageIndex.GetLastRefreshed().Format(time.RFC3339),
+			"storageNodes":  len(nodes),
+			"edgeNodes":     edgeCount,
+			"cloudNodes":    cloudCount,
+			"buckets":       buckets,
+			"bucketCount":   len(buckets),
+			"dataItemCount": len(dataItems),
+			"regions":       regions,
+			"zones":         zones,
+			"lastUpdated":   s.storageIndex.GetLastRefreshed().Format(time.RFC3339),
 		}
 
 		json.NewEncoder(w).Encode(report)
 	})
 
-	// Storage summary endpoint
 	mux.HandleFunc("/storage-summary", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 
@@ -1237,7 +1834,7 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		w.Write([]byte(summary))
 	})
 
-	// Bandwidth summary endpoint
+	// Bandwidth summary
 	mux.HandleFunc("/bandwidth-summary", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 
@@ -1248,6 +1845,95 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		w.Write([]byte(summary))
 	})
 
+	// Scheduler stats
+	mux.HandleFunc("/scheduler-stats", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		stats := map[string]interface{}{
+			"queueLength": len(s.podQueue),
+			"cacheSize":   len(s.nodeResourceCache),
+		}
+
+		json.NewEncoder(w).Encode(stats)
+	})
+
+	// Data distribution
+	mux.HandleFunc("/data-distribution", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		s.storageMutex.RLock()
+		defer s.storageMutex.RUnlock()
+
+		allDataItems := s.storageIndex.GetAllDataItems()
+		storageNodes := s.storageIndex.GetAllStorageNodes()
+
+		nodeTypes := make(map[string]string)
+		nodeRegions := make(map[string]string)
+		nodeZones := make(map[string]string)
+
+		for _, node := range storageNodes {
+			nodeTypes[node.Name] = string(node.NodeType)
+			nodeRegions[node.Name] = node.Region
+			nodeZones[node.Name] = node.Zone
+		}
+
+		dataDetails := make(map[string]map[string]interface{})
+
+		buckets := make(map[string]int)
+
+		for urn, item := range allDataItems {
+			parts := strings.SplitN(urn, "/", 2)
+			bucket := ""
+			if len(parts) > 0 {
+				bucket = parts[0]
+				buckets[bucket]++
+			}
+
+			locationInfo := make([]map[string]string, 0, len(item.Locations))
+			for _, nodeName := range item.Locations {
+				locationInfo = append(locationInfo, map[string]string{
+					"node":   nodeName,
+					"type":   nodeTypes[nodeName],
+					"region": nodeRegions[nodeName],
+					"zone":   nodeZones[nodeName],
+				})
+			}
+
+			dataDetails[urn] = map[string]interface{}{
+				"size":         item.Size,
+				"contentType":  item.ContentType,
+				"bucket":       bucket,
+				"lastModified": item.LastModified.Format(time.RFC3339),
+				"nodeCount":    len(item.Locations),
+				"locations":    locationInfo,
+			}
+
+			if len(item.Metadata) > 0 {
+				dataDetails[urn]["metadata"] = item.Metadata
+			}
+		}
+
+		stats := map[string]interface{}{
+			"totalDataItems": len(allDataItems),
+			"totalNodes":     len(storageNodes),
+			"bucketCounts":   buckets,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		}
+
+		response := map[string]interface{}{
+			"summary": stats,
+			"data":    dataDetails,
+		}
+
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(response); err != nil {
+			klog.Errorf("Error encoding data distribution response: %v", err)
+			http.Error(w, "Error generating response", http.StatusInternalServerError)
+		}
+	})
+
+	// Perform maintenance
 	mux.HandleFunc("/perform-maintenance", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1268,12 +1954,12 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 	})
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", s.config.HealthServerPort),
 		Handler: mux,
 	}
 
 	go func() {
-		klog.Info("Starting health check server on :8080")
+		klog.Infof("Starting health check server on port %d", s.config.HealthServerPort)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			klog.Errorf("Health check server failed: %v", err)
 		}

@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streaming-test-config
+  namespace: data-locality-scheduler
+data:
+  streaming-test.py: |
+    import time
+    import os
+    import socket
+
+    component = os.environ.get("COMPONENT", "unknown")
+    print(f"Starting streaming {component}...")
+    print(f"Running on node: {os.environ.get('NODE_NAME', 'unknown')}")
+
+    # Stay running
+    time.sleep(3600)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-stream-ingestor
+  namespace: data-locality-scheduler
+  labels:
+    pipeline: streaming
+    component: ingestor
+  annotations:
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/pipeline: "streaming"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: stream-ingestor
+    image: python:3.9
+    command: [ "python", "/config/streaming-test.py" ]
+    env:
+    - name: COMPONENT
+      value: "ingestor"
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "400m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: streaming-test-config
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stream-analyzer
+  namespace: data-locality-scheduler
+  labels:
+    pipeline: streaming
+    component: analyzer
+  annotations:
+    scheduler.thesis/prefer-cloud: "true"
+    scheduler.thesis/pipeline: "streaming"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: stream-analyzer
+    image: python:3.9
+    command: [ "python", "/config/streaming-test.py" ]
+    env:
+    - name: COMPONENT
+      value: "analyzer"
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: streaming-test-config
+  restartPolicy: Never

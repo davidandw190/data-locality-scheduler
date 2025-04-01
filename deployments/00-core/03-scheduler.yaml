@@ -1,3 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-locality-scheduler-config
+  namespace: data-locality-scheduler
+data:
+  scheduler-config.yaml: |
+    # Basic settings
+    schedulerName: "data-locality-scheduler"
+    podQueueSize: 100
+    healthServerPort: 8080
+    refreshInterval: "5m"
+
+    # Filtering options
+    percentageOfNodesToScore: 50
+    minFeasibleNodesToFind: 100
+
+    # Bandwidth settings
+    localBandwidth: 1000000000        # 1 GB/s
+    sameZoneBandwidth: 500000000      # 500 MB/s
+    sameRegionBandwidth: 200000000    # 200 MB/s
+    crossRegionBandwidth: 50000000    # 50 MB/s
+    edgeCloudBandwidth: 25000000      # 25 MB/s
+
+    # Default weights
+    resourceWeight: 0.3
+    nodeAffinityWeight: 0.2
+    nodeTypeWeight: 0.1
+    capabilitiesWeight: 0.1
+    dataLocalityWeight: 0.3
+
+    # Data-intensive weights
+    dataIntensiveResourceWeight: 0.2
+    dataIntensiveNodeAffinityWeight: 0.1
+    dataIntensiveNodeTypeWeight: 0.1
+    dataIntensiveCapabilitiesWeight: 0.1
+    dataIntensiveDataLocalityWeight: 0.6
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,12 +59,14 @@ spec:
         image: davidandw190/data-locality-scheduler:latest
         imagePullPolicy: Always
         args:
-        - "--scheduler-name=data-locality-scheduler"
-        - "--enable-data-locality=true"
-        - "--same-zone-bandwidth-mbps=500"
-        - "--same-region-bandwidth-mbps=200"
-        - "--edge-cloud-bandwidth-mbps=25"
-        - "--v=4"
+        - "--config=/etc/scheduler/scheduler-config.yaml"
+        - "--verbose=true"
+        # - "ls -la /etc/scheduler && cat /etc/scheduler/scheduler-config.yaml && exec /app/data-locality-scheduler --config=/etc/scheduler/scheduler-config.yaml --verbose=true"
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: 8080
           name: http
@@ -49,9 +89,16 @@ spec:
           limits:
             cpu: 300m
             memory: 512Mi
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/scheduler
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
+      volumes:
+      - name: config-volume
+        configMap:
+          name: data-locality-scheduler-config
 ---
 apiVersion: v1
 kind: Service

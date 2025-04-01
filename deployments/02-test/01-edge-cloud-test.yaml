@@ -22,7 +22,12 @@ spec:
   containers:
   - name: edge-processor
     image: python:3.9
-    command: [ "python", "-c", "import time; print('Processing edge data...'); time.sleep(3600)" ]
+    command: [ "python", "-c", "import time, os; print(f'Processing edge data on {os.environ.get(\"NODE_NAME\", \"unknown\")}'); time.sleep(3600)" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
     resources:
       requests:
         memory: "128Mi"
@@ -45,7 +50,12 @@ spec:
   containers:
   - name: cloud-processor
     image: python:3.9
-    command: [ "python", "-c", "import time; print('Processing cloud data...'); time.sleep(3600)" ]
+    command: [ "python", "-c", "import time, os; print(f'Processing cloud data on {os.environ.get(\"NODE_NAME\", \"unknown\")}'); time.sleep(3600)" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
     resources:
       requests:
         memory: "128Mi"

@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multi-source-test
+  namespace: data-locality-scheduler
+data:
+  aggregator.py: |
+    import os
+    import time
+    import socket
+
+    node_name = os.environ.get("NODE_NAME", "unknown")
+    region = os.environ.get("NODE_REGION", "unknown")
+
+    print(f"Running data aggregation on node: {node_name} in region: {region}")
+    print(f"Hostname: {socket.gethostname()}")
+
+    # Simulate data source access and aggregation
+    source_count = int(os.environ.get("SOURCE_COUNT", "3"))
+    print(f"Aggregating data from {source_count} sources...")
+
+    # Simulate processing
+    time.sleep(3600)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-source-aggregator
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "edge-bucket/sensor-data-1.json,201171520,5,4,json"
+    data.scheduler.thesis/input-2: "edge-bucket/sensor-data-2.json,201171520,5,4,json"
+    data.scheduler.thesis/input-3: "edge-bucket/sensor-data-3.json,201171520,5,4,json"
+    data.scheduler.thesis/output-1: "analytics/aggregated-edge-data.json,31457280,0,4,json"
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/prefer-region: "region-1"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: edge-aggregator
+    image: python:3.11
+    command: [ "python", "/code/aggregator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: NODE_REGION
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['topology.kubernetes.io/region']
+    - name: SOURCE_COUNT
+      value: "3"
+    volumeMounts:
+    - name: code
+      mountPath: /code
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "400m"
+  volumes:
+  - name: code
+    configMap:
+      name: multi-source-test
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-region-aggregator
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/region1-data.json,52428800,5,3,json"
+    data.scheduler.thesis/input-2: "region2-bucket/region2-data.json,52428800,5,3,json"
+    data.scheduler.thesis/input-3: "test-bucket/test-data.json,1048576,5,3,json"
+    data.scheduler.thesis/output-1: "analytics/cross-region-data.json,26214400,0,3,json"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: region-aggregator
+    image: python:3.11
+    command: [ "python", "/code/aggregator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: NODE_REGION
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['topology.kubernetes.io/region']
+    - name: SOURCE_COUNT
+      value: "3"
+    volumeMounts:
+    - name: code
+      mountPath: /code
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+      limits:
+        memory: "1Gi"
+        cpu: "600m"
+  volumes:
+  - name: code
+    configMap:
+      name: multi-source-test
+  restartPolicy: Never

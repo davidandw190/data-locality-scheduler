@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: video-processing-config
+  namespace: data-locality-scheduler
+data:
+  video-processing.py: |
+    import time
+    import os
+    import socket
+
+    print(f"Starting video processing...")
+    print(f"Running on node: {os.environ.get('NODE_NAME', 'unknown')}")
+
+    # Simulate processing
+    time.sleep(3600)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: small-data-intensive
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "videos/small-video.mp4,52428800,15,5,mp4"
+    data.scheduler.thesis/output-1: "processed/small-video-output.mp4,104857600,0,5,mp4"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: video-processor
+    image: python:3.9
+    command: [ "python", "/config/video-processing.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+      limits:
+        memory: "1Gi"
+        cpu: "600m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: video-processing-config
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: large-data-intensive
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "videos/large-video.mp4,2147483648,120,5,mp4"
+    data.scheduler.thesis/output-1: "processed/large-video-output.mp4,1073741824,0,5,mp4"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: video-processor
+    image: python:3.9
+    command: [ "python", "/config/video-processing.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+  volumes:
+  - name: config
+    configMap:
+      name: video-processing-config
+  restartPolicy: Never

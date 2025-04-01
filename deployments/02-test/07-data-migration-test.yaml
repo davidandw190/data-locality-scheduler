@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-migration-test
+  namespace: data-locality-scheduler
+data:
+  migration.py: |
+    import os
+    import time
+    import socket
+    import json
+
+    node_name = os.environ.get("NODE_NAME", "unknown")
+    migration_type = os.environ.get("MIGRATION_TYPE", "unknown")
+    source_region = os.environ.get("SOURCE_REGION", "unknown")
+    target_region = os.environ.get("TARGET_REGION", "unknown")
+
+    print(f"Running {migration_type} migration from {source_region} to {target_region}")
+    print(f"Running on node: {node_name}")
+    print(f"Hostname: {socket.gethostname()}")
+
+    # Simulate migration process
+    print("Starting data migration...")
+    time.sleep(3600)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: large-data-migration
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/large-dataset.bin,1073741824,30,5,binary"
+    data.scheduler.thesis/output-1: "region2-bucket/migrated-dataset.bin,1073741824,0,5,binary"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-region: "region-1"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: migration-job
+    image: python:3.11
+    command: [ "python", "/code/migration.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: MIGRATION_TYPE
+      value: "large-dataset"
+    - name: SOURCE_REGION
+      value: "region-1"
+    - name: TARGET_REGION
+      value: "region-2"
+    volumeMounts:
+    - name: code
+      mountPath: /code
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  volumes:
+  - name: code
+    configMap:
+      name: data-migration-test
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: incremental-data-sync
+  namespace: data-locality-scheduler
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/incremental-updates.json,201171520,5,3,json"
+    data.scheduler.thesis/output-1: "region2-bucket/synced-data.json,201171520,0,3,json"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-region: "region-2"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: sync-job
+    image: python:3.11
+    command: [ "python", "/code/migration.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: MIGRATION_TYPE
+      value: "incremental-sync"
+    - name: SOURCE_REGION
+      value: "region-1"
+    - name: TARGET_REGION
+      value: "region-2"
+    volumeMounts:
+    - name: code
+      mountPath: /code
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+      limits:
+        memory: "1Gi"
+        cpu: "600m"
+  volumes:
+  - name: code
+    configMap:
+      name: data-migration-test
+  restartPolicy: Never
