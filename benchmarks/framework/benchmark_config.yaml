@@ -1,0 +1,47 @@
+name: "Data Locality Scheduler Benchmark"
+version: "0.5.0"
+
+kubernetes:
+  namespace: "scheduler-benchmark"
+  setup_storage: true
+  storage_providers:
+  - name: "minio-central"
+    type: "object"
+    region: "central"
+  - name: "minio-edge-region1"
+    type: "object"
+    region: "region-1"
+  - name: "minio-edge-region2"
+    type: "object"
+    region: "region-2"
+
+schedulers:
+- name: "data-locality-scheduler"
+  description: "Data locality aware scheduler"
+- name: "default-scheduler"
+  description: "Kubernetes default scheduler"
+
+workloads:
+- name: "data-intensive-workflow"
+  description: "Data processing with large dataset dependencies"
+  iterations: 3
+  data_intensity: "high"
+  compute_intensity: "medium"
+# - name: "edge-to-cloud-workflow"
+#   description: "Edge-focused workflow with cloud offloading"
+#   iterations: 2
+#   data_intensity: "medium"
+#   compute_intensity: "medium"
+
+metrics:
+  collect_node_metrics: true
+  collect_pod_metrics: true
+  collect_network_metrics: true
+  collection_interval: 5 # seconds
+
+execution:
+  max_wait_time: 300 # 5 minutes
+  poll_interval: 5
+  parallel_runs: false
+  cleanup_after_run: true
+  validation_level: "thorough"
