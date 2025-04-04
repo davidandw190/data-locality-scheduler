@@ -22,11 +22,17 @@ schedulers:
   description: "Kubernetes default scheduler"
 
 workloads:
+- name: "data-locality-test"
+  description: "Test workload specifically for data locality"
+  iterations: 3
+  data_intensity: "very-high"
+  compute_intensity: "low"
 - name: "data-intensive-workflow"
   description: "Data processing with large dataset dependencies"
   iterations: 3
   data_intensity: "high"
   compute_intensity: "medium"
+
 # - name: "edge-to-cloud-workflow"
 #   description: "Edge-focused workflow with cloud offloading"
 #   iterations: 2

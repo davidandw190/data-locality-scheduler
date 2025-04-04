@@ -269,6 +269,7 @@ class DataInitializer:
         
         return file_path
     
+    
     def _initialize_data(self):
         all_data_refs = {}
         
@@ -278,10 +279,63 @@ class DataInitializer:
             all_data_refs[workload_name] = data_refs
             
             logger.info(f"Workload {workload_name}: {len(data_refs['input'])} inputs, {len(data_refs['output'])} outputs")
+            
+            for ref_type in ['input', 'output']:
+                for i, ref in enumerate(data_refs[ref_type]):
+                    urn = ref['urn']
+                    size = ref['size_bytes']
+                    logger.info(f"  {ref_type.capitalize()} {i+1}: {urn} (size: {size} bytes)")
         
         self._create_buckets()
         
         created_items = []
+        
+        custom_test_data = [
+            {"urn": "datasets/test-central.dat", "size": 10*1024*1024, "service": "minio"},
+            {"urn": "region1-bucket/test-region1.dat", "size": 10*1024*1024, "service": "region1"},
+            {"urn": "region2-bucket/test-region2.dat", "size": 10*1024*1024, "service": "region2"},
+        ]
+        
+        logger.info("Creating custom test data for better locality testing...")
+        for data_item in custom_test_data:
+            urn = data_item["urn"]
+            size_bytes = data_item["size"]
+            service = data_item["service"]
+            
+            parts = urn.split('/', 1)
+            bucket = parts[0]
+            path = parts[1] if len(parts) > 1 else f"test-data-{uuid.uuid4()}.dat"
+            
+            # Create data file
+            file_name = f"custom_{bucket}_{uuid.uuid4()}.dat"
+            logger.info(f"Creating test file {file_name} ({size_bytes} bytes) for {urn}")
+            file_path = self._create_test_data(size_bytes, file_name)
+            
+            success = False
+            for attempt in range(3):
+                try:
+                    cmd = f"mc cp {file_path} {service}/{bucket}/{path}"
+                    logger.info(f"Uploading: {cmd}")
+                    
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        logger.info(f"Successfully uploaded {urn} to {service}")
+                        success = True
+                        created_items.append((service, urn))
+                        break
+                    else:
+                        logger.warning(f"Failed to upload {urn} to {service}: {result.stderr}")
+                        if "bucket does not exist" in result.stderr:
+                            create_cmd = f"mc mb -p {service}/{bucket}"
+                            logger.info(f"Creating bucket: {create_cmd}")
+                            subprocess.run(create_cmd, shell=True)
+                        time.sleep(2)
+                except Exception as e:
+                    logger.error(f"Error during upload attempt {attempt+1}: {e}")
+                    time.sleep(2)
+            
+            if not success:
+                logger.error(f"Failed to upload {urn} to {service} after multiple attempts")
         
         for workload_name, data_refs in all_data_refs.items():
             logger.info(f"Initializing data for workload: {workload_name}")
@@ -294,45 +348,47 @@ class DataInitializer:
                 bucket = parts[0]
                 path = parts[1] if len(parts) > 1 else f"{workload_name}_input_{i}.dat"
                 
-                # Create data file
                 file_name = f"{workload_name}_input_{i}_{uuid.uuid4()}.dat"
                 file_path = self._create_test_data(size_bytes, file_name)
                 
-                # Upload to appropriate MinIO instances based on bucket name
-                target_services = []
-                if bucket in ["datasets", "intermediate", "results", "test-bucket", "shared"]:
-                    target_services = ["minio"]  # Central storage
-                elif bucket in ["edge-data", "region1-bucket"]:
-                    target_services = ["region1"]  # Region 1 edge
-                elif bucket in ["region2-bucket"]:
-                    target_services = ["region2"]  # Region 2 edge
-                else:
-                    target_services = ["minio", "region1", "region2"]  # All services as fallback
+                target_service = "minio"  # Default to central
+                if bucket.startswith("region1") or bucket == "edge-data":
+                    target_service = "region1"
+                elif bucket.startswith("region2"):
+                    target_service = "region2"
                 
+                logger.info(f"Uploading {urn} to service {target_service} (size: {size_bytes} bytes)")
                 success = False
-                for service in target_services:
-                    cmd = f"mc cp {file_path} {service}/{bucket}/{path}"
-                    logger.info(f"Uploading: {cmd}")
-                    
-                    for attempt in range(3):  
+                for attempt in range(3):
+                    try:
+                        cmd = f"mc cp {file_path} {target_service}/{bucket}/{path}"
+                        logger.info(f"Uploading: {cmd}")
+                        
                         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                         if result.returncode == 0:
-                            logger.info(f"Successfully uploaded {urn} to {service}")
+                            logger.info(f"Successfully uploaded {urn} to {target_service}")
                             success = True
-                            created_items.append((service, urn))
+                            created_items.append((target_service, urn))
                             break
                         else:
-                            logger.warning(f"Failed to upload {urn} to {service}: {result.stderr}")
+                            logger.warning(f"Failed to upload {urn}: {result.stderr}")
                             if "bucket does not exist" in result.stderr:
-                                create_cmd = f"mc mb -p {service}/{bucket}"
+                                create_cmd = f"mc mb -p {target_service}/{bucket}"
                                 logger.info(f"Creating bucket: {create_cmd}")
                                 subprocess.run(create_cmd, shell=True)
                             time.sleep(2)
+                    except Exception as e:
+                        logger.error(f"Error during upload attempt {attempt+1}: {e}")
+                        time.sleep(2)
                 
                 if not success:
-                    logger.error(f"Failed to upload {urn} to any service")
+                    logger.error(f"Failed to upload {urn} after multiple attempts")
+                    
+        logger.info(f"Created {len(created_items)} data items:")
+        for service, urn in created_items:
+            logger.info(f"  {service}: {urn}")
         
-        logger.info(f"Verifying {len(created_items)} created data items...")
+        logger.info("Verifying created data...")
         verification_failures = 0
         
         for service, urn in created_items:
@@ -348,28 +404,7 @@ class DataInitializer:
         else:
             logger.info("All data items successfully verified")
         
-        logger.info("Listing all buckets and their contents:")
-        for service in ["minio", "region1", "region2"]:
-            cmd = f"mc ls {service}"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            logger.info(f"{service} buckets: {result.stdout}")
-            
-            if result.returncode == 0:
-                bucket_lines = result.stdout.strip().split('\n')
-                for line in bucket_lines:
-                    if not line:
-                        continue
-                    try:
-                        bucket_name = line.split()[-1]
-                        logger.info(f"Sample contents of {service}/{bucket_name}:")
-                        ls_cmd = f"mc ls {service}/{bucket_name} --limit 5"
-                        ls_result = subprocess.run(ls_cmd, shell=True, capture_output=True, text=True)
-                        logger.info(ls_result.stdout)
-                    except:
-                        logger.warning(f"Could not parse bucket listing: {line}")
-        
         return True
-    
     
     def run(self):
         logger.info("Starting data initialization for benchmarks")

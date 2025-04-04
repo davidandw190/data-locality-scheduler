@@ -822,11 +822,13 @@ class BenchmarkRunner:
         
         logger.info(f"Calculating data locality metrics for {workload_key}")
         
+        # Ensure we have the latest mapping
         self._map_buckets_to_nodes()
         
         storage_nodes = {}
         bucket_to_nodes = {}
         
+        # Get the current storage service to node mapping
         try:
             pods = self.k8s_client.list_namespaced_pod(
                 namespace=namespace,
@@ -840,30 +842,41 @@ class BenchmarkRunner:
                 node_name = pod.spec.node_name
                 pod_name = pod.metadata.name
                 
+                # Determine service type from pod labels
                 labels = pod.metadata.labels
                 role = labels.get('role', '')
                 region = labels.get('region', '')
                 
-                if role == 'central':
+                service_name = None
+                if 'central' in pod_name or role == 'central':
                     service_name = "minio-central"
-                elif role == 'edge' and region == 'region-1':
+                elif ('region1' in pod_name or region == 'region-1') and ('edge' in pod_name or role == 'edge'):
                     service_name = "minio-edge-region1"
-                elif role == 'edge' and region == 'region-2':
+                elif ('region2' in pod_name or region == 'region-2') and ('edge' in pod_name or role == 'edge'):
                     service_name = "minio-edge-region2"
                 else:
-                    continue
+                    # Try to infer from the name
+                    if 'central' in pod_name:
+                        service_name = "minio-central"
+                    elif 'region1' in pod_name or 'region-1' in pod_name:
+                        service_name = "minio-edge-region1"
+                    elif 'region2' in pod_name or 'region-2' in pod_name:
+                        service_name = "minio-edge-region2"
                 
-                storage_nodes[service_name] = node_name
-                logger.info(f"Mapped storage service {service_name} to node {node_name}")
+                if service_name:
+                    storage_nodes[service_name] = node_name
+                    logger.info(f"Mapped storage service {service_name} to node {node_name}")
         except Exception as e:
             logger.error(f"Error mapping storage pods to nodes: {e}")
         
+        # Make bucket mapping more robust
         bucket_mapping = {
             "minio-central": ["datasets", "intermediate", "results", "shared", "test-bucket"],
             "minio-edge-region1": ["edge-data", "region1-bucket"],
             "minio-edge-region2": ["region2-bucket"]
         }
         
+        # Map buckets to their storage nodes
         for service, buckets in bucket_mapping.items():
             if service in storage_nodes:
                 node = storage_nodes[service]
@@ -873,20 +886,25 @@ class BenchmarkRunner:
                     if node not in bucket_to_nodes[bucket]:
                         bucket_to_nodes[bucket].append(node)
         
+        # More detailed logging
         logger.info(f"Storage nodes: {storage_nodes}")
         logger.info(f"Bucket to nodes mapping: {bucket_to_nodes}")
         
+        # Calculate data locality for pods
         data_locality_scores = []
         total_data_refs = 0
         local_data_refs = 0
         
         for pod_metric in pod_metrics:
+            pod_name = pod_metric.get('pod_name', 'unknown')
             pod_node = pod_metric.get('node')
             data_refs = pod_metric.get('data_annotations', {})
             
             if data_refs and pod_node:
+                logger.debug(f"Analyzing data locality for pod {pod_name} on node {pod_node}")
                 pod_local_refs = 0
                 pod_total_refs = 0
+                pod_data_refs = []
                 
                 for key, value in data_refs.items():
                     if key.startswith('data.scheduler.thesis/input-') or key.startswith('data.scheduler.thesis/output-'):
@@ -898,51 +916,46 @@ class BenchmarkRunner:
                         bucket = data_path.split('/')[0] if '/' in data_path else data_path
                         
                         is_local = False
+                        storage_node = None
                         if bucket in bucket_to_nodes:
+                            storage_node = ', '.join(bucket_to_nodes[bucket])
                             if pod_node in bucket_to_nodes[bucket]:
                                 is_local = True
-                                logger.debug(f"Local data reference found: {data_path} on node {pod_node}")
+                                logger.info(f"Local data reference found: {data_path} on node {pod_node}")
+                        
+                        pod_data_refs.append({
+                            'key': key,
+                            'path': data_path,
+                            'bucket': bucket,
+                            'is_local': is_local,
+                            'storage_node': storage_node
+                        })
                         
                         if is_local:
                             pod_local_refs += 1
                             local_data_refs += 1
                 
+                # Log detailed data locality info for this pod
+                logger.info(f"Pod {pod_name} on node {pod_node}: {pod_local_refs} local refs out of {pod_total_refs} total")
+                for ref in pod_data_refs:
+                    locality = "LOCAL" if ref['is_local'] else "REMOTE"
+                    logger.info(f"  {ref['key']} = {ref['path']} ({locality}) - Storage on: {ref['storage_node']}")
+                
                 if pod_total_refs > 0:
                     pod_locality_score = pod_local_refs / pod_total_refs
                     pod_metric['data_locality_score'] = pod_locality_score
                     data_locality_scores.append(pod_locality_score)
-                    logger.debug(f"Pod {pod_metric.get('pod_name')} data locality score: {pod_locality_score}")
+                    logger.info(f"Pod {pod_name} data locality score: {pod_locality_score:.4f}")
         
         logger.info(f"Total data refs: {total_data_refs}, Local refs: {local_data_refs}")
         
         if total_data_refs > 0:
             overall_locality_score = local_data_refs / total_data_refs
-            logger.info(f"Overall data locality score: {overall_locality_score}")
+            logger.info(f"Overall data locality score: {overall_locality_score:.4f}")
         else:
             overall_locality_score = 0
             logger.warning("No data references found for locality calculation")
-        
-        if data_locality_scores:
-            avg_locality_score = sum(data_locality_scores) / len(data_locality_scores)
-            self.results["metrics"][workload_key]["data_locality_metrics"] = {
-                "scores": data_locality_scores,
-                "avg_score": avg_locality_score,
-                "data_refs": total_data_refs,
-                "data_local_refs": local_data_refs,
-                "overall_score": overall_locality_score
-            }
-            self.results["metrics"][workload_key]["data_locality_score"] = avg_locality_score
-        else:
-            logger.warning(f"No data locality scores calculated for {workload_key}")
-            self.results["metrics"][workload_key]["data_locality_metrics"] = {
-                "scores": [],
-                "avg_score": 0,
-                "data_refs": total_data_refs,
-                "data_local_refs": local_data_refs,
-                "overall_score": overall_locality_score
-            }
-            self.results["metrics"][workload_key]["data_locality_score"] = overall_locality_score
-    
+            
     
     def run_benchmarks(self):
         logger.info("Starting benchmark runs")

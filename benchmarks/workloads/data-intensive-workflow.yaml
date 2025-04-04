@@ -9,6 +9,7 @@ metadata:
   annotations:
     data.scheduler.thesis/input-1: "datasets/landsat-sample.tar.gz,850000,20,5,raw-data"
     data.scheduler.thesis/output-1: "intermediate/extracted-bands,200000,0,4,extracted"
+    scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler # will be overridden by benchmark runner
   containers:
@@ -59,6 +60,7 @@ metadata:
   annotations:
     data.scheduler.thesis/input-1: "intermediate/extracted-bands,200000,15,5,extracted"
     data.scheduler.thesis/output-1: "intermediate/transformed-data,150000,0,4,transformed"
+    scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
@@ -109,6 +111,7 @@ metadata:
   annotations:
     data.scheduler.thesis/input-1: "intermediate/transformed-data,150000,10,5,transformed"
     data.scheduler.thesis/output-1: "results/analysis-results,50000,0,4,results"
+    scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
