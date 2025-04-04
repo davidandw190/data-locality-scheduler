@@ -1,5 +1,5 @@
 name: "Data Locality Scheduler Benchmark"
-version: "0.5.0"
+version: "0.5.1"
 
 kubernetes:
   namespace: "scheduler-benchmark"
@@ -18,36 +18,44 @@ kubernetes:
 schedulers:
 - name: "data-locality-scheduler"
   description: "Data locality aware scheduler"
+  config:
+    dataLocalityWeight: 0.5
+    nodeTypeWeight: 0.2
+    resourceWeight: 0.2
+    nodeAffinityWeight: 0.1
 - name: "default-scheduler"
   description: "Kubernetes default scheduler"
 
 workloads:
-- name: "data-locality-test"
-  description: "Test workload specifically for data locality"
-  iterations: 3
-  data_intensity: "very-high"
-  compute_intensity: "low"
-- name: "data-intensive-workflow"
-  description: "Data processing with large dataset dependencies"
-  iterations: 3
+- name: "edge-to-cloud-pipeline"
+  description: "IoT data processing pipeline from edge to cloud"
+  iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
-
-# - name: "edge-to-cloud-workflow"
-#   description: "Edge-focused workflow with cloud offloading"
-#   iterations: 2
-#   data_intensity: "medium"
-#   compute_intensity: "medium"
+- name: "cross-region-analytics"
+  description: "Analytics workload using data from multiple regions"
+  iterations: 1
+  data_intensity: "high"
+  compute_intensity: "high"
+- name: "data-locality-test"
+  description: "Test workload specifically for data locality"
+  iterations: 1
+  data_intensity: "medium"
+  compute_intensity: "low"
 
 metrics:
   collect_node_metrics: true
   collect_pod_metrics: true
   collect_network_metrics: true
+  data_transfer_metrics: true
+  bandwidth_utilization: true
   collection_interval: 5 # seconds
+  latency_tracking: true
 
 execution:
-  max_wait_time: 300 # 5 minutes
-  poll_interval: 5
+  max_wait_time: 180 # 3 minutes
+  poll_interval: 3
   parallel_runs: false
   cleanup_after_run: true
   validation_level: "thorough"
+  detailed_logs: true

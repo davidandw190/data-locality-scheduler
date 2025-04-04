@@ -1,8 +1,7 @@
-# Basic settings
 schedulerName: "data-locality-scheduler"
 podQueueSize: 100
 healthServerPort: 8080
-schedulerInterval: "1s"
+# schedulerInterval: "1s"
 refreshInterval: "5m"
 enableMockData: false
 
@@ -16,19 +15,18 @@ resourceCacheEnabled: true
 resourceCacheExpiration: "30s"
 storageCacheExpiration: "5m"
 
-# Default weights
-resourceWeight: 0.3
-nodeAffinityWeight: 0.2
-nodeTypeWeight: 0.1
+resourceWeight: 0.2
+nodeAffinityWeight: 0.1
+nodeTypeWeight: 0.2
 capabilitiesWeight: 0.1
-dataLocalityWeight: 0.3
+dataLocalityWeight: 0.4
 
 # Data-intensive weights
-dataIntensiveResourceWeight: 0.2
+dataIntensiveResourceWeight: 0.1
 dataIntensiveNodeAffinityWeight: 0.1
 dataIntensiveNodeTypeWeight: 0.1
 dataIntensiveCapabilitiesWeight: 0.1
-dataIntensiveDataLocalityWeight: 0.5
+dataIntensiveDataLocalityWeight: 0.6
 
 # Compute-intensive weights
 computeIntensiveResourceWeight: 0.5
@@ -39,7 +37,7 @@ computeIntensiveDataLocalityWeight: 0.1
 
 # Bandwidth settings in bytes/second
 localBandwidth: 1000000000 # 1 GB/s
-sameZoneBandwidth: 500000000 # 500 MB/s
+sameZoneBandwidth: 600000000 # 600 MB/s
 sameRegionBandwidth: 200000000 # 200 MB/s
 crossRegionBandwidth: 50000000 # 50 MB/s
 edgeCloudBandwidth: 25000000 # 25 MB/s
@@ -61,7 +59,7 @@ maxResourceScore: 100
 defaultScore: 50
 
 # Debug options
-verboseLogging: false
-detailedMetrics: false
+verboseLogging: true
+detailedMetrics: true
 enableProfiling: false
 enableAPIEndpoint: true
