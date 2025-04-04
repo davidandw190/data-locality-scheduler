@@ -1,4 +1,3 @@
-# benchmarks/kubernetes/storage.yaml
 apiVersion: v1
 kind: Service
 metadata:
