@@ -241,8 +241,6 @@ class WorkloadSimulator:
         logger.error(f"Failed to upload {urn} after multiple attempts")
         return False
     
-    
-    # Modified process_with_real_data() method in benchmarks/docker/workload-sim/simulator.py
     def process_with_real_data(self, action):
         """Process a workload action with real data access"""
         logger.info(f"Starting action: {action} with real data interaction")
@@ -259,41 +257,78 @@ class WorkloadSimulator:
                         break
                 except Exception as e:
                     logger.warning(f"Download attempt {attempt+1} failed: {e}")
-                    time.sleep(1)  # Shorter sleep to avoid timeout
+                    time.sleep(2) 
         
         logger.info(f"Processing {len(input_files)} input files")
         for i, file_path in enumerate(input_files):
             if i < len(self.input_data):
                 logger.info(f"Input {i+1}: {self.input_data[i]['urn']} -> {file_path}")
         
-        # Simulate processing based on action type, but with reasonable time limits
-        # that don't exceed the benchmark timeout
-        intensity_multiplier = self._get_intensity_multiplier()
-        processing_time = min(20 * intensity_multiplier, 60)  # Cap at 60 seconds
-        
-        logger.info(f"Simulating processing for {processing_time:.1f} seconds")
-        
         if action in ['extract', 'collect']:
-            processing_start = time.time()
-            while time.time() - processing_start < processing_time:
-                # Do some actual processing to simulate CPU load
-                _ = [i * i for i in range(10000)]
-                # Process 10% of the time
-                if (time.time() - processing_start) > (processing_time * 0.1):
-                    break
+            for file_path in input_files:
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                logger.info(f"Extracting data from {file_path} ({file_size} bytes)")
+                
+                if file_size == 0:
+                    logger.warning(f"Empty or non-existent file: {file_path}")
+                    continue
+                    
+                with open(file_path, 'rb') as f:
+                    chunk_size = 1024 * 1024  # 1MB
+                    chunks_read = 0
+                    while True:
+                        data = f.read(chunk_size)
+                        if not data:
+                            break
+                        checksum = sum(data)
+                        chunks_read += 1
+                        if chunks_read % 10 == 0:
+                            logger.info(f"Processed {chunks_read} chunks ({chunks_read * chunk_size / 1024 / 1024:.2f} MB)")
+                
+                time.sleep(1) 
         
         elif action in ['transform', 'process', 'analyze']:
-            processing_start = time.time()
-            while time.time() - processing_start < processing_time:
-                # Do more intensive processing
-                _ = [hash(str(i)) for i in range(1000)]
-                # Process 50% of the time to ensure completion
-                if (time.time() - processing_start) > (processing_time * 0.5):
-                    break
+            # More CPU-intensive operations
+            for file_path in input_files:
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                logger.info(f"Processing data from {file_path} ({file_size} bytes)")
+                
+                if file_size == 0:
+                    logger.warning(f"Empty or non-existent file: {file_path}")
+                    continue
+                    
+                processing_start = time.time()
+                with open(file_path, 'rb') as f:
+                    chunk_size = 1024 * 1024 
+                    chunks_read = 0
+                    while True:
+                        data = f.read(chunk_size)
+                        if not data:
+                            break
+                        
+                        for _ in range(100): 
+                            _ = hash(data)
+                        
+                        chunks_read += 1
+                        if chunks_read % 10 == 0:
+                            logger.info(f"Processed {chunks_read} chunks ({chunks_read * chunk_size / 1024 / 1024:.2f} MB)")
+                
+                processing_time = time.time() - processing_start
+                logger.info(f"Finished processing in {processing_time:.2f} seconds")
+                
+                intensity_multiplier = self._get_intensity_multiplier()
+                computation_time = 2 * intensity_multiplier
+                logger.info(f"Performing additional computation for {computation_time:.2f} seconds")
+                
+                computation_start = time.time()
+                while time.time() - computation_start < computation_time:
+                    _ = [i * i for i in range(10000)]
+                
+                time.sleep(1)
         
         uploaded_outputs = 0
         for data_ref in self.output_data:
-            for attempt in range(2):  # Fewer attempts to avoid timeouts
+            for attempt in range(3): 
                 try:
                     success = self._upload_data(data_ref)
                     if success:
@@ -301,10 +336,10 @@ class WorkloadSimulator:
                         break
                     else:
                         logger.warning(f"Upload attempt {attempt+1} failed")
-                        time.sleep(1)  # Shorter sleep
+                        time.sleep(2) 
                 except Exception as e:
                     logger.warning(f"Upload attempt {attempt+1} failed with exception: {e}")
-                    time.sleep(1)  # Shorter sleep
+                    time.sleep(2) 
         
         end_time = time.time()
         duration = end_time - start_time
@@ -320,8 +355,7 @@ class WorkloadSimulator:
             'input_files_processed': len(input_files),
             'output_files_generated': uploaded_outputs
         }
-    
-    
+
     def _download_data(self, data_reference):
         """Actually download data from MinIO or create mock data if it doesn't exist"""
         urn = data_reference['urn']

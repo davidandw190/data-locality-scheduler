@@ -290,46 +290,14 @@ class DataInitializer:
         
         created_items = []
         
-        # 1. Edge-specific data - place on edge nodes
-        edge_specific_data = [
-            {"urn": "edge-data/sensor-data.json", "size": 5*1024*1024, "service": "region1"},
-            {"urn": "edge-data/metrics.json", "size": 2*1024*1024, "service": "region1"},
-            {"urn": "edge-data/telemetry.json", "size": 3*1024*1024, "service": "region1"}
-        ]
-        
-        # 2. Region-specific data - place in respective regions
-        region_specific_data = [
-            {"urn": "region1-bucket/region1-data.json", "size": 10*1024*1024, "service": "region1"},
-            {"urn": "region2-bucket/region2-data.json", "size": 10*1024*1024, "service": "region2"},
-        ]
-        
-        # 3. Cloud-specific data - place on cloud storage
-        cloud_specific_data = [
+        custom_test_data = [
             {"urn": "datasets/test-central.dat", "size": 10*1024*1024, "service": "minio"},
-            {"urn": "datasets/training-data.json", "size": 20*1024*1024, "service": "minio"},
-            {"urn": "datasets/reference-model.bin", "size": 30*1024*1024, "service": "minio"}
+            {"urn": "region1-bucket/test-region1.dat", "size": 10*1024*1024, "service": "region1"},
+            {"urn": "region2-bucket/test-region2.dat", "size": 10*1024*1024, "service": "region2"},
         ]
         
-        # 4. Create shared intermediate and results buckets
-        intermediate_data = [
-            {"urn": "intermediate/placeholder.json", "size": 1024, "service": "minio"}
-        ]
-        
-        results_data = [
-            {"urn": "results/placeholder.json", "size": 1024, "service": "minio"}
-        ]
-        
-        all_test_data = (
-            edge_specific_data + 
-            region_specific_data + 
-            cloud_specific_data + 
-            intermediate_data + 
-            results_data
-        )
-        
-        logger.info(f"Initializing {len(all_test_data)} data items across all storage services")
-        
-        for data_item in all_test_data:
+        logger.info("Creating custom test data for better locality testing...")
+        for data_item in custom_test_data:
             urn = data_item["urn"]
             size_bytes = data_item["size"]
             service = data_item["service"]
@@ -339,7 +307,7 @@ class DataInitializer:
             path = parts[1] if len(parts) > 1 else f"test-data-{uuid.uuid4()}.dat"
             
             # Create data file
-            file_name = f"{bucket}_{path.replace('/', '_')}_{uuid.uuid4()}.dat"
+            file_name = f"custom_{bucket}_{uuid.uuid4()}.dat"
             logger.info(f"Creating test file {file_name} ({size_bytes} bytes) for {urn}")
             file_path = self._create_test_data(size_bytes, file_name)
             
@@ -369,11 +337,74 @@ class DataInitializer:
             if not success:
                 logger.error(f"Failed to upload {urn} to {service} after multiple attempts")
         
+        for workload_name, data_refs in all_data_refs.items():
+            logger.info(f"Initializing data for workload: {workload_name}")
+            
+            for i, data_ref in enumerate(data_refs['input']):
+                urn = data_ref['urn']
+                size_bytes = data_ref['size_bytes']
+                
+                parts = urn.split('/', 1)
+                bucket = parts[0]
+                path = parts[1] if len(parts) > 1 else f"{workload_name}_input_{i}.dat"
+                
+                file_name = f"{workload_name}_input_{i}_{uuid.uuid4()}.dat"
+                file_path = self._create_test_data(size_bytes, file_name)
+                
+                target_service = "minio"  # Default to central
+                if bucket.startswith("region1") or bucket == "edge-data":
+                    target_service = "region1"
+                elif bucket.startswith("region2"):
+                    target_service = "region2"
+                
+                logger.info(f"Uploading {urn} to service {target_service} (size: {size_bytes} bytes)")
+                success = False
+                for attempt in range(3):
+                    try:
+                        cmd = f"mc cp {file_path} {target_service}/{bucket}/{path}"
+                        logger.info(f"Uploading: {cmd}")
+                        
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                        if result.returncode == 0:
+                            logger.info(f"Successfully uploaded {urn} to {target_service}")
+                            success = True
+                            created_items.append((target_service, urn))
+                            break
+                        else:
+                            logger.warning(f"Failed to upload {urn}: {result.stderr}")
+                            if "bucket does not exist" in result.stderr:
+                                create_cmd = f"mc mb -p {target_service}/{bucket}"
+                                logger.info(f"Creating bucket: {create_cmd}")
+                                subprocess.run(create_cmd, shell=True)
+                            time.sleep(2)
+                    except Exception as e:
+                        logger.error(f"Error during upload attempt {attempt+1}: {e}")
+                        time.sleep(2)
+                
+                if not success:
+                    logger.error(f"Failed to upload {urn} after multiple attempts")
+                    
         logger.info(f"Created {len(created_items)} data items:")
         for service, urn in created_items:
             logger.info(f"  {service}: {urn}")
         
-        return True    
+        logger.info("Verifying created data...")
+        verification_failures = 0
+        
+        for service, urn in created_items:
+            bucket = urn.split('/', 1)[0]
+            cmd = f"mc ls {service}/{urn}"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.warning(f"Verification failed for {service}/{urn}: {result.stderr}")
+                verification_failures += 1
+        
+        if verification_failures > 0:
+            logger.warning(f"{verification_failures} data items failed verification")
+        else:
+            logger.info("All data items successfully verified")
+        
+        return True
     
     def run(self):
         logger.info("Starting data initialization for benchmarks")
