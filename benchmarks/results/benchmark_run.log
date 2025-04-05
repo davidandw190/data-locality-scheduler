@@ -664,3 +664,781 @@
 2025-04-05 01:32:09,925 - benchmark-runner - INFO - Pod region2-data-processor-95b0f6db-1 data locality score: 0.5000
 2025-04-05 01:32:09,925 - benchmark-runner - INFO - Total data refs: 6, Local refs: 2
 2025-04-05 01:32:09,925 - benchmark-runner - INFO - Overall data locality score: 0.3333
+2025-04-05 15:30:31,826 - benchmark-runner - INFO - Loaded configuration from benchmarks/framework/benchmark_config.yaml
+2025-04-05 15:30:31,833 - benchmark-runner - INFO - Loaded Kubernetes config from default location
+2025-04-05 15:30:31,834 - benchmark-runner - INFO - Starting benchmark runs
+2025-04-05 15:30:31,834 - benchmark-runner - INFO - Preparing benchmark environment
+2025-04-05 15:30:32,184 - benchmark-runner - INFO - Using existing namespace: scheduler-benchmark
+2025-04-05 15:30:32,184 - benchmark-runner - INFO - Cleaning up any existing storage deployments...
+2025-04-05 15:30:38,604 - benchmark-runner - INFO - Deploying storage services
+2025-04-05 15:30:42,480 - benchmark-runner - INFO - Successfully deployed storage services
+2025-04-05 15:30:42,480 - benchmark-runner - INFO - Waiting for storage services to be ready
+2025-04-05 15:30:42,616 - benchmark-runner - INFO - Waiting for storage services: 0/3 pods running
+2025-04-05 15:30:42,616 - benchmark-runner - INFO - Pending pods: minio-central-7bbbf68b49-pxp58 (Pending), minio-edge-region1-7d9db96f58-f9hwq (Pending), minio-edge-region2-6587657df4-hz6rd (Pending)
+2025-04-05 15:30:47,927 - benchmark-runner - INFO - Storage services are ready: 3 pods running with ready containers
+2025-04-05 15:30:47,928 - benchmark-runner - INFO - Initializing benchmark data
+2025-04-05 15:30:47,928 - benchmark-runner - INFO - Running data initializer: python benchmarks/framework/data_initializer.py --config benchmarks/framework/benchmark_config.yaml --workloads-dir benchmarks/workloads
+2025-04-05 15:38:05,093 - benchmark-runner - INFO - Successfully initialized benchmark data
+2025-04-05 15:38:05,093 - benchmark-runner - INFO - Waiting for data initialization to complete
+2025-04-05 15:38:15,093 - benchmark-runner - INFO - Collecting cluster information
+2025-04-05 15:38:15,810 - benchmark-runner - INFO - Collected information for 6 nodes
+2025-04-05 15:38:15,810 - benchmark-runner - INFO - Cluster Overview:
+2025-04-05 15:38:15,811 - benchmark-runner - INFO - - Total nodes: 6
+2025-04-05 15:38:15,811 - benchmark-runner - INFO - - Edge nodes: 5
+2025-04-05 15:38:15,811 - benchmark-runner - INFO - - Cloud nodes: 1
+2025-04-05 15:38:15,811 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:38:15,952 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:38:15,952 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:38:15,952 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:38:15,952 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:38:15,953 - benchmark-runner - INFO - Indexing data locations for data locality metrics
+2025-04-05 15:38:15,973 - benchmark-runner - INFO - Indexed 14 data items
+2025-04-05 15:38:15,973 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 15:38:17,752 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 15:38:17,753 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_data-locality-scheduler_1 to complete
+2025-04-05 15:38:17,753 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'last_checkpoint'
+2025-04-05 15:38:17,753 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 15:38:17,979 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 15:38:17,979 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:38:18,140 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:38:18,140 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:38:18,140 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:38:18,140 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:38:18,287 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:38:18,288 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:38:18,288 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:38:18,288 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:38:18,288 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:38:18,288 - benchmark-runner - INFO - Total data refs: 0, Local refs: 0
+2025-04-05 15:38:18,288 - benchmark-runner - WARNING - No data references found for locality calculation
+2025-04-05 15:38:43,866 - benchmark-runner - INFO - Cleaned up workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 15:38:43,866 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/edge-to-cloud-pipeline_data-locality-scheduler_1.yaml
+2025-04-05 15:38:43,867 - benchmark-runner - INFO - Collecting network metrics for workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 15:38:43,867 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_data-locality-scheduler_1:
+2025-04-05 15:38:43,867 - benchmark-runner - INFO -   - Total data size: 0.00 MB
+2025-04-05 15:38:43,867 - benchmark-runner - ERROR - Error running workload edge-to-cloud-pipeline with data-locality-scheduler (iteration 1): division by zero
+2025-04-05 15:38:43,867 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'default-scheduler' (iteration 1)
+2025-04-05 15:38:45,770 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 15:38:45,770 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_default-scheduler_1 to complete
+2025-04-05 15:38:45,770 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'last_checkpoint'
+2025-04-05 15:38:45,770 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 15:38:45,961 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 15:38:45,961 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:38:46,074 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:38:46,074 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:38:46,074 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:38:46,075 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-data.json on node os-k8s-worker-node-0
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Local data reference found: results/processed-results.json on node os-k8s-worker-node-0
+2025-04-05 15:38:46,191 - benchmark-runner - INFO - Pod cloud-data-processor-9977b727-1 on node os-k8s-worker-node-0: 2 local refs out of 2 total
+2025-04-05 15:38:46,192 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-data.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:38:46,192 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/processed-results.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Pod cloud-data-processor-9977b727-1 data locality score: 1.0000
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-data.json on node os-k8s-worker-node-0
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Pod edge-data-collector-9977b727-1 on node os-k8s-worker-node-0: 1 local refs out of 2 total
+2025-04-05 15:38:46,192 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-data.json (REMOTE) - Storage on: os-k8s-worker-node-1
+2025-04-05 15:38:46,192 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/preprocessed-data.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Pod edge-data-collector-9977b727-1 data locality score: 0.5000
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Total data refs: 4, Local refs: 3
+2025-04-05 15:38:46,192 - benchmark-runner - INFO - Overall data locality score: 0.7500
+2025-04-05 15:39:08,741 - benchmark-runner - INFO - Cleaned up workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 15:39:08,741 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/edge-to-cloud-pipeline_default-scheduler_1.yaml
+2025-04-05 15:39:08,741 - benchmark-runner - INFO - Collecting network metrics for workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 15:39:08,742 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_default-scheduler_1:
+2025-04-05 15:39:08,742 - benchmark-runner - INFO -   - Total data size: 15.00 MB
+2025-04-05 15:39:08,742 - benchmark-runner - INFO -   - Local data access: 10.00 MB (66.7%)
+2025-04-05 15:39:08,742 - benchmark-runner - INFO -   - Same region data: 5.00 MB (33.3%)
+2025-04-05 15:39:08,742 - benchmark-runner - INFO -   - Cross-region data: 0.00 MB (0.0%)
+2025-04-05 15:39:08,742 - benchmark-runner - INFO -   - Edge-to-cloud data: 5.00 MB (33.3%)
+2025-04-05 15:39:08,744 - benchmark-runner - INFO - Saved benchmark checkpoint to benchmarks/results/temp/checkpoint_9977b727_20250405_153908.json
+2025-04-05 15:39:08,744 - benchmark-runner - INFO - Running workload 'cross-region-analytics' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 15:39:10,909 - benchmark-runner - INFO - Deployed workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 15:39:10,909 - benchmark-runner - INFO - Waiting for workload cross-region-analytics_data-locality-scheduler_1 to complete
+2025-04-05 15:39:10,910 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'checkpoint_interval'
+2025-04-05 15:39:10,910 - benchmark-runner - INFO - Collecting metrics for workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 15:39:11,088 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-analytics_data-locality-scheduler_1
+2025-04-05 15:39:11,088 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:39:11,191 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:39:11,191 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:39:11,191 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:39:11,191 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:39:11,303 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:39:11,303 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Local data reference found: intermediate/region1-extracted.json on node os-k8s-worker-node-0
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Pod region1-data-extractor-9977b727-1 on node os-k8s-worker-node-0: 1 local refs out of 2 total
+2025-04-05 15:39:11,304 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/region1-data.json (REMOTE) - Storage on: os-k8s-worker-node-1
+2025-04-05 15:39:11,304 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region1-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Pod region1-data-extractor-9977b727-1 data locality score: 0.5000
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Total data refs: 2, Local refs: 1
+2025-04-05 15:39:11,304 - benchmark-runner - INFO - Overall data locality score: 0.5000
+2025-04-05 15:39:28,779 - benchmark-runner - INFO - Cleaned up workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 15:39:28,779 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/cross-region-analytics_data-locality-scheduler_1.yaml
+2025-04-05 15:39:28,779 - benchmark-runner - INFO - Collecting network metrics for workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 15:39:28,780 - benchmark-runner - INFO - Network metrics for cross-region-analytics_data-locality-scheduler_1:
+2025-04-05 15:39:28,780 - benchmark-runner - INFO -   - Total data size: 1.00 MB
+2025-04-05 15:39:28,780 - benchmark-runner - INFO -   - Local data access: 0.00 MB (0.0%)
+2025-04-05 15:39:28,780 - benchmark-runner - INFO -   - Same region data: 1.00 MB (100.0%)
+2025-04-05 15:39:28,780 - benchmark-runner - INFO -   - Cross-region data: 0.00 MB (0.0%)
+2025-04-05 15:39:28,780 - benchmark-runner - INFO -   - Edge-to-cloud data: 1.00 MB (100.0%)
+2025-04-05 15:39:28,785 - benchmark-runner - INFO - Saved benchmark checkpoint to benchmarks/results/temp/checkpoint_9977b727_20250405_153928.json
+2025-04-05 15:39:28,786 - benchmark-runner - INFO - Running workload 'cross-region-analytics' with scheduler 'default-scheduler' (iteration 1)
+2025-04-05 15:39:31,083 - benchmark-runner - INFO - Deployed workload cross-region-analytics_default-scheduler_1
+2025-04-05 15:39:31,083 - benchmark-runner - INFO - Waiting for workload cross-region-analytics_default-scheduler_1 to complete
+2025-04-05 15:39:31,083 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'checkpoint_interval'
+2025-04-05 15:39:31,083 - benchmark-runner - INFO - Collecting metrics for workload cross-region-analytics_default-scheduler_1
+2025-04-05 15:39:31,356 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-analytics_default-scheduler_1
+2025-04-05 15:39:31,356 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:39:31,486 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:39:31,487 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:39:31,487 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:39:31,487 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:39:31,626 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Local data reference found: intermediate/region1-extracted.json on node os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Local data reference found: intermediate/region2-extracted.json on node os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Local data reference found: results/aggregated-analysis.json on node os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Pod data-aggregator-9977b727-1 on node os-k8s-worker-node-0: 3 local refs out of 3 total
+2025-04-05 15:39:31,627 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/region1-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = intermediate/region2-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/aggregated-analysis.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:31,627 - benchmark-runner - INFO - Pod data-aggregator-9977b727-1 data locality score: 1.0000
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Local data reference found: intermediate/region1-extracted.json on node os-k8s-worker-node-0
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Pod region1-data-extractor-9977b727-1 on node os-k8s-worker-node-0: 1 local refs out of 2 total
+2025-04-05 15:39:31,628 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/region1-data.json (REMOTE) - Storage on: os-k8s-worker-node-1
+2025-04-05 15:39:31,628 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region1-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Pod region1-data-extractor-9977b727-1 data locality score: 0.5000
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Pod region2-data-extractor-9977b727-1 on node os-k8s-worker-node-1: 0 local refs out of 2 total
+2025-04-05 15:39:31,628 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region2-bucket/region2-data.json (REMOTE) - Storage on: os-k8s-worker-node-2
+2025-04-05 15:39:31,628 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region2-extracted.json (REMOTE) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Pod region2-data-extractor-9977b727-1 data locality score: 0.0000
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Total data refs: 7, Local refs: 4
+2025-04-05 15:39:31,628 - benchmark-runner - INFO - Overall data locality score: 0.5714
+2025-04-05 15:39:53,572 - benchmark-runner - INFO - Cleaned up workload cross-region-analytics_default-scheduler_1
+2025-04-05 15:39:53,573 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/cross-region-analytics_default-scheduler_1.yaml
+2025-04-05 15:39:53,573 - benchmark-runner - INFO - Collecting network metrics for workload cross-region-analytics_default-scheduler_1
+2025-04-05 15:39:53,573 - benchmark-runner - INFO - Network metrics for cross-region-analytics_default-scheduler_1:
+2025-04-05 15:39:53,573 - benchmark-runner - INFO -   - Total data size: 21.00 MB
+2025-04-05 15:39:53,573 - benchmark-runner - INFO -   - Local data access: 10.00 MB (47.6%)
+2025-04-05 15:39:53,573 - benchmark-runner - INFO -   - Same region data: 1.00 MB (4.8%)
+2025-04-05 15:39:53,573 - benchmark-runner - INFO -   - Cross-region data: 10.00 MB (47.6%)
+2025-04-05 15:39:53,573 - benchmark-runner - INFO -   - Edge-to-cloud data: 1.00 MB (4.8%)
+2025-04-05 15:39:53,578 - benchmark-runner - INFO - Saved benchmark checkpoint to benchmarks/results/temp/checkpoint_9977b727_20250405_153953.json
+2025-04-05 15:39:53,578 - benchmark-runner - INFO - Running workload 'data-locality-test' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 15:39:55,691 - benchmark-runner - INFO - Deployed workload data-locality-test_data-locality-scheduler_1
+2025-04-05 15:39:55,691 - benchmark-runner - INFO - Waiting for workload data-locality-test_data-locality-scheduler_1 to complete
+2025-04-05 15:39:55,692 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'checkpoint_interval'
+2025-04-05 15:39:55,692 - benchmark-runner - INFO - Collecting metrics for workload data-locality-test_data-locality-scheduler_1
+2025-04-05 15:39:55,958 - benchmark-runner - INFO - Calculating data locality metrics for data-locality-test_data-locality-scheduler_1
+2025-04-05 15:39:55,959 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:39:56,069 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:39:56,069 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:39:56,069 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:39:56,069 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:39:56,178 - benchmark-runner - INFO - Total data refs: 0, Local refs: 0
+2025-04-05 15:39:56,178 - benchmark-runner - WARNING - No data references found for locality calculation
+2025-04-05 15:40:01,423 - benchmark-runner - INFO - Cleaned up workload data-locality-test_data-locality-scheduler_1
+2025-04-05 15:40:01,423 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/data-locality-test_data-locality-scheduler_1.yaml
+2025-04-05 15:40:01,423 - benchmark-runner - INFO - Collecting network metrics for workload data-locality-test_data-locality-scheduler_1
+2025-04-05 15:40:01,423 - benchmark-runner - INFO - Network metrics for data-locality-test_data-locality-scheduler_1:
+2025-04-05 15:40:01,423 - benchmark-runner - INFO -   - Total data size: 0.00 MB
+2025-04-05 15:40:01,423 - benchmark-runner - ERROR - Error running workload data-locality-test with data-locality-scheduler (iteration 1): division by zero
+2025-04-05 15:40:01,424 - benchmark-runner - INFO - Running workload 'data-locality-test' with scheduler 'default-scheduler' (iteration 1)
+2025-04-05 15:40:03,684 - benchmark-runner - INFO - Deployed workload data-locality-test_default-scheduler_1
+2025-04-05 15:40:03,685 - benchmark-runner - INFO - Waiting for workload data-locality-test_default-scheduler_1 to complete
+2025-04-05 15:40:03,685 - benchmark-runner - ERROR - Error waiting for workload completion: 'BenchmarkRunner' object has no attribute 'checkpoint_interval'
+2025-04-05 15:40:03,685 - benchmark-runner - INFO - Collecting metrics for workload data-locality-test_default-scheduler_1
+2025-04-05 15:40:03,921 - benchmark-runner - INFO - Calculating data locality metrics for data-locality-test_default-scheduler_1
+2025-04-05 15:40:03,921 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 15:40:04,042 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 15:40:04,042 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 15:40:04,043 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 15:40:04,043 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Local data reference found: datasets/test-central.dat on node os-k8s-worker-node-0
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Local data reference found: intermediate/central-output.dat on node os-k8s-worker-node-0
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Pod central-data-processor-9977b727-1 on node os-k8s-worker-node-0: 2 local refs out of 2 total
+2025-04-05 15:40:04,151 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = datasets/test-central.dat (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:40:04,151 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/central-output.dat (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:40:04,151 - benchmark-runner - INFO - Pod central-data-processor-9977b727-1 data locality score: 1.0000
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Local data reference found: intermediate/region1-output.dat on node os-k8s-worker-node-0
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Pod region1-data-processor-9977b727-1 on node os-k8s-worker-node-0: 1 local refs out of 2 total
+2025-04-05 15:40:04,152 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/test-region1.dat (REMOTE) - Storage on: os-k8s-worker-node-1
+2025-04-05 15:40:04,152 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region1-output.dat (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Pod region1-data-processor-9977b727-1 data locality score: 0.5000
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Pod region2-data-processor-9977b727-1 on node os-k8s-worker-node-1: 0 local refs out of 2 total
+2025-04-05 15:40:04,152 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region2-bucket/test-region2.dat (REMOTE) - Storage on: os-k8s-worker-node-2
+2025-04-05 15:40:04,152 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region2-output.dat (REMOTE) - Storage on: os-k8s-worker-node-0
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Pod region2-data-processor-9977b727-1 data locality score: 0.0000
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Total data refs: 6, Local refs: 3
+2025-04-05 15:40:04,152 - benchmark-runner - INFO - Overall data locality score: 0.5000
+2025-04-05 15:40:09,603 - benchmark-runner - INFO - Cleaned up workload data-locality-test_default-scheduler_1
+2025-04-05 15:40:09,604 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/temp/data-locality-test_default-scheduler_1.yaml
+2025-04-05 15:40:09,604 - benchmark-runner - INFO - Collecting network metrics for workload data-locality-test_default-scheduler_1
+2025-04-05 15:40:09,604 - benchmark-runner - INFO - Network metrics for data-locality-test_default-scheduler_1:
+2025-04-05 15:40:09,604 - benchmark-runner - INFO -   - Total data size: 30.00 MB
+2025-04-05 15:40:09,604 - benchmark-runner - INFO -   - Local data access: 10.00 MB (33.3%)
+2025-04-05 15:40:09,604 - benchmark-runner - INFO -   - Same region data: 10.00 MB (33.3%)
+2025-04-05 15:40:09,604 - benchmark-runner - INFO -   - Cross-region data: 10.00 MB (33.3%)
+2025-04-05 15:40:09,604 - benchmark-runner - INFO -   - Edge-to-cloud data: 10.00 MB (33.3%)
+2025-04-05 15:40:09,610 - benchmark-runner - INFO - Saved benchmark checkpoint to benchmarks/results/temp/checkpoint_9977b727_20250405_154009.json
+2025-04-05 15:40:09,610 - benchmark-runner - INFO - Comparing results between schedulers
+2025-04-05 15:40:09,611 - benchmark-runner - INFO - Results comparison completed
+2025-04-05 15:40:09,611 - benchmark-runner - ERROR - Error in comparison phase: 'BenchmarkRunner' object has no attribute '_compare_network_metrics'
+2025-04-05 15:40:09,615 - benchmark-runner - INFO - Saved benchmark results to benchmarks/results/benchmark_results_9977b727_20250405_154009.json
+2025-04-05 15:40:09,615 - benchmark-runner - INFO - Saved benchmark summary to benchmarks/results/benchmark_summary_9977b727_20250405_154009.csv
+2025-04-05 15:40:09,615 - benchmark-runner - INFO - Generated benchmark report: benchmarks/results/benchmark_report_9977b727_20250405_154009.md
+2025-04-05 15:40:09,616 - benchmark-runner - INFO - Cleaned up temporary files for run 9977b727
+2025-04-05 15:40:09,616 - benchmark-runner - INFO - Benchmark runs completed in 577.78 seconds
+2025-04-05 16:59:56,570 - benchmark-runner - INFO - Loaded configuration from benchmarks/framework/benchmark_config.yaml
+2025-04-05 16:59:56,577 - benchmark-runner - INFO - Loaded Kubernetes config from default location
+2025-04-05 16:59:56,577 - benchmark-runner - INFO - Starting benchmark runs
+2025-04-05 16:59:56,577 - benchmark-runner - INFO - Preparing benchmark environment
+2025-04-05 16:59:56,948 - benchmark-runner - INFO - Using existing namespace: scheduler-benchmark
+2025-04-05 16:59:56,948 - benchmark-runner - INFO - Cleaning up any existing storage deployments...
+2025-04-05 17:00:03,591 - benchmark-runner - INFO - Deploying storage services
+2025-04-05 17:00:10,480 - benchmark-runner - INFO - Successfully deployed storage services
+2025-04-05 17:00:10,480 - benchmark-runner - INFO - Waiting for storage services to be ready
+2025-04-05 17:00:10,624 - benchmark-runner - INFO - Waiting for storage services: 0/3 pods running
+2025-04-05 17:00:10,624 - benchmark-runner - INFO - Pending pods: minio-central-7bbbf68b49-q5gv4 (Pending), minio-edge-region1-7d9db96f58-4mphh (Pending), minio-edge-region2-6587657df4-nngfx (Pending)
+2025-04-05 17:00:15,763 - benchmark-runner - INFO - Storage services are ready: 3 pods running with ready containers
+2025-04-05 17:00:15,763 - benchmark-runner - INFO - Initializing benchmark data
+2025-04-05 17:00:15,763 - benchmark-runner - INFO - Running data initializer: python benchmarks/framework/data_initializer.py --config benchmarks/framework/benchmark_config.yaml --workloads-dir benchmarks/workloads
+2025-04-05 17:07:32,955 - benchmark-runner - INFO - Successfully initialized benchmark data
+2025-04-05 17:07:32,955 - benchmark-runner - INFO - Waiting for data initialization to complete
+2025-04-05 17:07:42,955 - benchmark-runner - INFO - Collecting cluster information
+2025-04-05 17:07:43,623 - benchmark-runner - INFO - Collected information for 6 nodes
+2025-04-05 17:07:43,623 - benchmark-runner - INFO - Cluster Overview:
+2025-04-05 17:07:43,623 - benchmark-runner - INFO - - Total nodes: 6
+2025-04-05 17:07:43,623 - benchmark-runner - INFO - - Edge nodes: 5
+2025-04-05 17:07:43,623 - benchmark-runner - INFO - - Cloud nodes: 1
+2025-04-05 17:07:43,624 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 17:07:43,729 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 17:07:43,730 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 17:07:43,730 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 17:07:43,730 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 17:07:43,730 - benchmark-runner - INFO - Indexing data locations for data locality metrics
+2025-04-05 17:07:43,754 - benchmark-runner - INFO - Indexed 14 data items
+2025-04-05 17:07:43,755 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 17:07:45,803 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:07:45,803 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_data-locality-scheduler_1 to complete
+2025-04-05 17:07:45,884 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:07:48,999 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:07:52,157 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 1 pending, 1 running, 0 completed, 0 failed
+2025-04-05 17:07:55,294 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:07:58,415 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:01,517 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:04,637 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:07,787 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:10,882 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:14,004 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:08:17,140 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:17,141 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:20,240 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:20,240 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:23,359 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:23,359 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:26,498 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:26,498 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:29,620 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:29,620 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:32,716 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:32,716 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:35,842 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:35,842 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:38,992 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:38,992 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:42,128 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:42,129 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:45,260 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:45,260 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:48,431 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:48,431 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:51,600 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:51,600 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:54,743 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:54,744 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:08:57,858 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:08:57,858 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:00,951 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:00,951 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:04,041 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:04,041 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:07,182 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:07,182 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:10,303 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:10,303 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:13,477 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:13,478 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:16,655 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:16,655 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:19,794 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:19,794 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:22,915 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:22,915 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:26,043 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:26,043 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:29,226 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:29,226 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:32,323 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:32,324 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:35,421 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:35,421 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:38,565 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:38,565 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:41,722 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:41,722 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:44,861 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:44,861 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:47,971 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:47,971 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:51,059 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:51,059 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:54,178 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:54,178 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:09:57,289 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:09:57,290 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:00,422 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:00,422 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:03,523 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:03,523 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:06,622 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:06,622 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:09,711 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:09,711 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:12,821 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:12,821 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:15,955 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:15,956 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:19,073 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:19,073 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:22,175 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:22,175 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:25,254 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:25,254 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:28,358 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:28,358 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:31,448 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:31,449 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:34,547 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:34,547 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:37,745 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:37,745 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:40,933 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:40,933 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:44,186 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:44,186 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:47,186 - benchmark-runner - WARNING - Workload edge-to-cloud-pipeline_data-locality-scheduler_1 did not complete within 180 seconds
+2025-04-05 17:10:47,187 - benchmark-runner - INFO - Performing cleanup for timed out workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:47,187 - benchmark-runner - ERROR - Error collecting final metrics for timed out workload: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:10:48,256 - benchmark-runner - INFO - Forcibly terminated workload pods for edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:48,257 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:48,464 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:48,464 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 17:10:48,557 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 17:10:48,557 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 17:10:48,557 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 17:10:48,557 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 17:10:48,654 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 17:10:48,654 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 17:10:48,654 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 17:10:48,654 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 17:10:48,655 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 17:10:48,655 - benchmark-runner - INFO - Total data refs: 0, Local refs: 0
+2025-04-05 17:10:48,655 - benchmark-runner - WARNING - No data references found for locality calculation
+2025-04-05 17:10:49,296 - benchmark-runner - WARNING - Failed to clean up workload: Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_data-locality-scheduler_1.yaml": pods "edge-data-collector-f66d4e98-1" not found
+Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_data-locality-scheduler_1.yaml": pods "cloud-data-processor-f66d4e98-1" not found
+
+2025-04-05 17:10:49,296 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_data-locality-scheduler_1.yaml
+2025-04-05 17:10:49,296 - benchmark-runner - INFO - Collecting network metrics for workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-05 17:10:49,296 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_data-locality-scheduler_1:
+2025-04-05 17:10:49,296 - benchmark-runner - INFO -   - Total data size: 0.00 MB
+2025-04-05 17:10:49,296 - benchmark-runner - ERROR - Error running workload edge-to-cloud-pipeline with scheduler data-locality-scheduler (iteration 1): division by zero
+2025-04-05 17:10:49,297 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'default-scheduler' (iteration 1)
+2025-04-05 17:10:51,643 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:10:51,643 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_default-scheduler_1 to complete
+2025-04-05 17:10:51,737 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:10:54,834 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:10:57,937 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:11:01,032 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:11:04,155 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:11:07,316 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:11:10,438 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:11:13,535 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 1 running, 1 completed, 0 failed
+2025-04-05 17:11:16,655 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 1 running, 1 completed, 0 failed
+2025-04-05 17:11:19,782 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 1 running, 1 completed, 0 failed
+2025-04-05 17:11:22,883 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:22,883 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:26,029 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:26,029 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:29,170 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:29,170 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:32,353 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:32,353 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:35,470 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:35,470 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:38,581 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:38,582 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:41,715 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:41,715 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:44,849 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:44,850 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:47,946 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:47,946 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:51,067 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:51,067 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:54,172 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:54,172 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:11:57,288 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:11:57,289 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:00,426 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:00,426 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:03,525 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:03,525 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:06,615 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:06,615 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:09,710 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:09,710 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:12,850 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:12,850 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:16,071 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:16,072 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:19,170 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:19,170 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:22,419 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:22,420 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:25,560 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:25,560 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:28,959 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:28,959 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:32,166 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:32,166 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:35,312 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:35,312 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:38,465 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:38,465 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:41,569 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:41,569 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:44,662 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:44,662 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:47,775 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:47,775 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:50,882 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:50,882 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:53,989 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:53,989 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:12:57,240 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:12:57,240 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:00,356 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:00,356 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:03,474 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:03,474 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:06,668 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:06,668 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:09,770 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:09,770 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:12,910 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:12,911 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:16,054 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:16,054 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:19,269 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:19,269 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:22,414 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:22,414 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:25,512 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:25,512 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:28,621 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:28,621 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:31,727 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:31,727 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:34,841 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:34,842 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:37,962 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:37,963 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:41,164 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:41,164 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:44,388 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:44,388 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:47,507 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:47,507 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:50,612 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:50,612 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:53,613 - benchmark-runner - WARNING - Workload edge-to-cloud-pipeline_default-scheduler_1 did not complete within 180 seconds
+2025-04-05 17:13:53,613 - benchmark-runner - INFO - Performing cleanup for timed out workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:53,613 - benchmark-runner - ERROR - Error collecting final metrics for timed out workload: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:13:54,732 - benchmark-runner - INFO - Forcibly terminated workload pods for edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:54,733 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:54,995 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:54,995 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 17:13:55,094 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 17:13:55,094 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 17:13:55,094 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 17:13:55,095 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 17:13:55,186 - benchmark-runner - INFO - Total data refs: 0, Local refs: 0
+2025-04-05 17:13:55,186 - benchmark-runner - WARNING - No data references found for locality calculation
+2025-04-05 17:13:55,911 - benchmark-runner - WARNING - Failed to clean up workload: Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_default-scheduler_1.yaml": pods "edge-data-collector-f66d4e98-1" not found
+Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_default-scheduler_1.yaml": pods "cloud-data-processor-f66d4e98-1" not found
+
+2025-04-05 17:13:55,911 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/temp/f66d4e98/workloads/edge-to-cloud-pipeline_default-scheduler_1.yaml
+2025-04-05 17:13:55,911 - benchmark-runner - INFO - Collecting network metrics for workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-05 17:13:55,911 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_default-scheduler_1:
+2025-04-05 17:13:55,911 - benchmark-runner - INFO -   - Total data size: 0.00 MB
+2025-04-05 17:13:55,911 - benchmark-runner - ERROR - Error running workload edge-to-cloud-pipeline with scheduler default-scheduler (iteration 1): division by zero
+2025-04-05 17:13:55,911 - benchmark-runner - INFO - Running workload 'cross-region-analytics' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 17:13:58,279 - benchmark-runner - INFO - Deployed workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:13:58,279 - benchmark-runner - INFO - Waiting for workload cross-region-analytics_data-locality-scheduler_1 to complete
+2025-04-05 17:13:58,377 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 3 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:14:01,488 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 3 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:14:04,622 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 2 pending, 1 running, 0 completed, 0 failed
+2025-04-05 17:14:07,741 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:14:10,848 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:14:13,994 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:14:17,112 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:14:20,203 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 2 running, 1 completed, 0 failed
+2025-04-05 17:14:23,326 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 2 running, 1 completed, 0 failed
+2025-04-05 17:14:26,474 - benchmark-runner - INFO - Workload cross-region-analytics_data-locality-scheduler_1: 0 pending, 1 running, 2 completed, 0 failed
+2025-04-05 17:14:29,591 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:29,591 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:32,744 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:32,745 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:35,848 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:35,849 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:38,959 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:38,959 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:42,087 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:42,087 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:45,215 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:45,215 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:48,352 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:48,352 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:51,490 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:51,490 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:54,618 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:54,618 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:14:57,756 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:14:57,756 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:00,917 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:00,917 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:04,195 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:04,195 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:07,386 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:07,386 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:10,488 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:10,488 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:13,595 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:13,596 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:16,733 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:16,733 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:19,883 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:19,883 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:22,990 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:22,990 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:26,115 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:26,115 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:29,220 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:29,220 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:32,335 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:32,335 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:35,461 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:35,461 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:38,600 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:38,600 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:41,719 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:41,719 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:44,832 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:44,832 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:47,948 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:47,948 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:51,072 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:51,072 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:54,179 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:54,179 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:15:57,289 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:15:57,289 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:00,460 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:00,461 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:03,622 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:03,622 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:06,732 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:06,732 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:09,854 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:09,854 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:12,975 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:12,975 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:16,212 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:16,212 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:19,338 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:19,338 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:22,475 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:22,475 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:25,601 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:25,601 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:28,724 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:28,724 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:31,913 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:31,913 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:35,047 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:35,048 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:38,202 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:38,202 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:41,527 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:41,527 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:44,683 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:44,683 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:47,859 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:47,860 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:50,983 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:50,983 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:54,083 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:54,083 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:16:57,192 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:16:57,192 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:17:00,192 - benchmark-runner - WARNING - Workload cross-region-analytics_data-locality-scheduler_1 did not complete within 180 seconds
+2025-04-05 17:17:00,193 - benchmark-runner - INFO - Performing cleanup for timed out workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:17:00,193 - benchmark-runner - ERROR - Error collecting final metrics for timed out workload: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:17:01,361 - benchmark-runner - INFO - Forcibly terminated workload pods for cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:17:01,362 - benchmark-runner - INFO - Collecting metrics for workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:17:01,593 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:17:01,593 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 17:17:01,681 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 17:17:01,681 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 17:17:01,681 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 17:17:01,681 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 17:17:01,770 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 17:17:01,770 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 17:17:01,770 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 17:17:01,770 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 17:17:01,770 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 17:17:01,771 - benchmark-runner - INFO - Total data refs: 0, Local refs: 0
+2025-04-05 17:17:01,771 - benchmark-runner - WARNING - No data references found for locality calculation
+2025-04-05 17:17:02,479 - benchmark-runner - WARNING - Failed to clean up workload: Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/cross-region-analytics_data-locality-scheduler_1.yaml": pods "region1-data-extractor-f66d4e98-1" not found
+Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/cross-region-analytics_data-locality-scheduler_1.yaml": pods "region2-data-extractor-f66d4e98-1" not found
+Error from server (NotFound): error when deleting "benchmarks/temp/f66d4e98/workloads/cross-region-analytics_data-locality-scheduler_1.yaml": pods "data-aggregator-f66d4e98-1" not found
+
+2025-04-05 17:17:02,479 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/temp/f66d4e98/workloads/cross-region-analytics_data-locality-scheduler_1.yaml
+2025-04-05 17:17:02,479 - benchmark-runner - INFO - Collecting network metrics for workload cross-region-analytics_data-locality-scheduler_1
+2025-04-05 17:17:02,479 - benchmark-runner - INFO - Network metrics for cross-region-analytics_data-locality-scheduler_1:
+2025-04-05 17:17:02,479 - benchmark-runner - INFO -   - Total data size: 0.00 MB
+2025-04-05 17:17:02,479 - benchmark-runner - ERROR - Error running workload cross-region-analytics with scheduler data-locality-scheduler (iteration 1): division by zero
+2025-04-05 17:17:02,479 - benchmark-runner - INFO - Running workload 'cross-region-analytics' with scheduler 'default-scheduler' (iteration 1)
+2025-04-05 17:17:05,190 - benchmark-runner - INFO - Deployed workload cross-region-analytics_default-scheduler_1
+2025-04-05 17:17:05,190 - benchmark-runner - INFO - Waiting for workload cross-region-analytics_default-scheduler_1 to complete
+2025-04-05 17:17:05,286 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 3 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:17:08,390 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 1 pending, 2 running, 0 completed, 0 failed
+2025-04-05 17:17:11,482 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:14,617 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:17,740 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:20,891 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:23,986 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1: 0 pending, 1 running, 2 completed, 0 failed
+2025-04-05 17:17:27,095 - benchmark-runner - INFO - Workload cross-region-analytics_default-scheduler_1 completed: 3 succeeded, 0 failed
+2025-04-05 17:17:27,096 - benchmark-runner - INFO - Collecting metrics for workload cross-region-analytics_default-scheduler_1
+2025-04-05 17:17:27,330 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-analytics_default-scheduler_1
+2025-04-05 17:17:27,331 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-05 17:17:27,447 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-05 17:17:27,447 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-05 17:17:27,447 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-05 17:17:27,447 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-05 17:17:27,555 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-05 17:17:27,555 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-05 17:17:27,555 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Local data reference found: intermediate/region1-extracted.json on node os-k8s-worker-node-0
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Local data reference found: intermediate/region2-extracted.json on node os-k8s-worker-node-0
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Local data reference found: results/aggregated-analysis.json on node os-k8s-worker-node-0
+2025-04-05 17:17:27,556 - benchmark-runner - INFO - Pod data-aggregator-f66d4e98-1 on node os-k8s-worker-node-0: 3 local refs out of 3 total
+2025-04-05 17:17:27,556 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/region1-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 17:17:27,556 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = intermediate/region2-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 17:17:27,557 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/aggregated-analysis.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 17:17:27,557 - benchmark-runner - INFO - Pod data-aggregator-f66d4e98-1 data locality score: 1.0000
+2025-04-05 17:17:27,557 - benchmark-runner - INFO - Local data reference found: intermediate/region1-extracted.json on node os-k8s-worker-node-0
+2025-04-05 17:17:27,557 - benchmark-runner - INFO - Pod region1-data-extractor-f66d4e98-1 on node os-k8s-worker-node-0: 1 local refs out of 2 total
+2025-04-05 17:17:27,557 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/region1-data.json (REMOTE) - Storage on: os-k8s-worker-node-1
+2025-04-05 17:17:27,557 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region1-extracted.json (LOCAL) - Storage on: os-k8s-worker-node-0
+2025-04-05 17:17:27,557 - benchmark-runner - INFO - Pod region1-data-extractor-f66d4e98-1 data locality score: 0.5000
+2025-04-05 17:17:27,557 - benchmark-runner - INFO - Pod region2-data-extractor-f66d4e98-1 on node os-k8s-worker-node-1: 0 local refs out of 2 total
+2025-04-05 17:17:27,557 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region2-bucket/region2-data.json (REMOTE) - Storage on: os-k8s-worker-node-2
+2025-04-05 17:17:27,558 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/region2-extracted.json (REMOTE) - Storage on: os-k8s-worker-node-0
+2025-04-05 17:17:27,558 - benchmark-runner - INFO - Pod region2-data-extractor-f66d4e98-1 data locality score: 0.0000
+2025-04-05 17:17:27,558 - benchmark-runner - INFO - Total data refs: 7, Local refs: 4
+2025-04-05 17:17:27,558 - benchmark-runner - INFO - Overall data locality score: 0.5714
+2025-04-05 17:17:28,691 - benchmark-runner - INFO - Cleaned up workload cross-region-analytics_default-scheduler_1
+2025-04-05 17:17:28,691 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/temp/f66d4e98/workloads/cross-region-analytics_default-scheduler_1.yaml
+2025-04-05 17:17:28,691 - benchmark-runner - INFO - Collecting network metrics for workload cross-region-analytics_default-scheduler_1
+2025-04-05 17:17:28,691 - benchmark-runner - INFO - Network metrics for cross-region-analytics_default-scheduler_1:
+2025-04-05 17:17:28,691 - benchmark-runner - INFO -   - Total data size: 21.00 MB
+2025-04-05 17:17:28,691 - benchmark-runner - INFO -   - Local data access: 10.00 MB (47.6%)
+2025-04-05 17:17:28,691 - benchmark-runner - INFO -   - Same region data: 1.00 MB (4.8%)
+2025-04-05 17:17:28,691 - benchmark-runner - INFO -   - Cross-region data: 10.00 MB (47.6%)
+2025-04-05 17:17:28,692 - benchmark-runner - INFO -   - Edge-to-cloud data: 1.00 MB (4.8%)
+2025-04-05 17:17:28,692 - benchmark-runner - INFO - Running workload 'data-locality-test' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-05 17:17:32,208 - benchmark-runner - INFO - Deployed workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:17:32,208 - benchmark-runner - INFO - Waiting for workload data-locality-test_data-locality-scheduler_1 to complete
+2025-04-05 17:17:32,329 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 3 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:17:35,556 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 3 pending, 0 running, 0 completed, 0 failed
+2025-04-05 17:17:38,791 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 2 pending, 1 running, 0 completed, 0 failed
+2025-04-05 17:17:41,897 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:45,151 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:48,271 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:51,380 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:54,562 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:17:57,695 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:18:00,827 - benchmark-runner - INFO - Workload data-locality-test_data-locality-scheduler_1: 0 pending, 3 running, 0 completed, 0 failed
+2025-04-05 17:18:04,049 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:04,049 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:07,164 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:07,164 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:10,312 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:10,312 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:13,422 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:13,423 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:16,570 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:16,570 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:19,704 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:19,704 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:22,816 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:22,816 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:25,974 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:25,974 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:29,104 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:29,105 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:32,227 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:32,227 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:35,358 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:35,358 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:38,495 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:38,495 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:41,690 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:41,691 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:44,819 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:44,819 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:48,134 - benchmark-runner - INFO - Collecting incremental metrics for long-running workload data-locality-test_data-locality-scheduler_1
+2025-04-05 17:18:48,134 - benchmark-runner - ERROR - Unexpected error during workload monitoring: BenchmarkRunner._collect_workload_metrics() got an unexpected keyword argument 'final'
+2025-04-05 17:18:49,471 - benchmark-runner - INFO - Saved benchmark results to benchmarks/results/benchmark_results_f66d4e98_20250405_171849.json
+2025-04-05 17:18:49,472 - benchmark-runner - INFO - Saved benchmark summary to benchmarks/results/benchmark_summary_f66d4e98_20250405_171849.csv
+2025-04-05 17:18:49,472 - benchmark-runner - INFO - Generated benchmark report: benchmarks/results/benchmark_report_f66d4e98_20250405_171849.md
+2025-04-05 17:18:49,472 - benchmark-runner - INFO - Benchmark runs completed in 1132.89 seconds

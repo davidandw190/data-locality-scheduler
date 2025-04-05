@@ -14,40 +14,40 @@ metadata:
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: edge-collector
-      image: davidandw190/workload-sim:latest
-      command: ["python", "/app/simulator.py"]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "edge-collection"
-        - name: WORKLOAD_ACTION
-          value: "collect"
-        - name: WORKLOAD_INTENSITY
-          value: "medium"
-        - name: DATA_SCHEDULER_THESIS_INPUT_1
-          value: "edge-data/sensor-data.json,5242880,5,8,json"
-        - name: DATA_SCHEDULER_THESIS_OUTPUT_1
-          value: "intermediate/preprocessed-data.json,10485760,0,7,json"
-      resources:
-        requests:
-          memory: "128Mi"
-          cpu: "100m"
-        limits:
-          memory: "256Mi"
-          cpu: "200m"
+  - name: edge-collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "edge-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "edge-data/sensor-data.json,5242880,5,8,json"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "intermediate/preprocessed-data.json,10485760,0,7,json"
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
   tolerations:
-    - effect: NoSchedule
-      operator: Exists
-    - effect: NoExecute
-      operator: Exists
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -66,38 +66,38 @@ metadata:
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: cloud-processor
-      image: davidandw190/workload-sim:latest
-      command: ["python", "/app/simulator.py"]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "cloud-processing"
-        - name: WORKLOAD_ACTION
-          value: "process"
-        - name: WORKLOAD_INTENSITY
-          value: "high"
-        - name: DATA_SCHEDULER_THESIS_INPUT_1
-          value: "intermediate/preprocessed-data.json,10485760,10,7,json"
-        - name: DATA_SCHEDULER_THESIS_OUTPUT_1
-          value: "results/processed-results.json,1048576,0,6,json"
-      resources:
-        requests:
-          memory: "512Mi"
-          cpu: "500m"
-        limits:
-          memory: "1Gi"
-          cpu: "1"
+  - name: cloud-processor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "cloud-processing"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "intermediate/preprocessed-data.json,10485760,10,7,json"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "results/processed-results.json,1048576,0,6,json"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
   tolerations:
-    - effect: NoSchedule
-      operator: Exists
-    - effect: NoExecute
-      operator: Exists
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
   restartPolicy: Never

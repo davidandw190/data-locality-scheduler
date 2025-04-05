@@ -32,16 +32,37 @@ workloads:
   iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
+  timeout: 300 # 5 minutes
 - name: "cross-region-analytics"
   description: "Analytics workload using data from multiple regions"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "high"
+  timeout: 300
 - name: "data-locality-test"
   description: "Test workload specifically for data locality"
   iterations: 1
   data_intensity: "medium"
   compute_intensity: "low"
+  timeout: 300
+# - name: "eo-processing-pipeline"
+#   description: "Earth Observation imagery processing pipeline"
+#   iterations: 1
+#   data_intensity: "very-high"
+#   compute_intensity: "high"
+#   timeout: 600 # 10 minutes
+# - name: "ml-training-pipeline"
+#   description: "Machine Learning training pipeline with edge data collection"
+#   iterations: 1
+#   data_intensity: "high"
+#   compute_intensity: "very-high"
+#   timeout: 600
+# - name: "real-time-edge-analytics"
+#   description: "Real-time analytics with edge data processing"
+#   iterations: 1
+#   data_intensity: "medium"
+#   compute_intensity: "high"
+#   timeout: 600
 
 metrics:
   collect_node_metrics: true
