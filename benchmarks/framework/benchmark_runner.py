@@ -24,6 +24,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("benchmark-runner")
 
+def ensure_directory_exists(directory_path):
+    """Create directory if it doesn't exist"""
+    if not Path(directory_path).exists():
+        Path(directory_path).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created directory: {directory_path}")
+
+
 class BenchmarkRunner:
     """Main class for orchestrating scheduler benchmarks"""
     
@@ -31,6 +38,8 @@ class BenchmarkRunner:
         self.config_file = config_file
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir = self.output_dir / "temp"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id or str(uuid.uuid4())[:8]
         
         self.config = self._load_config()
@@ -593,7 +602,7 @@ class BenchmarkRunner:
                 
                 modified_workload.append(item)
         
-            temp_file = Path(f"benchmarks/results/tmp_{workload_name}_{scheduler_name}_{iteration}.yaml")
+            temp_file = self.temp_dir / f"{workload_name}_{scheduler_name}_{iteration}.yaml"
             with open(temp_file, 'w') as f:
                 yaml.dump_all(modified_workload, f)
         except Exception as e:
@@ -658,7 +667,6 @@ class BenchmarkRunner:
     def _wait_for_workload_completion(self, workload_name, scheduler_name, iteration):
         namespace = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
         workload_key = f"{workload_name}_{scheduler_name}_{iteration}"
-        run_suffix = f"{self.run_id}-{iteration}"
         
         logger.info(f"Waiting for workload {workload_key} to complete")
         
@@ -666,107 +674,134 @@ class BenchmarkRunner:
         poll_interval = self.config.get('execution', {}).get('poll_interval', 5)  # 5 seconds
         
         start_time = time.time()
-        pending_warning_threshold = 60  # Show detailed pending status after 60 seconds
+        pending_warning_threshold = 60 
         
-        while time.time() - start_time < max_wait_time:
-            # Get pods from the workload with the specific run ID
-            try:
-                pods = self.k8s_client.list_namespaced_pod(
-                    namespace=namespace,
-                    label_selector=f"benchmark-run-id={self.run_id},workload={workload_name},iteration={iteration}"
-                )
+        try:
+            while time.time() - start_time < max_wait_time:
+                if time.time() - self.last_checkpoint > self.checkpoint_interval:
+                    self._save_checkpoint()
                 
-                all_completed = True
-                still_pending = 0
-                still_running = 0
-                completed = 0
-                failed = 0
-                
-                pending_pods = []
-                
-                for pod in pods.items:
-                    phase = pod.status.phase
-                    if phase == 'Pending':
-                        still_pending += 1
-                        all_completed = False
-                        pending_pods.append(pod)
-                    elif phase == 'Running':
-                        still_running += 1
-                        all_completed = False
-                    elif phase == 'Succeeded':
-                        completed += 1
-                    elif phase == 'Failed':
-                        failed += 1
-                        # we count failed pods as "completed" for benchmarking purposes
-                
-                self.results["workloads"][workload_key]["pod_status"] = {
-                    "total": len(pods.items),
-                    "pending": still_pending,
-                    "running": still_running,
-                    "completed": completed,
-                    "failed": failed
-                }
-                
-                if all_completed and len(pods.items) > 0:
-                    logger.info(f"Workload {workload_key} completed: {completed} succeeded, {failed} failed")
-                    self.results["workloads"][workload_key]["status"] = "completed"
-                    self.results["workloads"][workload_key]["completion_time"] = time.time()
-                    self.results["workloads"][workload_key]["duration"] = time.time() - start_time
-                    break
-                
-                elapsed_time = time.time() - start_time
-                if still_pending > 0 and elapsed_time > pending_warning_threshold:
-                    pending_warning_threshold += 60 
+                try:
+                    pods = self.k8s_client.list_namespaced_pod(
+                        namespace=namespace,
+                        label_selector=f"benchmark-run-id={self.run_id},workload={workload_name},iteration={iteration}"
+                    )
                     
-                    logger.warning(f"Pods have been pending for {elapsed_time:.0f} seconds. Checking details...")
+                    all_completed = True
+                    still_pending = 0
+                    still_running = 0
+                    completed = 0
+                    failed = 0
                     
-                    for pod in pending_pods:
-                        pod_name = pod.metadata.name
-                        cmd = f"kubectl describe pod {pod_name} -n {namespace}"
-                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    pending_pods = []
+                    
+                    for pod in pods.items:
+                        phase = pod.status.phase
+                        if phase == 'Pending':
+                            still_pending += 1
+                            all_completed = False
+                            pending_pods.append(pod)
+                        elif phase == 'Running':
+                            still_running += 1
+                            all_completed = False
+                        elif phase == 'Succeeded':
+                            completed += 1
+                        elif phase == 'Failed':
+                            failed += 1
+                            # we count failed pods as "completed" for benchmarking purposes
+                    
+                    self.results["workloads"][workload_key]["pod_status"] = {
+                        "total": len(pods.items),
+                        "pending": still_pending,
+                        "running": still_running,
+                        "completed": completed,
+                        "failed": failed
+                    }
+                    
+                    if (all_completed and len(pods.items) > 0) or (completed + failed == len(pods.items) and len(pods.items) > 0):
+                        logger.info(f"Workload {workload_key} completed: {completed} succeeded, {failed} failed")
+                        self.results["workloads"][workload_key]["status"] = "completed"
+                        self.results["workloads"][workload_key]["completion_time"] = time.time()
+                        self.results["workloads"][workload_key]["duration"] = time.time() - start_time
+                        break
+                    
+                    elapsed_time = time.time() - start_time
+                    if still_pending > 0 and elapsed_time > pending_warning_threshold:
+                        pending_warning_threshold += 60 
                         
-                        if result.returncode == 0:
-                            describe_output = result.stdout
-                            logger.warning(f"Pod {pod_name} status details:")
+                        logger.warning(f"Pods have been pending for {elapsed_time:.0f} seconds. Checking details...")
+                        
+                        for pod in pending_pods:
+                            pod_name = pod.metadata.name
+                            cmd = f"kubectl describe pod {pod_name} -n {namespace}"
+                            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                             
-                            status_lines = []
-                            events_found = False
-                            for line in describe_output.split('\n'):
-                                if line.startswith("Status:"):
-                                    status_lines.append(line)
-                                elif "Conditions:" in line:
-                                    status_lines.append(line)
-                                elif line.strip().startswith("Type") and line.strip().endswith("Status  Reason"):
-                                    status_lines.append(line)
-                                    events_found = True
-                                elif events_found and line.strip().startswith(("Normal", "Warning")):
-                                    status_lines.append(line)
-                            
-                            for line in status_lines:
+                            if result.returncode == 0:
+                                describe_output = result.stdout
+                                logger.warning(f"Pod {pod_name} status details:")
+                                
+                                status_lines = []
+                                events_found = False
+                                for line in describe_output.split('\n'):
+                                    if line.startswith("Status:"):
+                                        status_lines.append(line)
+                                    elif "Conditions:" in line:
+                                        status_lines.append(line)
+                                    elif line.strip().startswith("Type") and line.strip().endswith("Status  Reason"):
+                                        status_lines.append(line)
+                                        events_found = True
+                                    elif events_found and line.strip().startswith(("Normal", "Warning")):
+                                        status_lines.append(line)
+                                
+                                for line in status_lines:
+                                    logger.warning(f"  {line.strip()}")
+                        
+                        scheduler_logs_cmd = f"kubectl logs -l app=data-locality-scheduler -n {namespace} --tail=20"
+                        scheduler_logs = subprocess.run(scheduler_logs_cmd, shell=True, capture_output=True, text=True)
+                        
+                        if scheduler_logs.returncode == 0:
+                            logger.warning("Recent scheduler logs:")
+                            for line in scheduler_logs.stdout.split('\n')[-10:]:
                                 logger.warning(f"  {line.strip()}")
+                                
                     
-                    scheduler_logs_cmd = f"kubectl logs -l app=data-locality-scheduler -n {namespace} --tail=20"
-                    scheduler_logs = subprocess.run(scheduler_logs_cmd, shell=True, capture_output=True, text=True)
-                    
-                    if scheduler_logs.returncode == 0:
-                        logger.warning("Recent scheduler logs:")
-                        for line in scheduler_logs.stdout.split('\n')[-10:]:
-                            logger.warning(f"  {line.strip()}")
-
+                    logger.info(f"Workload {workload_key}: {still_pending} pending, {still_running} running, {completed} completed, {failed} failed")
+                    time.sleep(poll_interval)
                 
-                logger.info(f"Workload {workload_key}: {still_pending} pending, {still_running} running, {completed} completed, {failed} failed")
-                time.sleep(poll_interval)
+                except ApiException as e:
+                    logger.error(f"Error checking pod status: {e}")
+                    time.sleep(poll_interval)
+                except Exception as e:
+                    logger.error(f"Unexpected error during pod status check: {e}")
+                    time.sleep(poll_interval)
             
-            except ApiException as e:
-                logger.error(f"Error checking pod status: {e}")
-                time.sleep(poll_interval)
-        
-        if time.time() - start_time >= max_wait_time:
-            logger.warning(f"Workload {workload_key} did not complete within {max_wait_time} seconds")
-            self.results["workloads"][workload_key]["status"] = "timeout"
-            self.results["workloads"][workload_key]["completion_time"] = time.time()
-            self.results["workloads"][workload_key]["duration"] = max_wait_time
+            if time.time() - start_time >= max_wait_time:
+                logger.warning(f"Workload {workload_key} did not complete within {max_wait_time} seconds")
+                self.results["workloads"][workload_key]["status"] = "timeout" 
+                self.results["workloads"][workload_key]["completion_time"] = time.time()
+                self.results["workloads"][workload_key]["duration"] = max_wait_time
+                
+                return True
+        except Exception as e:
+            logger.error(f"Error waiting for workload completion: {e}")
+            self.results["workloads"][workload_key]["status"] = "error"
+            self.results["workloads"][workload_key]["error"] = str(e)
+            return False
             
+        return True 
+    
+    def _save_checkpoint(self):
+        try:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            checkpoint_file = self.temp_dir / f"checkpoint_{self.run_id}_{timestamp}.json"
+            
+            with open(checkpoint_file, 'w') as f:
+                json.dump(self.results, f, default=str, indent=2)
+            
+            logger.info(f"Saved benchmark checkpoint to {checkpoint_file}")
+            self.last_checkpoint = time.time()
+        except Exception as e:
+            logger.error(f"Failed to save checkpoint: {e}")
             
     def _collect_workload_metrics(self, workload_name, scheduler_name, iteration):
         namespace = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
@@ -913,13 +948,11 @@ class BenchmarkRunner:
         
         logger.info(f"Calculating data locality metrics for {workload_key}")
         
-        # Ensure we have the latest mapping
         self._map_buckets_to_nodes()
         
         storage_nodes = {}
         bucket_to_nodes = {}
         
-        # Get the current storage service to node mapping
         try:
             pods = self.k8s_client.list_namespaced_pod(
                 namespace=namespace,
@@ -933,7 +966,7 @@ class BenchmarkRunner:
                 node_name = pod.spec.node_name
                 pod_name = pod.metadata.name
                 
-                # Determine service type from pod labels
+                # service type from pod labels
                 labels = pod.metadata.labels
                 role = labels.get('role', '')
                 region = labels.get('region', '')
@@ -960,14 +993,14 @@ class BenchmarkRunner:
         except Exception as e:
             logger.error(f"Error mapping storage pods to nodes: {e}")
         
-        # Make bucket mapping more robust
+        # make bucket mapping more robust
         bucket_mapping = {
             "minio-central": ["datasets", "intermediate", "results", "shared", "test-bucket"],
             "minio-edge-region1": ["edge-data", "region1-bucket"],
             "minio-edge-region2": ["region2-bucket"]
         }
         
-        # Map buckets to their storage nodes
+        # map buckets to their storage nodes
         for service, buckets in bucket_mapping.items():
             if service in storage_nodes:
                 node = storage_nodes[service]
@@ -977,11 +1010,9 @@ class BenchmarkRunner:
                     if node not in bucket_to_nodes[bucket]:
                         bucket_to_nodes[bucket].append(node)
         
-        # More detailed logging
         logger.info(f"Storage nodes: {storage_nodes}")
         logger.info(f"Bucket to nodes mapping: {bucket_to_nodes}")
         
-        # Calculate data locality for pods
         data_locality_scores = []
         total_data_refs = 0
         local_data_refs = 0
@@ -1026,7 +1057,6 @@ class BenchmarkRunner:
                             pod_local_refs += 1
                             local_data_refs += 1
                 
-                # Log detailed data locality info for this pod
                 logger.info(f"Pod {pod_name} on node {pod_node}: {pod_local_refs} local refs out of {pod_total_refs} total")
                 for ref in pod_data_refs:
                     locality = "LOCAL" if ref['is_local'] else "REMOTE"
@@ -1048,34 +1078,65 @@ class BenchmarkRunner:
             logger.warning("No data references found for locality calculation")
             
     
-    
     def run_benchmarks(self):
         logger.info("Starting benchmark runs")
         
         benchmark_start_time = time.time()
+        success = True
         
-        self.prepare_environment()
-        
-        for workload_config in self.config.get('workloads', []):
-            workload_name = workload_config.get('name') if isinstance(workload_config, dict) else workload_config
-            iterations = workload_config.get('iterations', 3) if isinstance(workload_config, dict) else 3
+        try:
+            self.prepare_environment()
             
-            for scheduler in self.config.get('schedulers', []):
-                scheduler_name = scheduler.get('name') if isinstance(scheduler, dict) else scheduler
+            for workload_config in self.config.get('workloads', []):
+                workload_name = workload_config.get('name') if isinstance(workload_config, dict) else workload_config
+                iterations = workload_config.get('iterations', 3) if isinstance(workload_config, dict) else 3
                 
-                for iteration in range(1, iterations + 1):
-                    self.run_workload(workload_name, scheduler_name, iteration)            
-                    self._collect_network_metrics(workload_name, scheduler_name, iteration)
-        
-        self._compare_results()
-        self._compare_network_metrics()
-        
-        benchmark_end_time = time.time()
-        self.results["metadata"]["benchmark_duration"] = benchmark_end_time - benchmark_start_time
-        self._save_results()
-        self._generate_report()
-        
-        logger.info(f"Benchmark runs completed in {benchmark_end_time - benchmark_start_time:.2f} seconds")
+                for scheduler in self.config.get('schedulers', []):
+                    scheduler_name = scheduler.get('name') if isinstance(scheduler, dict) else scheduler
+                    
+                    for iteration in range(1, iterations + 1):
+                        try:
+                            workload_success = self.run_workload(workload_name, scheduler_name, iteration)
+                            if workload_success:
+                                self._collect_network_metrics(workload_name, scheduler_name, iteration)
+                            
+                            self._save_checkpoint()
+                        except Exception as e:
+                            logger.error(f"Error running workload {workload_name} with {scheduler_name} (iteration {iteration}): {e}")
+                            success = False
+            
+            try:
+                self._compare_results()
+                self._compare_network_metrics()
+            except Exception as e:
+                logger.error(f"Error in comparison phase: {e}")
+                success = False
+            
+        except Exception as e:
+            logger.error(f"Benchmark execution error: {e}")
+            success = False
+        finally:
+            benchmark_end_time = time.time()
+            self.results["metadata"]["benchmark_duration"] = benchmark_end_time - benchmark_start_time
+            self.results["metadata"]["benchmark_success"] = success
+            
+            saved = self._save_results()
+            if saved:
+                self._generate_report()
+            
+            if self.config.get('execution', {}).get('cleanup_temp_files', True):
+                try:
+                    for temp_file in self.temp_dir.glob(f"*{self.run_id}*"):
+                        if temp_file.is_file():
+                            temp_file.unlink()
+                    logger.info(f"Cleaned up temporary files for run {self.run_id}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up temporary files: {e}")
+            
+            logger.info(f"Benchmark runs completed in {benchmark_end_time - benchmark_start_time:.2f} seconds")
+            
+        return success
+    
     
     def _compare_results(self):
         logger.info("Comparing results between schedulers")
@@ -1186,28 +1247,33 @@ class BenchmarkRunner:
         logger.info("Results comparison completed")
     
     def _save_results(self):
-        """Save benchmark results to files"""
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_file = self.output_dir / f"benchmark_results_{self.run_id}_{timestamp}.json"
-        
-        with open(results_file, 'w') as f:
-            json.dump(self.results, f, default=str, indent=2)
-        
-        logger.info(f"Saved benchmark results to {results_file}")
-        
-        summary_file = self.output_dir / f"benchmark_summary_{self.run_id}_{timestamp}.csv"
-        
-        with open(summary_file, 'w') as f:
-            f.write("workload,scheduler,iteration,data_locality_score,avg_placement_latency,edge_placements,cloud_placements,total_placements\n")
+        """Save benchmark results to files with error handling"""
+        try:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            results_file = self.output_dir / f"benchmark_results_{self.run_id}_{timestamp}.json"
             
-            for workload_key, metrics in self.results["metrics"].items():
-                parts = workload_key.rsplit('_', 2)
-                if len(parts) >= 3:
+            with open(results_file, 'w') as f:
+                json.dump(self.results, f, default=str, indent=2)
+            
+            logger.info(f"Saved benchmark results to {results_file}")
+            
+            summary_file = self.output_dir / f"benchmark_summary_{self.run_id}_{timestamp}.csv"
+            
+            with open(summary_file, 'w') as f:
+                f.write("workload,scheduler,iteration,data_locality_score,avg_placement_latency,edge_placements,cloud_placements,total_placements,local_data_percentage,cross_region_data_percentage\n")
+                
+                for workload_key, metrics in self.results["metrics"].items():
+                    parts = workload_key.rsplit('_', 2)
+                    if len(parts) < 3:
+                        continue
+                    
                     workload = parts[0]
                     scheduler = parts[1]
                     iteration = parts[2]
                     
-                    data_locality_score = metrics.get("data_locality_score", "")
+                    data_locality_score = 0
+                    if "data_locality_metrics" in metrics and "overall_score" in metrics["data_locality_metrics"]:
+                        data_locality_score = metrics["data_locality_metrics"]["overall_score"]
                     
                     avg_placement_latency = ""
                     if "scheduling_metrics" in metrics and "avg_placement_latency" in metrics["scheduling_metrics"]:
@@ -1224,10 +1290,28 @@ class BenchmarkRunner:
                         elif pod.get("node_type") == "cloud":
                             cloud_placements += 1
                     
-                    f.write(f"{workload},{scheduler},{iteration},{data_locality_score},{avg_placement_latency},{edge_placements},{cloud_placements},{total_placements}\n")
-        
-        logger.info(f"Saved benchmark summary to {summary_file}")
-    
+                    local_data_percentage = 0
+                    cross_region_data_percentage = 0
+                    
+                    if "network_metrics" in metrics:
+                        local_data_percentage = metrics["network_metrics"].get("local_data_percentage", 0)
+                        cross_region_data_percentage = metrics["network_metrics"].get("cross_region_data_percentage", 0)
+                    
+                    f.write(f"{workload},{scheduler},{iteration},{data_locality_score},{avg_placement_latency},{edge_placements},{cloud_placements},{total_placements},{local_data_percentage},{cross_region_data_percentage}\n")
+            
+            logger.info(f"Saved benchmark summary to {summary_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving results: {e}")
+            # Try to save to an alternative location
+            try:
+                emergency_file = Path(f"benchmark_results_emergency_{self.run_id}.json")
+                with open(emergency_file, 'w') as f:
+                    json.dump(self.results, f, default=str)
+                logger.warning(f"Saved emergency backup to {emergency_file}")
+            except Exception as backup_error:
+                logger.critical(f"Failed to save emergency backup: {backup_error}")
+            return False
     
     def _generate_report(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
