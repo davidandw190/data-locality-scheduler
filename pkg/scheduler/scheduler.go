@@ -565,7 +565,6 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 		}
 	}
 
-	// remove nodes that no longer exist or are no longer storage nodes
 	currentStorageNodes := s.storageIndex.GetAllStorageNodes()
 	for _, node := range currentStorageNodes {
 		if node.ServiceType == storage.StorageServiceMinio && !existingStorageNodes[node.Name] {
@@ -616,19 +615,63 @@ func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error 
 
 	if dataItemCount == 0 {
 		klog.Info("No data items found, attempting more aggressive discovery...")
-		time.Sleep(2 * time.Second)
 
-		serviceNames := []struct {
-			name     string
-			endpoint string
-		}{
-			{"minio", "minio.data-locality-scheduler.svc.cluster.local:9000"},
-			{"minio-edge-region1", "minio-edge-region1.data-locality-scheduler.svc.cluster.local:9000"},
-			{"minio-edge-region2", "minio-edge-region2.data-locality-scheduler.svc.cluster.local:9000"},
+		namespaces := []string{
+			"data-locality-scheduler",
+			"scheduler-benchmark",
 		}
 
-		for _, svc := range serviceNames {
-			minioIndexer.RegisterMinioService(svc.name, svc.endpoint, false)
+		servicePatterns := []struct {
+			namePrefix string
+			domains    []string
+			ports      []int
+		}{
+			{
+				namePrefix: "minio",
+				domains:    []string{".svc.cluster.local"},
+				ports:      []int{9000},
+			},
+			{
+				namePrefix: "minio-central",
+				domains:    []string{".svc.cluster.local"},
+				ports:      []int{9000},
+			},
+			{
+				namePrefix: "minio-edge-region1",
+				domains:    []string{".svc.cluster.local"},
+				ports:      []int{9000},
+			},
+			{
+				namePrefix: "minio-edge-region2",
+				domains:    []string{".svc.cluster.local"},
+				ports:      []int{9000},
+			},
+		}
+
+		for _, ns := range namespaces {
+			for _, svcPattern := range servicePatterns {
+				for _, domain := range svcPattern.domains {
+					for _, port := range svcPattern.ports {
+						var serviceName, endpoint string
+
+						if ns == "" {
+							serviceName = svcPattern.namePrefix
+							endpoint = fmt.Sprintf("%s%s:%d", svcPattern.namePrefix, domain, port)
+						} else {
+							serviceName = fmt.Sprintf("%s-%s", svcPattern.namePrefix, ns)
+							endpoint = fmt.Sprintf("%s.%s%s:%d", svcPattern.namePrefix, ns, domain, port)
+						}
+
+						klog.V(4).Infof("Attempting to register MinIO service %s at %s", serviceName, endpoint)
+						minioIndexer.RegisterMinioService(serviceName, endpoint, false)
+					}
+				}
+			}
+		}
+
+		// we try direct IP-based discovery as a last resort
+		if err := s.discoverMinioByPodIP(ctx, minioIndexer); err != nil {
+			klog.Warningf("Pod IP-based MinIO discovery failed: %v", err)
 		}
 
 		if err := minioIndexer.RefreshIndex(ctx); err != nil {
@@ -640,9 +683,84 @@ func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error 
 		s.storageMutex.RUnlock()
 
 		klog.Infof("After aggressive discovery: found %d data items", dataItemCount)
+
+		if dataItemCount == 0 && s.enableMockData {
+			klog.Warning("No MinIO data items found after exhaustive discovery. Creating mock data.")
+			s.storageIndex.MockMinioData()
+			s.bandwidthGraph.MockNetworkPaths()
+		}
 	}
 
 	minioIndexer.StartRefresher(ctx)
+	return nil
+}
+
+func (s *Scheduler) discoverMinioByPodIP(ctx context.Context, indexer *minio.Indexer) error {
+	namespaces := []string{"data-locality-scheduler", "scheduler-benchmark", ""}
+
+	var podList *v1.PodList
+	var err error
+
+	for _, ns := range namespaces {
+		labelSelectors := []string{
+			"app=minio",
+			"app in (minio,minio-edge,minio-central)",
+			"role in (central,edge)",
+		}
+
+		for _, selector := range labelSelectors {
+			options := metav1.ListOptions{
+				LabelSelector: selector,
+			}
+
+			if ns == "" {
+				podList, err = s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, options)
+			} else {
+				podList, err = s.clientset.CoreV1().Pods(ns).List(ctx, options)
+			}
+
+			if err != nil {
+				klog.Warningf("Failed to list pods with selector %s in namespace %s: %v",
+					selector, ns, err)
+				continue
+			}
+
+			if len(podList.Items) == 0 {
+				continue
+			}
+
+			klog.Infof("Found %d potential MinIO pods with selector %s in namespace %s",
+				len(podList.Items), selector, ns)
+
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != v1.PodRunning || pod.Status.PodIP == "" {
+					continue
+				}
+
+				var port int32 = 9000
+				for _, container := range pod.Spec.Containers {
+					for _, containerPort := range container.Ports {
+						if containerPort.ContainerPort == 9000 {
+							port = containerPort.ContainerPort
+							break
+						}
+					}
+				}
+
+				endpoint := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
+				serviceName := fmt.Sprintf("%s-%s", pod.Name, pod.Namespace)
+
+				klog.Infof("Registering MinIO pod %s/%s with IP %s",
+					pod.Namespace, pod.Name, endpoint)
+				indexer.RegisterMinioService(serviceName, endpoint, false)
+
+				if pod.Spec.NodeName != "" {
+					klog.Infof("Registering pod's node %s as storage endpoint", pod.Spec.NodeName)
+					indexer.RegisterMinioNode(pod.Spec.NodeName, endpoint, false)
+				}
+			}
+		}
+	}
 
 	return nil
 }

@@ -182,8 +182,7 @@ class WorkloadSimulator:
         
         logger.info(f"Uploading data to: {urn} ({size_bytes} bytes)")
         
-        # Determine which MinIO service to use based on bucket
-        minio_service = "minio"  # Default to central
+        minio_service = "minio"  
         if bucket in ["edge-data", "region1-bucket"]:
             minio_service = "region1"
         elif bucket in ["region2-bucket"]:
@@ -247,6 +246,29 @@ class WorkloadSimulator:
         
         start_time = time.time()
         
+        node_name = os.environ.get("NODE_NAME", "unknown")
+        region = os.environ.get("NODE_REGION", "unknown")
+        pod_name = os.environ.get("POD_NAME", "unknown")
+        data_refs = []
+        
+        for k, v in os.environ.items():
+            if k.startswith("DATA_SCHEDULER_THESIS_INPUT") or k.startswith("DATA_SCHEDULER_THESIS_OUTPUT"):
+                data_refs.append(f"{k}={v}")
+        
+        logger.info(f"Pod {pod_name} running on node {node_name} (region: {region})")
+        logger.info(f"Data references: {data_refs}")
+        
+        duration_override = os.environ.get("WORKLOAD_DURATION")
+        if duration_override:
+            try:
+                self.duration = int(duration_override)
+                logger.info(f"Using override duration: {self.duration}s")
+            except ValueError:
+                logger.warning(f"Invalid duration override: {duration_override}")
+        
+        if not hasattr(self, 'mc_configured'):
+            self._configure_minio_clients()
+        
         input_files = []
         for data_ref in self.input_data:
             for attempt in range(3):  
@@ -255,6 +277,8 @@ class WorkloadSimulator:
                     if file_path:
                         input_files.append(file_path)
                         break
+                    else:
+                        logger.warning(f"Download failed for {data_ref['urn']}, attempt {attempt+1}")
                 except Exception as e:
                     logger.warning(f"Download attempt {attempt+1} failed: {e}")
                     time.sleep(2) 
@@ -264,67 +288,38 @@ class WorkloadSimulator:
             if i < len(self.input_data):
                 logger.info(f"Input {i+1}: {self.input_data[i]['urn']} -> {file_path}")
         
-        if action in ['extract', 'collect']:
-            for file_path in input_files:
-                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-                logger.info(f"Extracting data from {file_path} ({file_size} bytes)")
-                
-                if file_size == 0:
-                    logger.warning(f"Empty or non-existent file: {file_path}")
-                    continue
-                    
-                with open(file_path, 'rb') as f:
-                    chunk_size = 1024 * 1024  # 1MB
-                    chunks_read = 0
-                    while True:
-                        data = f.read(chunk_size)
-                        if not data:
-                            break
-                        checksum = sum(data)
-                        chunks_read += 1
-                        if chunks_read % 10 == 0:
-                            logger.info(f"Processed {chunks_read} chunks ({chunks_read * chunk_size / 1024 / 1024:.2f} MB)")
-                
-                time.sleep(1) 
+        local_refs = 0
+        total_refs = len(self.input_data) + len(self.output_data)
         
+        for i, file_path in enumerate(input_files):
+            if i < len(self.input_data):
+
+                urn = self.input_data[i]['urn']
+                bucket = urn.split('/')[0] if '/' in urn else urn
+                
+                is_local = False
+                if (bucket in node_name or 
+                    node_name in bucket or 
+                    ('edge' in bucket and 'edge' in node_name) or
+                    ('cloud' in bucket and 'cloud' in node_name) or
+                    ('central' in bucket and 'cloud' in node_name) or
+                    ('region1' in bucket and 'region-1' in region) or
+                    ('region2' in bucket and 'region-2' in region)):
+                    is_local = True
+                    local_refs += 1
+                    logger.info(f"Data appears to be LOCAL: {urn} on node {node_name}")
+                else:
+                    logger.info(f"Data appears to be REMOTE: {urn} on node {node_name}")
+        
+
+        if action in ['extract', 'collect']:
+            self._perform_data_extraction(input_files)
         elif action in ['transform', 'process', 'analyze']:
-            # More CPU-intensive operations
-            for file_path in input_files:
-                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-                logger.info(f"Processing data from {file_path} ({file_size} bytes)")
-                
-                if file_size == 0:
-                    logger.warning(f"Empty or non-existent file: {file_path}")
-                    continue
-                    
-                processing_start = time.time()
-                with open(file_path, 'rb') as f:
-                    chunk_size = 1024 * 1024 
-                    chunks_read = 0
-                    while True:
-                        data = f.read(chunk_size)
-                        if not data:
-                            break
-                        
-                        for _ in range(100): 
-                            _ = hash(data)
-                        
-                        chunks_read += 1
-                        if chunks_read % 10 == 0:
-                            logger.info(f"Processed {chunks_read} chunks ({chunks_read * chunk_size / 1024 / 1024:.2f} MB)")
-                
-                processing_time = time.time() - processing_start
-                logger.info(f"Finished processing in {processing_time:.2f} seconds")
-                
-                intensity_multiplier = self._get_intensity_multiplier()
-                computation_time = 2 * intensity_multiplier
-                logger.info(f"Performing additional computation for {computation_time:.2f} seconds")
-                
-                computation_start = time.time()
-                while time.time() - computation_start < computation_time:
-                    _ = [i * i for i in range(10000)]
-                
-                time.sleep(1)
+            self._perform_data_transformation(input_files)
+        elif action in ['train', 'predict']:
+            self._perform_model_training(input_files)
+        else:
+            self._perform_generic_processing(input_files)
         
         uploaded_outputs = 0
         for data_ref in self.output_data:
@@ -333,6 +328,18 @@ class WorkloadSimulator:
                     success = self._upload_data(data_ref)
                     if success:
                         uploaded_outputs += 1
+                        bucket = data_ref['urn'].split('/')[0] if '/' in data_ref['urn'] else data_ref['urn']
+                        if (bucket in node_name or 
+                            node_name in bucket or
+                            ('edge' in bucket and 'edge' in node_name) or
+                            ('cloud' in bucket and 'cloud' in node_name) or
+                            ('central' in bucket and 'cloud' in node_name) or
+                            ('region1' in bucket and 'region-1' in region) or
+                            ('region2' in bucket and 'region-2' in region)):
+                            local_refs += 1
+                            logger.info(f"Output appears to be LOCAL: {data_ref['urn']} on node {node_name}")
+                        else:
+                            logger.info(f"Output appears to be REMOTE: {data_ref['urn']} on node {node_name}")
                         break
                     else:
                         logger.warning(f"Upload attempt {attempt+1} failed")
@@ -344,8 +351,11 @@ class WorkloadSimulator:
         end_time = time.time()
         duration = end_time - start_time
         
+        data_locality_score = local_refs / total_refs if total_refs > 0 else 0
+        
         logger.info(f"Completed action: {action} in {duration:.2f} seconds")
         logger.info(f"Processed {len(input_files)} input files, generated {uploaded_outputs} output files")
+        logger.info(f"Data locality score: {data_locality_score:.2f} ({local_refs} local refs out of {total_refs} total)")
         
         return {
             'action': action,
@@ -353,9 +363,66 @@ class WorkloadSimulator:
             'end_time': end_time,
             'duration': duration,
             'input_files_processed': len(input_files),
-            'output_files_generated': uploaded_outputs
+            'output_files_generated': uploaded_outputs,
+            'data_locality_score': data_locality_score,
+            'local_refs': local_refs,
+            'total_refs': total_refs
         }
 
+    def _configure_minio_clients(self):
+        """Configure MinIO clients for various services"""
+        logger.info("Configuring MinIO clients")
+        
+        minio_services = [
+            ("minio", "http://minio-central.scheduler-benchmark.svc.cluster.local:9000"),
+            ("region1", "http://minio-edge-region1.scheduler-benchmark.svc.cluster.local:9000"),
+            ("region2", "http://minio-edge-region2.scheduler-benchmark.svc.cluster.local:9000"),
+            
+            ("minio", "http://minio.data-locality-scheduler.svc.cluster.local:9000"),
+            ("region1", "http://minio-edge-region1.data-locality-scheduler.svc.cluster.local:9000"),
+            ("region2", "http://minio-edge-region2.data-locality-scheduler.svc.cluster.local:9000"),
+            
+            ("minio", "http://minio-central:9000"),
+            ("region1", "http://minio-edge-region1:9000"),
+            ("region2", "http://minio-edge-region2:9000"),
+            
+            ("minio", "http://minio:9000"),
+            ("minio-central", "http://minio-central:9000"),
+        ]
+        
+        connected_services = []
+        for name, endpoint in minio_services:
+            try:
+                logger.info(f"Trying to connect to MinIO service {name} at {endpoint}")
+                cmd = f"mc config host add {name} {endpoint} minioadmin minioadmin"
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                if result.returncode == 0:
+                    logger.info(f"Successfully configured MinIO client for {name} at {endpoint}")
+                    connected_services.append(name)
+                    
+                    list_cmd = f"mc ls {name}/"
+                    list_result = subprocess.run(list_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    if list_result.returncode == 0:
+                        logger.info(f"Connection to {name} verified - listing buckets successful")
+                        buckets = list_result.stdout.decode().strip().split('\n')
+                        if buckets and buckets[0]:  # There are buckets
+                            logger.info(f"Found buckets on {name}: {len(buckets)}")
+                    else:
+                        logger.warning(f"Connection to {name} failed verification: {list_result.stderr.decode()}")
+                else:
+                    logger.warning(f"Failed to configure MinIO client for {name}: {result.stderr.decode()}")
+            except Exception as e:
+                logger.warning(f"Error configuring MinIO client for {name}: {e}")
+        
+        if not connected_services:
+            logger.error("Failed to connect to any MinIO service! Will use mock data instead.")
+        
+        self.mc_configured = True
+        self.connected_services = connected_services
+        return connected_services
+    
+    
     def _download_data(self, data_reference):
         """Actually download data from MinIO or create mock data if it doesn't exist"""
         urn = data_reference['urn']
@@ -372,7 +439,6 @@ class WorkloadSimulator:
         output_dir.mkdir(exist_ok=True)
         output_file = output_dir / f"{bucket}_{path.replace('/', '_')}"
         
-        # Determine which MinIO service to use based on bucket
         minio_service = "minio"  # Default to central
         if bucket in ["edge-data", "region1-bucket"]:
             minio_service = "region1"

@@ -584,7 +584,6 @@ class BenchmarkRunner:
         
         return True
     
-    
     def _wait_for_workload_completion(self, workload_name, scheduler_name, iteration):
         namespace = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
         workload_key = f"{workload_name}_{scheduler_name}_{iteration}"
@@ -592,14 +591,17 @@ class BenchmarkRunner:
         
         logger.info(f"Waiting for workload {workload_key} to complete")
         
-        max_wait_time = self.config.get('execution', {}).get('max_wait_time', 300)  # 5 minutes
-        poll_interval = self.config.get('execution', {}).get('poll_interval', 5)  # 5 seconds
+        max_wait_time = self.config.get('execution', {}).get('max_wait_time', 300)
+        
+        if workload_name in ['data-locality-test', 'ml-training-pipeline', 'data-intensive-workflow']:
+            max_wait_time = 600  # 10 minutes for data-intensive workloads
+        
+        poll_interval = self.config.get('execution', {}).get('poll_interval', 5)
         
         start_time = time.time()
-        pending_warning_threshold = 60  # Show detailed pending status after 60 seconds
+        pending_warning_threshold = 60  
         
         while time.time() - start_time < max_wait_time:
-            # Get pods from the workload with the specific run ID
             try:
                 pods = self.k8s_client.list_namespaced_pod(
                     namespace=namespace,
@@ -623,12 +625,18 @@ class BenchmarkRunner:
                     elif phase == 'Running':
                         still_running += 1
                         all_completed = False
+                        
+                        if pod.status.start_time:
+                            running_time = time.time() - pod.status.start_time.timestamp()
+                            if running_time > max_wait_time * 0.8:  # 80% of max wait time
+                                logger.warning(f"Pod {pod.metadata.name} has been running for {running_time:.0f}s, it may be stuck")
+                                self._check_pod_logs(pod.metadata.name, namespace)
                     elif phase == 'Succeeded':
                         completed += 1
                     elif phase == 'Failed':
                         failed += 1
-                        # we count failed pods as "completed" for benchmarking purposes
-                
+                        self._log_pod_failure(pod.metadata.name, namespace)
+                    
                 self.results["workloads"][workload_key]["pod_status"] = {
                     "total": len(pods.items),
                     "pending": still_pending,
@@ -637,52 +645,38 @@ class BenchmarkRunner:
                     "failed": failed
                 }
                 
-                if all_completed and len(pods.items) > 0:
+               
+                if (completed + failed) == len(pods.items) and len(pods.items) > 0:
                     logger.info(f"Workload {workload_key} completed: {completed} succeeded, {failed} failed")
                     self.results["workloads"][workload_key]["status"] = "completed"
                     self.results["workloads"][workload_key]["completion_time"] = time.time()
                     self.results["workloads"][workload_key]["duration"] = time.time() - start_time
                     break
                 
+                if failed == len(pods.items) and len(pods.items) > 0:
+                    logger.warning(f"Workload {workload_key} failed: all {failed} pods failed")
+                    self.results["workloads"][workload_key]["status"] = "failed"
+                    self.results["workloads"][workload_key]["completion_time"] = time.time()
+                    self.results["workloads"][workload_key]["duration"] = time.time() - start_time
+                    break
+                
                 elapsed_time = time.time() - start_time
-                if still_pending > 0 and elapsed_time > pending_warning_threshold:
-                    pending_warning_threshold += 60 
+                if (still_pending > 0 or still_running > 0) and elapsed_time > pending_warning_threshold:
+                    pending_warning_threshold += 60  # Increase for next warning
                     
-                    logger.warning(f"Pods have been pending for {elapsed_time:.0f} seconds. Checking details...")
-                    
-                    for pod in pending_pods:
-                        pod_name = pod.metadata.name
-                        cmd = f"kubectl describe pod {pod_name} -n {namespace}"
-                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    if still_pending > 0:
+                        logger.warning(f"Pods have been pending for {elapsed_time:.0f} seconds. Checking details...")
                         
-                        if result.returncode == 0:
-                            describe_output = result.stdout
-                            logger.warning(f"Pod {pod_name} status details:")
-                            
-                            status_lines = []
-                            events_found = False
-                            for line in describe_output.split('\n'):
-                                if line.startswith("Status:"):
-                                    status_lines.append(line)
-                                elif "Conditions:" in line:
-                                    status_lines.append(line)
-                                elif line.strip().startswith("Type") and line.strip().endswith("Status  Reason"):
-                                    status_lines.append(line)
-                                    events_found = True
-                                elif events_found and line.strip().startswith(("Normal", "Warning")):
-                                    status_lines.append(line)
-                            
-                            for line in status_lines:
-                                logger.warning(f"  {line.strip()}")
+                        for pod in pending_pods:
+                            self._check_pod_scheduling_issues(pod.metadata.name, namespace)
                     
-                    scheduler_logs_cmd = f"kubectl logs -l app=data-locality-scheduler -n {namespace} --tail=20"
-                    scheduler_logs = subprocess.run(scheduler_logs_cmd, shell=True, capture_output=True, text=True)
-                    
-                    if scheduler_logs.returncode == 0:
-                        logger.warning("Recent scheduler logs:")
-                        for line in scheduler_logs.stdout.split('\n')[-10:]:
-                            logger.warning(f"  {line.strip()}")
-
+                    if still_pending > 0 and elapsed_time > 120:  
+                        self._check_cluster_resources(namespace)
+                        
+                    if still_running > 0 and elapsed_time > 180:  
+                        for pod in pods.items:
+                            if pod.status.phase == 'Running':
+                                self._check_pod_logs(pod.metadata.name, namespace)
                 
                 logger.info(f"Workload {workload_key}: {still_pending} pending, {still_running} running, {completed} completed, {failed} failed")
                 time.sleep(poll_interval)
@@ -697,7 +691,77 @@ class BenchmarkRunner:
             self.results["workloads"][workload_key]["completion_time"] = time.time()
             self.results["workloads"][workload_key]["duration"] = max_wait_time
             
+            # Collect logs from running/pending pods for timeout diagnosis
+            try:
+                pods = self.k8s_client.list_namespaced_pod(
+                    namespace=namespace,
+                    label_selector=f"benchmark-run-id={self.run_id},workload={workload_name},iteration={iteration}"
+                )
+                
+                for pod in pods.items:
+                    if pod.status.phase in ['Running', 'Pending']:
+                        logger.warning(f"Pod {pod.metadata.name} did not complete in time")
+                        self._check_pod_logs(pod.metadata.name, namespace, tail_lines=50)
+            except Exception as e:
+                logger.error(f"Failed to collect logs from timed out pods: {e}")
+
+    def _check_pod_scheduling_issues(self, pod_name, namespace):
+        """Check why a pod is not being scheduled"""
+        try:
+            cmd = f"kubectl describe pod {pod_name} -n {namespace}"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             
+            if result.returncode == 0:
+                describe_output = result.stdout
+                
+                # extract events from pod description
+                events_section = describe_output.split("Events:")[1] if "Events:" in describe_output else ""
+                if events_section and "FailedScheduling" in events_section:
+                    logger.warning(f"Pod {pod_name} scheduling issues found:")
+                    for line in events_section.splitlines():
+                        if "FailedScheduling" in line:
+                            logger.warning(f"  {line.strip()}")
+            
+            scheduler_logs_cmd = f"kubectl logs -l app=data-locality-scheduler -n {namespace} --tail=20"
+            scheduler_logs = subprocess.run(scheduler_logs_cmd, shell=True, capture_output=True, text=True)
+            
+            if scheduler_logs.returncode == 0 and pod_name in scheduler_logs.stdout:
+                logger.warning(f"Recent scheduler logs for pod {pod_name}:")
+                for line in scheduler_logs.stdout.splitlines():
+                    if pod_name in line:
+                        logger.warning(f"  {line.strip()}")
+        except Exception as e:
+            logger.error(f"Error checking pod scheduling issues: {e}")
+
+    def _check_pod_logs(self, pod_name, namespace, tail_lines=20):
+        """Check logs from a pod to diagnose issues"""
+        try:
+            cmd = f"kubectl logs {pod_name} -n {namespace} --tail={tail_lines}"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            
+            if result.returncode == 0 and result.stdout:
+                logger.info(f"Recent logs from pod {pod_name}:")
+                for line in result.stdout.splitlines()[-5:]:  # Show just last 5 lines in info logs
+                    logger.info(f"  {line.strip()}")
+            else:
+                logger.warning(f"No logs available from pod {pod_name} or error retrieving logs: {result.stderr}")
+        except Exception as e:
+            logger.error(f"Error checking pod logs: {e}")
+
+    def _check_cluster_resources(self, namespace):
+        """Check cluster resource utilization"""
+        try:
+            cmd = "kubectl describe nodes | grep -A 5 'Allocated resources'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.warning("Cluster resource utilization:")
+                for line in result.stdout.splitlines():
+                    if any(x in line for x in ["CPU", "Memory", "Allocated", "Resource"]):
+                        logger.warning(f"  {line.strip()}")
+        except Exception as e:
+            logger.error(f"Error checking cluster resources: {e}")
+                
     def _collect_workload_metrics(self, workload_name, scheduler_name, iteration):
         namespace = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
         workload_key = f"{workload_name}_{scheduler_name}_{iteration}"
@@ -835,26 +899,38 @@ class BenchmarkRunner:
         except ApiException as e:
             logger.error(f"Error collecting pod metrics: {e}")
     
-    
-        
     def _calculate_data_locality_metrics(self, pod_metrics, workload_name, scheduler_name, iteration):
         namespace = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
         workload_key = f"{workload_name}_{scheduler_name}_{iteration}"
         
         logger.info(f"Calculating data locality metrics for {workload_key}")
         
-        # Ensure we have the latest mapping
         self._map_buckets_to_nodes()
         
         storage_nodes = {}
         bucket_to_nodes = {}
-        
-        # Get the current storage service to node mapping
+
         try:
             pods = self.k8s_client.list_namespaced_pod(
                 namespace=namespace,
                 label_selector="app=minio"
             )
+            
+            if not pods.items:
+                pods = self.k8s_client.list_namespaced_pod(
+                    namespace=namespace,
+                    label_selector="app in (minio,minio-edge,minio-central)"
+                )
+            
+            # # Also look in the data-locality-scheduler namespace as fallback
+            # if not pods.items:
+            #     try:
+            #         pods = self.k8s_client.list_namespaced_pod(
+            #             namespace="data-locality-scheduler",
+            #             label_selector="app in (minio,minio-edge,minio-central)"
+            #         )
+            #     except Exception:
+            #         pass
             
             for pod in pods.items:
                 if pod.status.phase != 'Running' or not pod.spec.node_name:
@@ -863,26 +939,11 @@ class BenchmarkRunner:
                 node_name = pod.spec.node_name
                 pod_name = pod.metadata.name
                 
-                # Determine service type from pod labels
-                labels = pod.metadata.labels
+                labels = pod.metadata.labels or {}
                 role = labels.get('role', '')
                 region = labels.get('region', '')
                 
-                service_name = None
-                if 'central' in pod_name or role == 'central':
-                    service_name = "minio-central"
-                elif ('region1' in pod_name or region == 'region-1') and ('edge' in pod_name or role == 'edge'):
-                    service_name = "minio-edge-region1"
-                elif ('region2' in pod_name or region == 'region-2') and ('edge' in pod_name or role == 'edge'):
-                    service_name = "minio-edge-region2"
-                else:
-                    # Try to infer from the name
-                    if 'central' in pod_name:
-                        service_name = "minio-central"
-                    elif 'region1' in pod_name or 'region-1' in pod_name:
-                        service_name = "minio-edge-region1"
-                    elif 'region2' in pod_name or 'region-2' in pod_name:
-                        service_name = "minio-edge-region2"
+                service_name = self._determine_service_name(pod_name, role, region)
                 
                 if service_name:
                     storage_nodes[service_name] = node_name
@@ -890,42 +951,62 @@ class BenchmarkRunner:
         except Exception as e:
             logger.error(f"Error mapping storage pods to nodes: {e}")
         
-        # Make bucket mapping more robust
-        bucket_mapping = {
-            "minio-central": ["datasets", "intermediate", "results", "shared", "test-bucket"],
-            "minio-edge-region1": ["edge-data", "region1-bucket"],
-            "minio-edge-region2": ["region2-bucket"]
-        }
+        self._map_buckets_to_nodes_robust(storage_nodes, bucket_to_nodes)
         
-        # Map buckets to their storage nodes
-        for service, buckets in bucket_mapping.items():
-            if service in storage_nodes:
-                node = storage_nodes[service]
-                for bucket in buckets:
-                    if bucket not in bucket_to_nodes:
-                        bucket_to_nodes[bucket] = []
-                    if node not in bucket_to_nodes[bucket]:
-                        bucket_to_nodes[bucket].append(node)
-        
-        # More detailed logging
         logger.info(f"Storage nodes: {storage_nodes}")
         logger.info(f"Bucket to nodes mapping: {bucket_to_nodes}")
         
-        # Calculate data locality for pods
         data_locality_scores = []
         total_data_refs = 0
         local_data_refs = 0
+        same_zone_refs = 0
+        same_region_refs = 0
+        cross_region_refs = 0
+        total_data_size = 0
+        local_data_size = 0
+        
+        pod_node_topology = {}
+        
+        for pod_metric in pod_metrics:
+            pod_name = pod_metric.get('pod_name', 'unknown')
+            pod_node = pod_metric.get('node')
+            
+            if not pod_node:
+                continue
+                
+            try:
+                node = self.k8s_client.read_node(pod_node)
+                region = node.metadata.labels.get('topology.kubernetes.io/region', '')
+                zone = node.metadata.labels.get('topology.kubernetes.io/zone', '')
+                node_type = node.metadata.labels.get('node-capability/node-type', 'unknown')
+                
+                pod_node_topology[pod_name] = {
+                    'node': pod_node,
+                    'region': region,
+                    'zone': zone,
+                    'node_type': node_type
+                }
+            except Exception as e:
+                logger.warning(f"Failed to get topology for node {pod_node}: {e}")
         
         for pod_metric in pod_metrics:
             pod_name = pod_metric.get('pod_name', 'unknown')
             pod_node = pod_metric.get('node')
             data_refs = pod_metric.get('data_annotations', {})
             
-            if data_refs and pod_node:
+            if data_refs and pod_node and pod_name in pod_node_topology:
                 logger.debug(f"Analyzing data locality for pod {pod_name} on node {pod_node}")
                 pod_local_refs = 0
+                pod_same_zone_refs = 0
+                pod_same_region_refs = 0
+                pod_cross_region_refs = 0
                 pod_total_refs = 0
                 pod_data_refs = []
+                pod_total_data_size = 0
+                pod_local_data_size = 0
+                
+                pod_region = pod_node_topology[pod_name]['region']
+                pod_zone = pod_node_topology[pod_name]['zone']
                 
                 for key, value in data_refs.items():
                     if key.startswith('data.scheduler.thesis/input-') or key.startswith('data.scheduler.thesis/output-'):
@@ -934,49 +1015,230 @@ class BenchmarkRunner:
                         
                         parts = value.split(',')
                         data_path = parts[0]
+                        data_size = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+                        
+                        pod_total_data_size += data_size
+                        total_data_size += data_size
+                        
                         bucket = data_path.split('/')[0] if '/' in data_path else data_path
                         
                         is_local = False
+                        is_same_zone = False
+                        is_same_region = False
                         storage_node = None
+                        storage_region = ""
+                        storage_zone = ""
+                        
                         if bucket in bucket_to_nodes:
-                            storage_node = ', '.join(bucket_to_nodes[bucket])
-                            if pod_node in bucket_to_nodes[bucket]:
+                            bucket_nodes = bucket_to_nodes[bucket]
+                            if pod_node in bucket_nodes:
                                 is_local = True
+                                storage_node = pod_node
+                                storage_region = pod_region
+                                storage_zone = pod_zone
                                 logger.info(f"Local data reference found: {data_path} on node {pod_node}")
+                            else:
+                                for node_name in bucket_nodes:
+                                    try:
+                                        if node_name in pod_node_topology:
+                                            node_region = pod_node_topology[node_name]['region']
+                                            node_zone = pod_node_topology[node_name]['zone']
+                                        else:
+                                            node = self.k8s_client.read_node(node_name)
+                                            node_region = node.metadata.labels.get('topology.kubernetes.io/region', '')
+                                            node_zone = node.metadata.labels.get('topology.kubernetes.io/zone', '')
+                                            
+                                            pod_node_topology[node_name] = {
+                                                'node': node_name,
+                                                'region': node_region,
+                                                'zone': node_zone
+                                            }
+                                        
+                                        if not storage_node:
+                                            storage_node = node_name
+                                            storage_region = node_region
+                                            storage_zone = node_zone
+                                        
+                                        if pod_zone and node_zone and pod_zone == node_zone:
+                                            is_same_zone = True
+                                            break
+                                        elif pod_region and node_region and pod_region == node_region:
+                                            is_same_region = True
+                                    except Exception as e:
+                                        logger.warning(f"Error checking node {node_name} topology: {e}")
+                        
+                        data_locality = "UNKNOWN"
+                        if is_local:
+                            data_locality = "LOCAL"
+                            pod_local_refs += 1
+                            local_data_refs += 1
+                            pod_local_data_size += data_size
+                            local_data_size += data_size
+                        elif is_same_zone:
+                            data_locality = "SAME_ZONE"
+                            pod_same_zone_refs += 1
+                            same_zone_refs += 1
+                        elif is_same_region:
+                            data_locality = "SAME_REGION"
+                            pod_same_region_refs += 1
+                            same_region_refs += 1
+                        else:
+                            data_locality = "CROSS_REGION"
+                            pod_cross_region_refs += 1
+                            cross_region_refs += 1
                         
                         pod_data_refs.append({
                             'key': key,
                             'path': data_path,
                             'bucket': bucket,
-                            'is_local': is_local,
-                            'storage_node': storage_node
+                            'size': data_size,
+                            'locality': data_locality,
+                            'storage_node': storage_node,
+                            'storage_region': storage_region,
+                            'storage_zone': storage_zone
                         })
-                        
-                        if is_local:
-                            pod_local_refs += 1
-                            local_data_refs += 1
                 
-                # Log detailed data locality info for this pod
-                logger.info(f"Pod {pod_name} on node {pod_node}: {pod_local_refs} local refs out of {pod_total_refs} total")
+                logger.info(f"Pod {pod_name} on node {pod_node} ({pod_region}/{pod_zone}): "
+                            f"{pod_local_refs} local, {pod_same_zone_refs} same zone, "
+                            f"{pod_same_region_refs} same region, {pod_cross_region_refs} cross region "
+                            f"out of {pod_total_refs} total refs")
+                
                 for ref in pod_data_refs:
-                    locality = "LOCAL" if ref['is_local'] else "REMOTE"
-                    logger.info(f"  {ref['key']} = {ref['path']} ({locality}) - Storage on: {ref['storage_node']}")
+                    logger.info(f"  {ref['key']} = {ref['path']} ({ref['locality']}) - "
+                            f"Storage on: {ref['storage_node']} ({ref['storage_region']}/{ref['storage_zone']})")
                 
                 if pod_total_refs > 0:
-                    pod_locality_score = pod_local_refs / pod_total_refs
-                    pod_metric['data_locality_score'] = pod_locality_score
+                    # Calculate a weighted locality score
+                    # LOCAL: 1.0, SAME_ZONE: 0.8, SAME_REGION: 0.5, CROSS_REGION: 0.0
+                    locality_weight_sum = (
+                        pod_local_refs * 1.0 + 
+                        pod_same_zone_refs * 0.8 + 
+                        pod_same_region_refs * 0.5
+                    )
+                    pod_locality_score = locality_weight_sum / pod_total_refs
+                    
+                    size_weighted_score = 0
+                    if pod_total_data_size > 0:
+                        size_weighted_score = pod_local_data_size / pod_total_data_size
+                    
+                    pod_metric['data_locality'] = {
+                        'score': pod_locality_score,
+                        'local_refs': pod_local_refs,
+                        'same_zone_refs': pod_same_zone_refs,
+                        'same_region_refs': pod_same_region_refs,
+                        'cross_region_refs': pod_cross_region_refs,
+                        'total_refs': pod_total_refs,
+                        'size_weighted_score': size_weighted_score,
+                        'total_data_size': pod_total_data_size,
+                        'local_data_size': pod_local_data_size
+                    }
+                    
                     data_locality_scores.append(pod_locality_score)
-                    logger.info(f"Pod {pod_name} data locality score: {pod_locality_score:.4f}")
+                    logger.info(f"Pod {pod_name} data locality score: {pod_locality_score:.4f}, "
+                            f"Size-weighted: {size_weighted_score:.4f}")
         
-        logger.info(f"Total data refs: {total_data_refs}, Local refs: {local_data_refs}")
+        logger.info(f"Total data refs: {total_data_refs}, Local refs: {local_data_refs}, "
+                f"Same zone: {same_zone_refs}, Same region: {same_region_refs}, "
+                f"Cross region: {cross_region_refs}")
         
         if total_data_refs > 0:
             overall_locality_score = local_data_refs / total_data_refs
-            logger.info(f"Overall data locality score: {overall_locality_score:.4f}")
-        else:
-            overall_locality_score = 0
-            logger.warning("No data references found for locality calculation")
             
+            weighted_locality_sum = (
+                local_data_refs * 1.0 + 
+                same_zone_refs * 0.8 + 
+                same_region_refs * 0.5
+            )
+            weighted_locality_score = weighted_locality_sum / total_data_refs
+            
+            size_weighted_locality = 0
+            if total_data_size > 0:
+                size_weighted_locality = local_data_size / total_data_size
+            
+            logger.info(f"Overall data locality score: {overall_locality_score:.4f}")
+            logger.info(f"Weighted locality score: {weighted_locality_score:.4f}")
+            logger.info(f"Size-weighted locality: {size_weighted_locality:.4f}")
+            
+            self.results["metrics"][workload_key]["data_locality_metrics"] = {
+                "overall_score": overall_locality_score,
+                "weighted_score": weighted_locality_score,
+                "size_weighted_score": size_weighted_locality,
+                "local_refs": local_data_refs,
+                "same_zone_refs": same_zone_refs,
+                "same_region_refs": same_region_refs,
+                "cross_region_refs": cross_region_refs,
+                "total_refs": total_data_refs,
+                "local_data_size": local_data_size,
+                "total_data_size": total_data_size
+            }
+        else:
+            logger.warning("No data references found for locality calculation")
+            self.results["metrics"][workload_key]["data_locality_metrics"] = {
+                "overall_score": 0,
+                "weighted_score": 0,
+                "size_weighted_score": 0,
+                "local_refs": 0,
+                "same_zone_refs": 0,
+                "same_region_refs": 0,
+                "cross_region_refs": 0,
+                "total_refs": 0,
+                "local_data_size": 0,
+                "total_data_size": 0
+            }
+
+    def _determine_service_name(self, pod_name, role, region):
+        """Determine MinIO service name from pod information"""
+        if 'minio-central' in pod_name or role == 'central':
+            return "minio-central"
+        elif 'minio-edge-region1' in pod_name or (role == 'edge' and region == 'region-1'):
+            return "minio-edge-region1"
+        elif 'minio-edge-region2' in pod_name or (role == 'edge' and region == 'region-2'):
+            return "minio-edge-region2"
+        elif 'minio' in pod_name:
+            if 'region1' in pod_name or 'region-1' in pod_name:
+                return "minio-edge-region1"
+            elif 'region2' in pod_name or 'region-2' in pod_name:
+                return "minio-edge-region2"
+            else:
+                return "minio-central"
+        return None
+
+    def _map_buckets_to_nodes_robust(self, storage_nodes, bucket_to_nodes):
+        """Map buckets to nodes with multiple approaches for robustness"""
+        default_bucket_mapping = {
+            "minio-central": ["datasets", "intermediate", "results", "shared", "test-bucket"],
+            "minio-edge-region1": ["edge-data", "region1-bucket"],
+            "minio-edge-region2": ["region2-bucket"]
+        }
+        
+        for service, node in storage_nodes.items():
+            if service in default_bucket_mapping:
+                for bucket in default_bucket_mapping[service]:
+                    if bucket not in bucket_to_nodes:
+                        bucket_to_nodes[bucket] = []
+                    if node not in bucket_to_nodes[bucket]:
+                        bucket_to_nodes[bucket].append(node)
+        
+        try:
+            for service, node in storage_nodes.items():
+                service_short_name = service.replace("minio-", "").replace("-", "_")
+                cmd = f"mc ls {service_short_name}/ 2>/dev/null || true"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                
+                if result.returncode == 0 and result.stdout:
+                    for line in result.stdout.splitlines():
+                        parts = line.strip().split()
+                        if len(parts) >= 1:
+                            potential_bucket = parts[-1].strip('/')
+                            if potential_bucket and not potential_bucket.startswith('.'):
+                                if potential_bucket not in bucket_to_nodes:
+                                    bucket_to_nodes[potential_bucket] = []
+                                if node not in bucket_to_nodes[potential_bucket]:
+                                    bucket_to_nodes[potential_bucket].append(node)
+                                    logger.info(f"Discovered bucket {potential_bucket} on node {node} via mc ls")
+        except Exception as e:
+            logger.warning(f"Failed to dynamically discover buckets: {e}")
+                
     
     def run_benchmarks(self):
         logger.info("Starting benchmark runs")
