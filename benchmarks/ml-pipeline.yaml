@@ -1,0 +1,314 @@
+# benchmarks/workloads/ml-training-pipeline.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-data-collector
+  namespace: scheduler-benchmark
+  labels:
+    workload: ml-training-pipeline
+    stage: data-collection
+  annotations:
+    data.scheduler.thesis/input-1: "edge-data/sensor-data.json,20971520,5,8,json"
+    data.scheduler.thesis/output-1: "intermediate/collected-data.parquet,10485760,0,7,parquet"
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: data-collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "edge-data/sensor-data.json,20971520,5,8,json"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "intermediate/collected-data.parquet,10485760,0,7,parquet"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "300m"
+  tolerations:
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: DoesNotExist
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: feature-extraction
+  namespace: scheduler-benchmark
+  labels:
+    workload: ml-training-pipeline
+    stage: feature-extraction
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/collected-data.parquet,10485760,15,7,parquet"
+    data.scheduler.thesis/output-1: "intermediate/features.npz,5242880,0,7,npz"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: feature-extractor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "feature-extraction"
+    - name: WORKLOAD_ACTION
+      value: "transform"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "intermediate/collected-data.parquet,10485760,15,7,parquet"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "intermediate/features.npz,5242880,0,7,npz"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+  tolerations:
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: DoesNotExist
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: model-training
+  namespace: scheduler-benchmark
+  labels:
+    workload: ml-training-pipeline
+    stage: training
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/features.npz,5242880,30,7,npz"
+    data.scheduler.thesis/output-1: "models/trained-model.h5,104857600,0,6,h5"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: model-trainer
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "model-training"
+    - name: WORKLOAD_ACTION
+      value: "train"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "intermediate/features.npz,5242880,30,7,npz"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "models/trained-model.h5,104857600,0,6,h5"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1"
+      limits:
+        memory: "2Gi"
+        cpu: "2"
+  tolerations:
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: DoesNotExist
+      - weight: 80
+        preference:
+          matchExpressions:
+          - key: node-capability/node-type
+            operator: In
+            values:
+            - cloud
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: model-evaluation
+  namespace: scheduler-benchmark
+  labels:
+    workload: ml-training-pipeline
+    stage: evaluation
+  annotations:
+    data.scheduler.thesis/input-1: "models/trained-model.h5,104857600,10,6,h5"
+    data.scheduler.thesis/input-2: "intermediate/features.npz,5242880,5,6,npz"
+    data.scheduler.thesis/output-1: "results/model-metrics.json,1048576,0,5,json"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: model-evaluator
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "model-evaluation"
+    - name: WORKLOAD_ACTION
+      value: "evaluate"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "models/trained-model.h5,104857600,10,6,h5"
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: "intermediate/features.npz,5242880,5,6,npz"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "results/model-metrics.json,1048576,0,5,json"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+  tolerations:
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: DoesNotExist
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inference-service
+  namespace: scheduler-benchmark
+  labels:
+    workload: ml-training-pipeline
+    stage: inference
+  annotations:
+    data.scheduler.thesis/input-1: "models/trained-model.h5,104857600,3,8,h5"
+    data.scheduler.thesis/output-1: "results/predictions.json,2097152,0,5,json"
+    scheduler.thesis/prefer-edge: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: inference-server
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "inference"
+    - name: WORKLOAD_ACTION
+      value: "predict"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: "models/trained-model.h5,104857600,3,8,h5"
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: "results/predictions.json,2097152,0,5,json"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  tolerations:
+  - effect: NoSchedule
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: DoesNotExist
+      - weight: 80
+        preference:
+          matchExpressions:
+          - key: node-capability/node-type
+            operator: In
+            values:
+            - edge
+  restartPolicy: Never

@@ -7,11 +7,11 @@ metadata:
     workload: data-intensive-workflow
     stage: extract
   annotations:
-    data.scheduler.thesis/input-1: "datasets/landsat-sample.tar.gz,850000,20,5,raw-data"
-    data.scheduler.thesis/output-1: "intermediate/extracted-bands,200000,0,4,extracted"
+    data.scheduler.thesis/input-1: "datasets/landsat-sample.tar.gz,850000,20,8,raw-data"
+    data.scheduler.thesis/output-1: "intermediate/extracted-bands,200000,0,7,extracted"
     scheduler.thesis/data-intensive: "true"
 spec:
-  schedulerName: data-locality-scheduler # will be overridden by benchmark runner
+  schedulerName: data-locality-scheduler
   containers:
   - name: extract-processor
     image: davidandw190/workload-sim:latest
@@ -31,10 +31,8 @@ spec:
       value: "extract"
     - name: WORKLOAD_INTENSITY
       value: "high"
-    - name: DATA_SCHEDULER_THESIS_INPUT_1
-      value: "datasets/landsat-sample.tar.gz,850000,20,5,raw-data"
-    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
-      value: "intermediate/extracted-bands,200000,0,4,extracted"
+    - name: WORKLOAD_DURATION
+      value: "60"
     resources:
       requests:
         memory: "256Mi"

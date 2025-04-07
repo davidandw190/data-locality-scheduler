@@ -435,14 +435,11 @@ class BenchmarkRunner:
             
             for item in workload:
                 if item.get('kind') == 'Pod':
-                    # update the name to make it unique for this run
                     original_name = item['metadata']['name']
                     item['metadata']['name'] = f"{original_name}-{run_suffix}"
                     
-                    # set the scheduler
                     item['spec']['schedulerName'] = scheduler_name
                     
-                    # add benchmark annotations
                     if 'annotations' not in item['metadata']:
                         item['metadata']['annotations'] = {}
                     
@@ -453,7 +450,6 @@ class BenchmarkRunner:
                         'benchmark.thesis/iteration': str(iteration)
                     })
                     
-                    # add labels for easier querying
                     if 'labels' not in item['metadata']:
                         item['metadata']['labels'] = {}
                     
@@ -462,17 +458,6 @@ class BenchmarkRunner:
                         'workload': workload_name,
                         'scheduler': scheduler_name.replace('-', ''),
                         'iteration': str(iteration)
-                    })
-                    
-                    if 'nodeSelector' not in item['spec']:
-                        item['spec']['nodeSelector'] = {}
-                    
-                    if 'tolerations' not in item['spec']:
-                        item['spec']['tolerations'] = []
-                    
-                    item['spec']['tolerations'].append({
-                        'effect': 'NoSchedule',
-                        'operator': 'Exists'
                     })
                     
                     if 'containers' in item['spec']:
@@ -499,9 +484,45 @@ class BenchmarkRunner:
                                 'name': 'ITERATION',
                                 'value': str(iteration)
                             })
+                            
+                            container['env'].append({
+                                'name': 'WORKLOAD_DURATION',
+                                'value': '60'  # 60 seconds
+                            })
+                            
+                            for k, v in item['metadata'].get('annotations', {}).items():
+                                if k.startswith('data.scheduler.thesis/'):
+                                    env_name = k.replace('data.scheduler.thesis/', '').replace('-', '_').upper()
+                                    container['env'].append({
+                                        'name': f"DATA_SCHEDULER_THESIS_{env_name}",
+                                        'value': v
+                                    })
+                    
+                    if 'tolerations' not in item['spec']:
+                        item['spec']['tolerations'] = []
+                    
+                    has_control_plane_toleration = False
+                    for toleration in item['spec'].get('tolerations', []):
+                        if toleration.get('key') == 'node-role.kubernetes.io/control-plane':
+                            has_control_plane_toleration = True
+                            break
+                    
+                    if not has_control_plane_toleration:
+                        item['spec']['tolerations'].append({
+                            'key': 'node-role.kubernetes.io/control-plane',
+                            'operator': 'Exists',
+                            'effect': 'NoSchedule'
+                        })
+                        
+                        item['spec']['tolerations'].append({
+                            'key': 'node-role.kubernetes.io/master',
+                            'operator': 'Exists',
+                            'effect': 'NoSchedule'
+                        })
                 
                 modified_workload.append(item)
-        
+            
+            # Save the modified workload to a temporary file
             temp_file = Path(f"benchmarks/results/tmp_{workload_name}_{scheduler_name}_{iteration}.yaml")
             with open(temp_file, 'w') as f:
                 yaml.dump_all(modified_workload, f)
