@@ -119,20 +119,20 @@ func (d *MinioDetector) AddMinioLabelsToNode(labels map[string]string, buckets [
 		klog.Warningf("Node %s missing region/zone information, storage functionality may be limited", d.nodeName)
 	}
 
-	// storage labels
 	labels[StorageNodeLabel] = "true"
 	labels[StorageTypeLabel] = "object"
 	labels[StorageTechLabel] = "minio"
 
-	// bucket labels
+	klog.Infof("Node %s hosts the following buckets:", d.nodeName)
 	for _, bucket := range buckets {
 		labels[BucketLabelPrefix+bucket] = "true"
+		klog.Infof("  - %s", bucket)
 	}
 
-	// storage capacity
 	capacity := d.getStorageCapacity()
 	if capacity > 0 {
 		labels[StorageCapacityLabel] = strconv.FormatInt(capacity, 10)
+		klog.Infof("Storage capacity: %d bytes", capacity)
 	} else {
 		klog.Warningf("Unable to determine storage capacity for MinIO on node %s", d.nodeName)
 	}

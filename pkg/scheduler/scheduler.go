@@ -743,6 +743,25 @@ func (s *Scheduler) scheduleOne(ctx context.Context) {
 }
 
 func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string, error) {
+	klog.Infof("Finding best node for pod %s/%s", pod.Namespace, pod.Name)
+
+	if pod.Annotations != nil {
+		dataAnnotations := []string{}
+		for k := range pod.Annotations {
+			if strings.HasPrefix(k, "data.scheduler.thesis/") {
+				dataAnnotations = append(dataAnnotations, k)
+			}
+		}
+
+		if len(dataAnnotations) > 0 {
+			klog.Infof("Pod has %d data annotations: %v", len(dataAnnotations), dataAnnotations)
+		}
+
+		if val, ok := pod.Annotations["scheduler.thesis/data-intensive"]; ok {
+			klog.Infof("Pod is marked as data-intensive with value: %s", val)
+		}
+	}
+
 	nodes, err := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list nodes: %w", err)
@@ -752,10 +771,32 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return "", fmt.Errorf("no nodes available in the cluster")
 	}
 
+	klog.V(4).Infof("Available nodes for scheduling:")
+	for _, node := range nodes.Items {
+		nodeType := "standard"
+		if val, ok := node.Labels[EdgeNodeLabel]; ok {
+			nodeType = val
+		}
+
+		isStorage := "no"
+		if val, ok := node.Labels[StorageNodeLabel]; ok && val == "true" {
+			isStorage = "yes"
+		}
+
+		region := node.Labels[RegionLabel]
+		zone := node.Labels[ZoneLabel]
+
+		klog.V(4).Infof("- Node: %s (type: %s, storage: %s, region: %s, zone: %s)",
+			node.Name, nodeType, isStorage, region, zone)
+	}
+
 	filteredNodes, err := s.filterNodes(ctx, pod, nodes.Items)
 	if err != nil {
 		return "", fmt.Errorf("node filtering error: %w", err)
 	}
+
+	klog.Infof("Filtered to %d suitable nodes for pod %s/%s",
+		len(filteredNodes), pod.Namespace, pod.Name)
 
 	nodesToScore := filteredNodes
 	if len(filteredNodes) > 1 && s.config.PercentageOfNodesToScore < 100 {
@@ -787,19 +828,16 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 		return nodeScores[i].Score > nodeScores[j].Score
 	})
 
-	if klog.V(4).Enabled() {
-		topN := 3
-		if len(nodeScores) < topN {
-			topN = len(nodeScores)
-		}
-
-		klog.V(4).Infof("Top %d nodes for pod %s/%s:", topN, pod.Namespace, pod.Name)
-		for i := 0; i < topN; i++ {
-			klog.V(4).Infof("  %d. Node: %s, Score: %d", i+1, nodeScores[i].Name, nodeScores[i].Score)
-		}
+	klog.Infof("Node scores for pod %s/%s:", pod.Namespace, pod.Name)
+	for i, score := range nodeScores {
+		klog.Infof("  %d. Node: %s, Score: %d", i+1, score.Name, score.Score)
 	}
 
-	return nodeScores[0].Name, nil
+	selectedNode := nodeScores[0].Name
+	klog.Infof("Selected node %s with highest score %d for pod %s/%s",
+		selectedNode, nodeScores[0].Score, pod.Namespace, pod.Name)
+
+	return selectedNode, nil
 }
 
 func (s *Scheduler) recordSchedulingFailure(ctx context.Context, pod *v1.Pod, err error) {

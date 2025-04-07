@@ -89,6 +89,40 @@ func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) 
 		return p.config.DefaultScore, nil
 	}
 
+	klog.V(4).Infof("Pod %s/%s has %d input dependencies and %d output dependencies",
+		pod.Namespace, pod.Name, len(inputData), len(outputData))
+
+	for i, dep := range inputData {
+		klog.V(5).Infof("Input dependency %d: %s (size: %d bytes)", i+1, dep.URN, dep.SizeBytes)
+	}
+
+	storageNodes := make(map[string][]string)
+	for _, data := range inputData {
+		nodes := p.storageIndex.GetStorageNodesForData(data.URN)
+		if len(nodes) == 0 {
+			parts := strings.SplitN(data.URN, "/", 2)
+			if len(parts) > 0 {
+				bucket := parts[0]
+				nodes = p.storageIndex.GetBucketNodes(bucket)
+			}
+		}
+		storageNodes[data.URN] = nodes
+
+		klog.V(4).Infof("Data %s is available on nodes: %v", data.URN, nodes)
+	}
+
+	isStorageNode := false
+	for _, nodes := range storageNodes {
+		if containsString(nodes, nodeName) {
+			isStorageNode = true
+			break
+		}
+	}
+
+	if isStorageNode {
+		klog.V(4).Infof("Node %s is a storage node for this pod's data", nodeName)
+	}
+
 	inputScore := p.calculateInputDataScore(inputData, nodeName)
 	outputScore := p.calculateOutputDataScore(outputData, nodeName)
 
@@ -305,7 +339,11 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		if len(storageNodes) == 0 {
 			parts := strings.SplitN(data.URN, "/", 2)
 			if len(parts) > 0 {
-				storageNodes = p.storageIndex.GetBucketNodes(parts[0])
+				bucket := parts[0]
+				storageNodes = p.storageIndex.GetBucketNodes(bucket)
+
+				klog.V(5).Infof("For data %s, bucket %s is hosted on nodes: %v",
+					data.URN, bucket, storageNodes)
 			}
 		}
 
@@ -361,6 +399,9 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 		adjustedWeight := data.Weight * sizeFactor
 		weightedScore += float64(score) * adjustedWeight
 		totalWeight += adjustedWeight
+
+		klog.V(5).Infof("Data %s scored %d on node %s (weighted: %.2f)",
+			data.URN, score, nodeName, float64(score)*adjustedWeight)
 	}
 
 	if totalWeight == 0 {
@@ -368,10 +409,96 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 	}
 
 	finalScore := int(weightedScore / totalWeight)
-	klog.V(4).Infof("Final input data score for node %s: %d", nodeName, finalScore)
+	klog.V(4).Infof("Final input data score for node %s: %d (from weighted score %.2f / total weight %.2f)",
+		nodeName, finalScore, weightedScore, totalWeight)
 
 	return finalScore
 }
+
+// func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependency, nodeName string) int {
+// 	if len(inputData) == 0 {
+// 		return p.config.DefaultScore
+// 	}
+
+// 	var totalWeight float64
+// 	var weightedScore float64
+// 	var bestStorageNodes = make(map[string]string) // Cache for best storage nodes
+
+// 	for _, data := range inputData {
+// 		// nodes holding the data
+// 		storageNodes := p.storageIndex.GetStorageNodesForData(data.URN)
+
+// 		// if no storage nodes found, try to get the bucket nodes
+// 		if len(storageNodes) == 0 {
+// 			parts := strings.SplitN(data.URN, "/", 2)
+// 			if len(parts) > 0 {
+// 				storageNodes = p.storageIndex.GetBucketNodes(parts[0])
+// 			}
+// 		}
+
+// 		// if still no storage nodes, use default score
+// 		if len(storageNodes) == 0 {
+// 			klog.V(3).Infof("No storage nodes found for %s, using default score", data.URN)
+// 			weightedScore += float64(p.config.DefaultScore) * data.Weight
+// 			totalWeight += data.Weight
+// 			continue
+// 		}
+
+// 		// we check if data is directly on the node (ideal case)
+// 		if containsString(storageNodes, nodeName) {
+// 			klog.V(4).Infof("Data %s is co-located on node %s - optimal score", data.URN, nodeName)
+// 			weightedScore += float64(p.config.MaxScore) * data.Weight
+// 			totalWeight += data.Weight
+// 			continue
+// 		}
+
+// 		bestTransferTime := float64(1e12) // very large initial value
+// 		var bestStorageNode string
+
+// 		if cachedNode, exists := bestStorageNodes[data.URN]; exists {
+// 			transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(
+// 				cachedNode, nodeName, data.SizeBytes)
+// 			bestTransferTime = transferTime
+// 			bestStorageNode = cachedNode
+// 		} else {
+// 			for _, storageNode := range storageNodes {
+// 				transferTime := p.bandwidthGraph.EstimateTransferTimeBetweenNodes(
+// 					storageNode, nodeName, data.SizeBytes)
+// 				if transferTime < bestTransferTime {
+// 					bestTransferTime = transferTime
+// 					bestStorageNode = storageNode
+// 				}
+// 			}
+
+// 			if bestStorageNode != "" {
+// 				bestStorageNodes[data.URN] = bestStorageNode
+// 			}
+// 		}
+
+// 		klog.V(5).Infof("For data %s (size: %d): best storage node is %s with transfer time %.2f s",
+// 			data.URN, data.SizeBytes, bestStorageNode, bestTransferTime)
+
+// 		score := calculateScoreFromTransferTime(bestTransferTime, p.config.MaxScore)
+
+// 		sizeFactor := 1.0
+// 		if data.SizeBytes > 100*1024*1024 { // 100MB
+// 			sizeFactor = 1.5 // 50% more important for large files
+// 		}
+
+// 		adjustedWeight := data.Weight * sizeFactor
+// 		weightedScore += float64(score) * adjustedWeight
+// 		totalWeight += adjustedWeight
+// 	}
+
+// 	if totalWeight == 0 {
+// 		return p.config.DefaultScore
+// 	}
+
+// 	finalScore := int(weightedScore / totalWeight)
+// 	klog.V(4).Infof("Final input data score for node %s: %d", nodeName, finalScore)
+
+// 	return finalScore
+// }
 
 func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDependency, nodeName string) int {
 	if len(outputData) == 0 {
