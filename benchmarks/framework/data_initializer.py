@@ -18,8 +18,6 @@ logging.basicConfig(
 logger = logging.getLogger("data-initializer")
 
 class DataInitializer:
-    """Initializes data in MinIO buckets for benchmarking"""
-    
     def __init__(self, config_file, workloads_dir):
         self.config_file = Path(config_file)
         self.workloads_dir = Path(workloads_dir)
@@ -29,7 +27,6 @@ class DataInitializer:
         self.temp_dir.mkdir(exist_ok=True)
         
     def _load_config(self):
-        """Load benchmark configuration"""
         try:
             with open(self.config_file, 'r') as f:
                 config = yaml.safe_load(f)

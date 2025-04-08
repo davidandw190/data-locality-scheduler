@@ -25,7 +25,6 @@ logging.basicConfig(
 logger = logging.getLogger("benchmark-runner")
 
 class BenchmarkRunner:
-    """Main class for orchestrating scheduler benchmarks"""
     
     def __init__(self, config_file, output_dir, run_id=None):
         self.config_file = config_file
@@ -66,7 +65,6 @@ class BenchmarkRunner:
         self.data_item_locations = {}
         
     def _load_config(self):
-        """Load benchmark configuration"""
         try:
             with open(self.config_file, 'r') as f:
                 config = yaml.safe_load(f)
@@ -78,7 +76,6 @@ class BenchmarkRunner:
     
     
     def prepare_environment(self):
-        """Prepare benchmark environment"""
         logger.info("Preparing benchmark environment")
         
         ns_name = self.config.get('kubernetes', {}).get('namespace', 'scheduler-benchmark')
@@ -106,17 +103,12 @@ class BenchmarkRunner:
         
         if self.config.get('kubernetes', {}).get('setup_storage', True):
             self._deploy_storage_services()
-            
             self._wait_for_storage_readiness()
-            
             self._initialize_benchmark_data()
-            
             self._wait_for_data_initialization()
         
         self._collect_cluster_info()
-        
         self._map_buckets_to_nodes()
-        
         self._index_data_locations()
     
     
@@ -594,7 +586,7 @@ class BenchmarkRunner:
         max_wait_time = self.config.get('execution', {}).get('max_wait_time', 300)
         
         if workload_name in ['data-locality-test', 'ml-training-pipeline', 'data-intensive-workflow']:
-            max_wait_time = 600  # 10 minutes for data-intensive workloads
+            max_wait_time = 600  # 10 minutes for more data-intensive workloads
         
         poll_interval = self.config.get('execution', {}).get('poll_interval', 5)
         
@@ -910,6 +902,7 @@ class BenchmarkRunner:
         storage_nodes = {}
         bucket_to_nodes = {}
 
+        # Get storage pod to node mappings
         try:
             pods = self.k8s_client.list_namespaced_pod(
                 namespace=namespace,
@@ -921,16 +914,6 @@ class BenchmarkRunner:
                     namespace=namespace,
                     label_selector="app in (minio,minio-edge,minio-central)"
                 )
-            
-            # # Also look in the data-locality-scheduler namespace as fallback
-            # if not pods.items:
-            #     try:
-            #         pods = self.k8s_client.list_namespaced_pod(
-            #             namespace="data-locality-scheduler",
-            #             label_selector="app in (minio,minio-edge,minio-central)"
-            #         )
-            #     except Exception:
-            #         pass
             
             for pod in pods.items:
                 if pod.status.phase != 'Running' or not pod.spec.node_name:
@@ -964,6 +947,13 @@ class BenchmarkRunner:
         cross_region_refs = 0
         total_data_size = 0
         local_data_size = 0
+        same_zone_data_size = 0
+        same_region_data_size = 0
+        cross_region_data_size = 0
+        edge_to_cloud_transfers = 0
+        cloud_to_edge_transfers = 0
+        edge_to_cloud_data_size = 0
+        cloud_to_edge_data_size = 0
         
         pod_node_topology = {}
         
@@ -973,7 +963,7 @@ class BenchmarkRunner:
             
             if not pod_node:
                 continue
-                
+                    
             try:
                 node = self.k8s_client.read_node(pod_node)
                 region = node.metadata.labels.get('topology.kubernetes.io/region', '')
@@ -989,6 +979,7 @@ class BenchmarkRunner:
             except Exception as e:
                 logger.warning(f"Failed to get topology for node {pod_node}: {e}")
         
+        # Now analyze data locality for each pod
         for pod_metric in pod_metrics:
             pod_name = pod_metric.get('pod_name', 'unknown')
             pod_node = pod_metric.get('node')
@@ -1004,9 +995,15 @@ class BenchmarkRunner:
                 pod_data_refs = []
                 pod_total_data_size = 0
                 pod_local_data_size = 0
+                pod_same_zone_data_size = 0
+                pod_same_region_data_size = 0
+                pod_cross_region_data_size = 0
+                pod_edge_to_cloud_data_size = 0
+                pod_cloud_to_edge_data_size = 0
                 
                 pod_region = pod_node_topology[pod_name]['region']
                 pod_zone = pod_node_topology[pod_name]['zone']
+                pod_node_type = pod_node_topology[pod_name]['node_type']
                 
                 for key, value in data_refs.items():
                     if key.startswith('data.scheduler.thesis/input-') or key.startswith('data.scheduler.thesis/output-'):
@@ -1028,6 +1025,7 @@ class BenchmarkRunner:
                         storage_node = None
                         storage_region = ""
                         storage_zone = ""
+                        storage_node_type = "unknown"
                         
                         if bucket in bucket_to_nodes:
                             bucket_nodes = bucket_to_nodes[bucket]
@@ -1036,6 +1034,7 @@ class BenchmarkRunner:
                                 storage_node = pod_node
                                 storage_region = pod_region
                                 storage_zone = pod_zone
+                                storage_node_type = pod_node_type
                                 logger.info(f"Local data reference found: {data_path} on node {pod_node}")
                             else:
                                 for node_name in bucket_nodes:
@@ -1043,27 +1042,40 @@ class BenchmarkRunner:
                                         if node_name in pod_node_topology:
                                             node_region = pod_node_topology[node_name]['region']
                                             node_zone = pod_node_topology[node_name]['zone']
+                                            node_type = pod_node_topology[node_name]['node_type']
                                         else:
                                             node = self.k8s_client.read_node(node_name)
                                             node_region = node.metadata.labels.get('topology.kubernetes.io/region', '')
                                             node_zone = node.metadata.labels.get('topology.kubernetes.io/zone', '')
+                                            node_type = node.metadata.labels.get('node-capability/node-type', 'unknown')
                                             
                                             pod_node_topology[node_name] = {
                                                 'node': node_name,
                                                 'region': node_region,
-                                                'zone': node_zone
+                                                'zone': node_zone,
+                                                'node_type': node_type
                                             }
                                         
                                         if not storage_node:
                                             storage_node = node_name
                                             storage_region = node_region
                                             storage_zone = node_zone
+                                            storage_node_type = node_type
                                         
                                         if pod_zone and node_zone and pod_zone == node_zone:
                                             is_same_zone = True
+                                            storage_node = node_name
+                                            storage_region = node_region
+                                            storage_zone = node_zone
+                                            storage_node_type = node_type
                                             break
                                         elif pod_region and node_region and pod_region == node_region:
                                             is_same_region = True
+                                            if not is_same_zone:  # only set if we haven't found same zone
+                                                storage_node = node_name
+                                                storage_region = node_region
+                                                storage_zone = node_zone
+                                                storage_node_type = node_type
                                     except Exception as e:
                                         logger.warning(f"Error checking node {node_name} topology: {e}")
                         
@@ -1078,14 +1090,33 @@ class BenchmarkRunner:
                             data_locality = "SAME_ZONE"
                             pod_same_zone_refs += 1
                             same_zone_refs += 1
+                            pod_same_zone_data_size += data_size
+                            same_zone_data_size += data_size
                         elif is_same_region:
                             data_locality = "SAME_REGION"
                             pod_same_region_refs += 1
                             same_region_refs += 1
+                            pod_same_region_data_size += data_size
+                            same_region_data_size += data_size
                         else:
                             data_locality = "CROSS_REGION"
                             pod_cross_region_refs += 1
                             cross_region_refs += 1
+                            pod_cross_region_data_size += data_size
+                            cross_region_data_size += data_size
+                        
+                        # track edge-to-cloud or cloud-to-edge transfers
+                        is_edge_to_cloud = pod_node_type == 'edge' and storage_node_type == 'cloud'
+                        is_cloud_to_edge = pod_node_type == 'cloud' and storage_node_type == 'edge'
+                        
+                        if is_edge_to_cloud and not is_local:
+                            edge_to_cloud_transfers += 1
+                            edge_to_cloud_data_size += data_size
+                            pod_edge_to_cloud_data_size += data_size
+                        elif is_cloud_to_edge and not is_local:
+                            cloud_to_edge_transfers += 1
+                            cloud_to_edge_data_size += data_size
+                            pod_cloud_to_edge_data_size += data_size
                         
                         pod_data_refs.append({
                             'key': key,
@@ -1095,7 +1126,8 @@ class BenchmarkRunner:
                             'locality': data_locality,
                             'storage_node': storage_node,
                             'storage_region': storage_region,
-                            'storage_zone': storage_zone
+                            'storage_zone': storage_zone,
+                            'storage_node_type': storage_node_type
                         })
                 
                 logger.info(f"Pod {pod_name} on node {pod_node} ({pod_region}/{pod_zone}): "
@@ -1119,7 +1151,11 @@ class BenchmarkRunner:
                     
                     size_weighted_score = 0
                     if pod_total_data_size > 0:
-                        size_weighted_score = pod_local_data_size / pod_total_data_size
+                        size_weighted_score = (
+                            (pod_local_data_size * 1.0) + 
+                            (pod_same_zone_data_size * 0.8) + 
+                            (pod_same_region_data_size * 0.5)
+                        ) / pod_total_data_size
                     
                     pod_metric['data_locality'] = {
                         'score': pod_locality_score,
@@ -1130,7 +1166,12 @@ class BenchmarkRunner:
                         'total_refs': pod_total_refs,
                         'size_weighted_score': size_weighted_score,
                         'total_data_size': pod_total_data_size,
-                        'local_data_size': pod_local_data_size
+                        'local_data_size': pod_local_data_size,
+                        'same_zone_data_size': pod_same_zone_data_size,
+                        'same_region_data_size': pod_same_region_data_size,
+                        'cross_region_data_size': pod_cross_region_data_size,
+                        'edge_to_cloud_data_size': pod_edge_to_cloud_data_size,
+                        'cloud_to_edge_data_size': pod_cloud_to_edge_data_size
                     }
                     
                     data_locality_scores.append(pod_locality_score)
@@ -1153,11 +1194,42 @@ class BenchmarkRunner:
             
             size_weighted_locality = 0
             if total_data_size > 0:
-                size_weighted_locality = local_data_size / total_data_size
+                size_weighted_locality = (
+                    (local_data_size * 1.0) + 
+                    (same_zone_data_size * 0.8) + 
+                    (same_region_data_size * 0.5)
+                ) / total_data_size
             
             logger.info(f"Overall data locality score: {overall_locality_score:.4f}")
             logger.info(f"Weighted locality score: {weighted_locality_score:.4f}")
             logger.info(f"Size-weighted locality: {size_weighted_locality:.4f}")
+            
+            # Calculate network metrics
+            network_metrics = {
+                "total_data_size_bytes": total_data_size,
+                "local_data_size_bytes": local_data_size,
+                "same_zone_data_size_bytes": same_zone_data_size,
+                "same_region_data_size_bytes": same_region_data_size,
+                "cross_region_data_size_bytes": cross_region_data_size,
+                "edge_to_cloud_transfers": edge_to_cloud_transfers,
+                "cloud_to_edge_transfers": cloud_to_edge_transfers,
+                "edge_to_cloud_data_size_bytes": edge_to_cloud_data_size,
+                "cloud_to_edge_data_size_bytes": cloud_to_edge_data_size
+            }
+            
+            # Llg network metrics in human-readable format
+            total_mb = total_data_size / (1024*1024)
+            local_mb = local_data_size / (1024*1024)
+            same_region_mb = same_region_data_size / (1024*1024)
+            cross_region_mb = cross_region_data_size / (1024*1024)
+            edge_to_cloud_mb = edge_to_cloud_data_size / (1024*1024)
+            
+            logger.info(f"Network metrics for {workload_key}:")
+            logger.info(f"  - Total data size: {total_mb:.2f} MB")
+            logger.info(f"  - Local data access: {local_mb:.2f} MB ({100*local_data_size/total_data_size:.1f}%)")
+            logger.info(f"  - Same region data: {same_region_mb:.2f} MB ({100*same_region_data_size/total_data_size:.1f}%)")
+            logger.info(f"  - Cross-region data: {cross_region_mb:.2f} MB ({100*cross_region_data_size/total_data_size:.1f}%)")
+            logger.info(f"  - Edge-to-cloud data: {edge_to_cloud_mb:.2f} MB ({100*edge_to_cloud_data_size/total_data_size:.1f}%)")
             
             self.results["metrics"][workload_key]["data_locality_metrics"] = {
                 "overall_score": overall_locality_score,
@@ -1169,7 +1241,11 @@ class BenchmarkRunner:
                 "cross_region_refs": cross_region_refs,
                 "total_refs": total_data_refs,
                 "local_data_size": local_data_size,
-                "total_data_size": total_data_size
+                "same_zone_data_size": same_zone_data_size,
+                "same_region_data_size": same_region_data_size,
+                "cross_region_data_size": cross_region_data_size,
+                "total_data_size": total_data_size,
+                "network_metrics": network_metrics
             }
         else:
             logger.warning("No data references found for locality calculation")
@@ -1183,9 +1259,18 @@ class BenchmarkRunner:
                 "cross_region_refs": 0,
                 "total_refs": 0,
                 "local_data_size": 0,
-                "total_data_size": 0
+                "same_zone_data_size": 0,
+                "same_region_data_size": 0,
+                "cross_region_data_size": 0,
+                "total_data_size": 0,
+                "network_metrics": {
+                    "total_data_size_bytes": 0,
+                    "local_data_size_bytes": 0,
+                    "edge_to_cloud_transfers": 0,
+                    "cloud_to_edge_transfers": 0
+                }
             }
-
+            
     def _determine_service_name(self, pod_name, role, region):
         """Determine MinIO service name from pod information"""
         if 'minio-central' in pod_name or role == 'central':
@@ -1204,7 +1289,6 @@ class BenchmarkRunner:
         return None
 
     def _map_buckets_to_nodes_robust(self, storage_nodes, bucket_to_nodes):
-        """Map buckets to nodes with multiple approaches for robustness"""
         default_bucket_mapping = {
             "minio-central": ["datasets", "intermediate", "results", "shared", "test-bucket"],
             "minio-edge-region1": ["edge-data", "region1-bucket"],
@@ -1288,39 +1372,110 @@ class BenchmarkRunner:
             for scheduler in schedulers:
                 scheduler_metrics[scheduler] = {
                     "data_locality_scores": [],
+                    "weighted_locality_scores": [],
+                    "size_weighted_scores": [],
+                    "local_data_percentages": [],
+                    "cross_region_percentages": [],
+                    "edge_to_cloud_percentages": [],
                     "placement_latencies": [],
                     "edge_placements": 0,
                     "cloud_placements": 0,
-                    "total_placements": 0
+                    "total_placements": 0,
+                    "network_stats": {
+                        "total_data_size": 0,
+                        "local_data_size": 0,
+                        "cross_region_data_size": 0,
+                        "edge_to_cloud_data_size": 0
+                    }
                 }
-                
-                for iteration in range(1, 10): 
+                    
+                for iteration in range(1, 10): # max 10 iterations
                     workload_key = f"{workload}_{scheduler}_{iteration}"
                     if workload_key in self.results["metrics"]:
                         metrics = self.results["metrics"][workload_key]
                         
-                        if "data_locality_score" in metrics:
-                            scheduler_metrics[scheduler]["data_locality_scores"].append(metrics["data_locality_score"])
+                        # process data locality metrics
+                        if "data_locality_metrics" in metrics:
+                            locality_metrics = metrics["data_locality_metrics"]
+                            
+                            # overall locality score
+                            if "overall_score" in locality_metrics:
+                                scheduler_metrics[scheduler]["data_locality_scores"].append(
+                                    locality_metrics["overall_score"]
+                                )
+                            
+                            # weighted locality score
+                            if "weighted_score" in locality_metrics:
+                                scheduler_metrics[scheduler]["weighted_locality_scores"].append(
+                                    locality_metrics["weighted_score"]
+                                )
+                            
+                            # size-weighted locality score
+                            if "size_weighted_score" in locality_metrics:
+                                scheduler_metrics[scheduler]["size_weighted_scores"].append(
+                                    locality_metrics["size_weighted_score"]
+                                )
+                            
+                            # calculate percentages
+                            total_data_size = locality_metrics.get("total_data_size", 0)
+                            if total_data_size > 0:
+                                local_pct = (locality_metrics.get("local_data_size", 0) / total_data_size) * 100
+                                cross_region_pct = (locality_metrics.get("cross_region_data_size", 0) / total_data_size) * 100
+                                
+                                scheduler_metrics[scheduler]["local_data_percentages"].append(local_pct)
+                                scheduler_metrics[scheduler]["cross_region_percentages"].append(cross_region_pct)
+                                
+                                # add to network stats
+                                scheduler_metrics[scheduler]["network_stats"]["total_data_size"] += total_data_size
+                                scheduler_metrics[scheduler]["network_stats"]["local_data_size"] += locality_metrics.get("local_data_size", 0)
+                                scheduler_metrics[scheduler]["network_stats"]["cross_region_data_size"] += locality_metrics.get("cross_region_data_size", 0)
+                                
+                                # edge to cloud transfers
+                                if "network_metrics" in locality_metrics:
+                                    network_metrics = locality_metrics["network_metrics"]
+                                    edge_to_cloud_size = network_metrics.get("edge_to_cloud_data_size_bytes", 0)
+                                    if edge_to_cloud_size > 0:
+                                        edge_to_cloud_pct = (edge_to_cloud_size / total_data_size) * 100
+                                        scheduler_metrics[scheduler]["edge_to_cloud_percentages"].append(edge_to_cloud_pct)
+                                        scheduler_metrics[scheduler]["network_stats"]["edge_to_cloud_data_size"] += edge_to_cloud_size
                         
+                        # process scheduling metrics
                         if "scheduling_metrics" in metrics and "placement_latencies" in metrics["scheduling_metrics"]:
                             scheduler_metrics[scheduler]["placement_latencies"].extend(metrics["scheduling_metrics"]["placement_latencies"])
                         
+                        # process pod metrics for node type distribution
                         for pod in metrics.get("pod_metrics", []):
                             scheduler_metrics[scheduler]["total_placements"] += 1
                             if pod.get("node_type") == "edge":
                                 scheduler_metrics[scheduler]["edge_placements"] += 1
                             elif pod.get("node_type") == "cloud":
                                 scheduler_metrics[scheduler]["cloud_placements"] += 1
+                
+                if len(scheduler_metrics[scheduler]["data_locality_scores"]) == 0:
+                    scheduler_metrics[scheduler]["data_locality_scores"] = [0.0]
+                if len(scheduler_metrics[scheduler]["weighted_locality_scores"]) == 0:
+                    scheduler_metrics[scheduler]["weighted_locality_scores"] = [0.0]
+                if len(scheduler_metrics[scheduler]["size_weighted_scores"]) == 0:
+                    scheduler_metrics[scheduler]["size_weighted_scores"] = [0.0]
             
+            # compare data locality scores
             if all(len(m["data_locality_scores"]) > 0 for m in scheduler_metrics.values()):
                 data_locality_comparison = {}
                 for scheduler, metrics in scheduler_metrics.items():
                     avg_score = sum(metrics["data_locality_scores"]) / len(metrics["data_locality_scores"])
+                    avg_weighted = sum(metrics["weighted_locality_scores"]) / len(metrics["weighted_locality_scores"]) if metrics["weighted_locality_scores"] else 0
+                    avg_size_weighted = sum(metrics["size_weighted_scores"]) / len(metrics["size_weighted_scores"]) if metrics["size_weighted_scores"] else 0
+                    
                     data_locality_comparison[scheduler] = {
                         "mean": avg_score,
+                        "weighted_mean": avg_weighted,
+                        "size_weighted_mean": avg_size_weighted,
                         "scores": metrics["data_locality_scores"],
                         "min": min(metrics["data_locality_scores"]),
-                        "max": max(metrics["data_locality_scores"])
+                        "max": max(metrics["data_locality_scores"]),
+                        "local_data_percentage": sum(metrics["local_data_percentages"]) / len(metrics["local_data_percentages"]) if metrics["local_data_percentages"] else 0,
+                        "cross_region_percentage": sum(metrics["cross_region_percentages"]) / len(metrics["cross_region_percentages"]) if metrics["cross_region_percentages"] else 0,
+                        "edge_to_cloud_percentage": sum(metrics["edge_to_cloud_percentages"]) / len(metrics["edge_to_cloud_percentages"]) if metrics["edge_to_cloud_percentages"] else 0
                     }
                 
                 if "data-locality-scheduler" in data_locality_comparison and "default-scheduler" in data_locality_comparison:
@@ -1329,9 +1484,64 @@ class BenchmarkRunner:
                     if baseline > 0:
                         improvement = ((new_score - baseline) / baseline) * 100
                         data_locality_comparison["improvement_percentage"] = improvement
+                    
+                    # size-weighted improvement
+                    baseline_size = data_locality_comparison["default-scheduler"]["size_weighted_mean"]
+                    new_size_score = data_locality_comparison["data-locality-scheduler"]["size_weighted_mean"]
+                    if baseline_size > 0:
+                        size_improvement = ((new_size_score - baseline_size) / baseline_size) * 100
+                        data_locality_comparison["size_weighted_improvement_percentage"] = size_improvement
+                    
+                    # local data percentage improvement
+                    baseline_local = data_locality_comparison["default-scheduler"]["local_data_percentage"]
+                    new_local = data_locality_comparison["data-locality-scheduler"]["local_data_percentage"]
+                    if baseline_local > 0:
+                        local_improvement = ((new_local - baseline_local) / baseline_local) * 100
+                        data_locality_comparison["local_data_improvement_percentage"] = local_improvement
                 
                 comparison[workload]["data_locality_comparison"] = data_locality_comparison
             
+            # compare network metrics
+            network_comparison = {}
+            for scheduler, metrics in scheduler_metrics.items():
+                network_stats = metrics["network_stats"]
+                total_data = network_stats["total_data_size"]
+                
+                if total_data > 0:
+                    local_pct = (network_stats["local_data_size"] / total_data) * 100
+                    cross_region_pct = (network_stats["cross_region_data_size"] / total_data) * 100
+                    edge_to_cloud_pct = (network_stats["edge_to_cloud_data_size"] / total_data) * 100
+                    
+                    network_comparison[scheduler] = {
+                        "total_data_mb": total_data / (1024*1024),  # Convert to MB
+                        "local_data_mb": network_stats["local_data_size"] / (1024*1024),
+                        "cross_region_data_mb": network_stats["cross_region_data_size"] / (1024*1024),
+                        "edge_to_cloud_data_mb": network_stats["edge_to_cloud_data_size"] / (1024*1024),
+                        "local_percentage": local_pct,
+                        "cross_region_percentage": cross_region_pct,
+                        "edge_to_cloud_percentage": edge_to_cloud_pct
+                    }
+            
+            if network_comparison:
+                comparison[workload]["network_comparison"] = network_comparison
+                
+                # compute network efficiency improvement
+                if "data-locality-scheduler" in network_comparison and "default-scheduler" in network_comparison:
+                    dl_local_pct = network_comparison["data-locality-scheduler"]["local_percentage"]
+                    def_local_pct = network_comparison["default-scheduler"]["local_percentage"]
+                    
+                    if def_local_pct > 0:
+                        locality_improvement = ((dl_local_pct - def_local_pct) / def_local_pct) * 100
+                        network_comparison["local_data_improvement_percentage"] = locality_improvement
+                    
+                    dl_cross = network_comparison["data-locality-scheduler"]["cross_region_percentage"]
+                    def_cross = network_comparison["default-scheduler"]["cross_region_percentage"]
+                    
+                    if def_cross > 0:
+                        cross_reduction = ((def_cross - dl_cross) / def_cross) * 100
+                        network_comparison["cross_region_reduction_percentage"] = cross_reduction
+            
+            # compare scheduling latency
             if all(len(m["placement_latencies"]) > 0 for m in scheduler_metrics.values()):
                 scheduling_latency_comparison = {}
                 for scheduler, metrics in scheduler_metrics.items():
@@ -1352,6 +1562,7 @@ class BenchmarkRunner:
                 
                 comparison[workload]["scheduling_latency_comparison"] = scheduling_latency_comparison
             
+            # compare node distribution
             node_distribution_comparison = {}
             for scheduler, metrics in scheduler_metrics.items():
                 total_placements = metrics["total_placements"]
@@ -1369,12 +1580,19 @@ class BenchmarkRunner:
             
             if node_distribution_comparison:
                 comparison[workload]["node_distribution_comparison"] = node_distribution_comparison
+                
+                if "data-locality-scheduler" in node_distribution_comparison and "default-scheduler" in node_distribution_comparison:
+                    dl_edge_pct = node_distribution_comparison["data-locality-scheduler"]["edge_percentage"] 
+                    def_edge_pct = node_distribution_comparison["default-scheduler"]["edge_percentage"]
+                    
+                    if def_edge_pct > 0:
+                        edge_improvement = ((dl_edge_pct - def_edge_pct) / def_edge_pct) * 100
+                        node_distribution_comparison["edge_utilization_improvement_percentage"] = edge_improvement
         
         self.results["comparison"] = comparison
         logger.info("Results comparison completed")
-    
+        
     def _save_results(self):
-        """Save benchmark results to files"""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         results_file = self.output_dir / f"benchmark_results_{self.run_id}_{timestamp}.json"
         
@@ -1443,18 +1661,45 @@ class BenchmarkRunner:
                 
                 if 'data_locality_comparison' in comparison:
                     f.write("#### Data Locality Comparison\n\n")
-                    f.write("| Scheduler | Data Locality Score (Mean) | Min | Max |\n")
-                    f.write("|-----------|----------------------------|-----|-----|\n")
+                    f.write("| Scheduler | Data Locality Score | Weighted Score | Size-Weighted Score | Local Data % | Cross-Region % |\n")
+                    f.write("|-----------|--------------------|-----------------|--------------------|-------------|---------------|\n")
                     
                     for scheduler, scores in comparison['data_locality_comparison'].items():
-                        if scheduler != 'improvement_percentage':
-                            f.write(f"| {scheduler} | {scores['mean']:.4f} | {scores['min']:.4f} | {scores['max']:.4f} |\n")
+                        if scheduler != 'improvement_percentage' and scheduler != 'size_weighted_improvement_percentage' and scheduler != 'local_data_improvement_percentage':
+                            f.write(f"| {scheduler} | {scores['mean']:.4f} | {scores.get('weighted_mean', 0):.4f} | {scores.get('size_weighted_mean', 0):.4f} | {scores.get('local_data_percentage', 0):.1f}% | {scores.get('cross_region_percentage', 0):.1f}% |\n")
                     
                     f.write("\n")
                     
                     if 'improvement_percentage' in comparison['data_locality_comparison']:
                         improvement = comparison['data_locality_comparison']['improvement_percentage']
                         f.write(f"**Data Locality Improvement: {improvement:.2f}%**\n\n")
+                    
+                    if 'size_weighted_improvement_percentage' in comparison['data_locality_comparison']:
+                        improvement = comparison['data_locality_comparison']['size_weighted_improvement_percentage']
+                        f.write(f"**Size-Weighted Data Locality Improvement: {improvement:.2f}%**\n\n")
+                    
+                    if 'local_data_improvement_percentage' in comparison['data_locality_comparison']:
+                        improvement = comparison['data_locality_comparison']['local_data_improvement_percentage']
+                        f.write(f"**Local Data Access Improvement: {improvement:.2f}%**\n\n")
+                
+                if 'network_comparison' in comparison:
+                    f.write("#### Network Data Transfer Comparison\n\n")
+                    f.write("| Scheduler | Total Data (MB) | Local Data (MB) | Cross-Region (MB) | Edge-to-Cloud (MB) | Local % | Cross-Region % |\n")
+                    f.write("|-----------|----------------|----------------|------------------|-------------------|---------|---------------|\n")
+                    
+                    for scheduler, metrics in comparison['network_comparison'].items():
+                        if scheduler != 'local_data_improvement_percentage' and scheduler != 'cross_region_reduction_percentage':
+                            f.write(f"| {scheduler} | {metrics.get('total_data_mb', 0):.2f} | {metrics.get('local_data_mb', 0):.2f} | {metrics.get('cross_region_data_mb', 0):.2f} | {metrics.get('edge_to_cloud_data_mb', 0):.2f} | {metrics.get('local_percentage', 0):.1f}% | {metrics.get('cross_region_percentage', 0):.1f}% |\n")
+                    
+                    f.write("\n")
+                    
+                    if 'local_data_improvement_percentage' in comparison['network_comparison']:
+                        improvement = comparison['network_comparison']['local_data_improvement_percentage']
+                        f.write(f"**Local Data Access Improvement: {improvement:.2f}%**\n\n")
+                    
+                    if 'cross_region_reduction_percentage' in comparison['network_comparison']:
+                        reduction = comparison['network_comparison']['cross_region_reduction_percentage']
+                        f.write(f"**Cross-Region Data Transfer Reduction: {reduction:.2f}%**\n\n")
                 
                 if 'scheduling_latency_comparison' in comparison:
                     f.write("#### Scheduling Latency Comparison\n\n")
@@ -1480,25 +1725,46 @@ class BenchmarkRunner:
                     f.write("|-----------|----------------|-----------------|--------|----------|\n")
                     
                     for scheduler, distribution in comparison['node_distribution_comparison'].items():
-                        edge = distribution['edge_placements']
-                        cloud = distribution['cloud_placements']
-                        edge_pct = distribution['edge_percentage']
-                        cloud_pct = distribution['cloud_percentage']
-                        f.write(f"| {scheduler} | {edge} | {cloud} | {edge_pct:.1f}% | {cloud_pct:.1f}% |\n")
+                        if scheduler != 'edge_utilization_improvement_percentage':
+                            edge = distribution['edge_placements']
+                            cloud = distribution['cloud_placements']
+                            edge_pct = distribution['edge_percentage']
+                            cloud_pct = distribution['cloud_percentage']
+                            f.write(f"| {scheduler} | {edge} | {cloud} | {edge_pct:.1f}% | {cloud_pct:.1f}% |\n")
                     
                     f.write("\n")
+                    
+                    if 'edge_utilization_improvement_percentage' in comparison['node_distribution_comparison']:
+                        improvement = comparison['node_distribution_comparison']['edge_utilization_improvement_percentage']
+                        f.write(f"**Edge Resource Utilization Improvement: {improvement:.2f}%**\n\n")
             
             f.write("## Overall Summary\n\n")
             
             data_locality_improvements = []
+            size_weighted_improvements = []
+            local_data_improvements = []
             latency_improvements = []
+            cross_region_reductions = []
+            edge_utilization_improvements = []
             
             for workload, comparison in self.results["comparison"].items():
                 if 'data_locality_comparison' in comparison and 'improvement_percentage' in comparison['data_locality_comparison']:
                     data_locality_improvements.append(comparison['data_locality_comparison']['improvement_percentage'])
                 
+                if 'data_locality_comparison' in comparison and 'size_weighted_improvement_percentage' in comparison['data_locality_comparison']:
+                    size_weighted_improvements.append(comparison['data_locality_comparison']['size_weighted_improvement_percentage'])
+                
+                if 'data_locality_comparison' in comparison and 'local_data_improvement_percentage' in comparison['data_locality_comparison']:
+                    local_data_improvements.append(comparison['data_locality_comparison']['local_data_improvement_percentage'])
+                
                 if 'scheduling_latency_comparison' in comparison and 'improvement_percentage' in comparison['scheduling_latency_comparison']:
                     latency_improvements.append(comparison['scheduling_latency_comparison']['improvement_percentage'])
+                
+                if 'network_comparison' in comparison and 'cross_region_reduction_percentage' in comparison['network_comparison']:
+                    cross_region_reductions.append(comparison['network_comparison']['cross_region_reduction_percentage'])
+                
+                if 'node_distribution_comparison' in comparison and 'edge_utilization_improvement_percentage' in comparison['node_distribution_comparison']:
+                    edge_utilization_improvements.append(comparison['node_distribution_comparison']['edge_utilization_improvement_percentage'])
             
             f.write("| Metric | Average Improvement |\n")
             f.write("|--------|---------------------|\n")
@@ -1509,11 +1775,23 @@ class BenchmarkRunner:
             else:
                 f.write("| Data Locality | N/A |\n")
             
+            if size_weighted_improvements:
+                avg_size_weighted_improvement = sum(size_weighted_improvements) / len(size_weighted_improvements)
+                f.write(f"| Size-Weighted Data Locality | {avg_size_weighted_improvement:.2f}% |\n")
+            
+            if local_data_improvements:
+                avg_local_data_improvement = sum(local_data_improvements) / len(local_data_improvements)
+                f.write(f"| Local Data Access | {avg_local_data_improvement:.2f}% |\n")
+            
             if latency_improvements:
                 avg_latency_improvement = sum(latency_improvements) / len(latency_improvements)
                 f.write(f"| Scheduling Latency | {avg_latency_improvement:.2f}% |\n")
             else:
                 f.write("| Scheduling Latency | N/A |\n")
+            
+            if cross_region_reductions:
+                avg_cross_region_reduction = sum(cross_region_reductions) / len(cross_region_reductions)
+                f.write(f"| Cross-Region Transfer Reduction | {avg_cross_region_reduction:.2f}% |\n")
             
             f.write("\n")
             
@@ -1538,6 +1816,44 @@ class BenchmarkRunner:
             
             f.write("\n")
             
+            f.write("### Data Transfer Efficiency\n\n")
+            
+            data_transfer_by_scheduler = {
+                "data-locality-scheduler": {
+                    "local_percentage": [],
+                    "cross_region_percentage": [],
+                    "edge_to_cloud_percentage": []
+                },
+                "default-scheduler": {
+                    "local_percentage": [],
+                    "cross_region_percentage": [],
+                    "edge_to_cloud_percentage": []
+                }
+            }
+            
+            for workload, comparison in self.results["comparison"].items():
+                if 'network_comparison' in comparison:
+                    for scheduler, metrics in comparison['network_comparison'].items():
+                        if scheduler in data_transfer_by_scheduler:
+                            if 'local_percentage' in metrics:
+                                data_transfer_by_scheduler[scheduler]["local_percentage"].append(metrics['local_percentage'])
+                            if 'cross_region_percentage' in metrics:
+                                data_transfer_by_scheduler[scheduler]["cross_region_percentage"].append(metrics['cross_region_percentage'])
+                            if 'edge_to_cloud_percentage' in metrics:
+                                data_transfer_by_scheduler[scheduler]["edge_to_cloud_percentage"].append(metrics['edge_to_cloud_percentage'])
+            
+            f.write("| Scheduler | Local Data % | Cross-Region % | Edge-to-Cloud % |\n")
+            f.write("|-----------|-------------|---------------|----------------|\n")
+            
+            for scheduler, metrics in data_transfer_by_scheduler.items():
+                local_pct = sum(metrics["local_percentage"]) / len(metrics["local_percentage"]) if metrics["local_percentage"] else 0
+                cross_pct = sum(metrics["cross_region_percentage"]) / len(metrics["cross_region_percentage"]) if metrics["cross_region_percentage"] else 0
+                e2c_pct = sum(metrics["edge_to_cloud_percentage"]) / len(metrics["edge_to_cloud_percentage"]) if metrics["edge_to_cloud_percentage"] else 0
+                
+                f.write(f"| {scheduler} | {local_pct:.2f}% | {cross_pct:.2f}% | {e2c_pct:.2f}% |\n")
+            
+            f.write("\n")
+            
             f.write("## Conclusion\n\n")
             
             has_improvement = False
@@ -1545,6 +1861,14 @@ class BenchmarkRunner:
             
             if data_locality_improvements and sum(data_locality_improvements) / len(data_locality_improvements) > 0:
                 improvements_list.append(f"a {sum(data_locality_improvements) / len(data_locality_improvements):.2f}% improvement in data locality scores")
+                has_improvement = True
+            
+            if local_data_improvements and sum(local_data_improvements) / len(local_data_improvements) > 0:
+                improvements_list.append(f"a {sum(local_data_improvements) / len(local_data_improvements):.2f}% increase in local data access")
+                has_improvement = True
+            
+            if cross_region_reductions and sum(cross_region_reductions) / len(cross_region_reductions) > 0:
+                improvements_list.append(f"a {sum(cross_region_reductions) / len(cross_region_reductions):.2f}% reduction in cross-region data transfers")
                 has_improvement = True
             
             if latency_improvements and sum(latency_improvements) / len(latency_improvements) > 0:
@@ -1589,7 +1913,7 @@ class BenchmarkRunner:
             f.write("and potentially reduced data transfer costs.\n")
         
         logger.info(f"Generated benchmark report: {report_file}")
-
+        
 def main():
     parser = argparse.ArgumentParser(description='Run scheduler benchmarks')
     parser.add_argument('--config', type=str, default='benchmarks/framework/benchmark_config.yaml',

@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import subprocess
 import sys
 import time
@@ -18,7 +19,6 @@ logging.basicConfig(
 logger = logging.getLogger("workload-simulator")
 
 class WorkloadSimulator:
-    """Base class for simulating different types of workloads"""
     def __init__(self, config_file=None, workload_type=None, duration=None, intensity=None):
         self.config = self._load_config(config_file)
         self.workload_type = workload_type or self.config.get('workloadType', 'generic')
@@ -59,7 +59,6 @@ class WorkloadSimulator:
                 logger.info(f"  Output {i+1}: {data['urn']} ({data['size_bytes']} bytes)")
     
     def _parse_data_references(self, ref_type):
-        """Parse data references from pod annotations"""
         data_refs = []
         for k, v in os.environ.items():
             if k.startswith(f"DATA_SCHEDULER_THESIS_{ref_type.upper()}_"):
@@ -69,7 +68,6 @@ class WorkloadSimulator:
                         urn = parts[0]
                         size_bytes = int(parts[1])
                         
-                        # Optional parameters
                         processing_time = int(parts[2]) if len(parts) > 2 else 0
                         priority = int(parts[3]) if len(parts) > 3 else 5
                         data_type = parts[4] if len(parts) > 4 else "generic"
@@ -107,7 +105,6 @@ class WorkloadSimulator:
         return intensity_levels.get(self.intensity, 1.0)
 
     def _download_data(self, data_reference):
-        """Actually download data from MinIO or create mock data if it doesn't exist"""
         urn = data_reference['urn']
         size_bytes = data_reference['size_bytes']
         
@@ -136,10 +133,9 @@ class WorkloadSimulator:
             if result.returncode != 0:
                 logger.warning(f"MinIO download failed: {result.stderr}")
                 
-                # Create mock data of appropriate size
+                # we create mock data of appropriate size
                 logger.info(f"Creating mock data of size {size_bytes} bytes")
                 with open(output_file, 'wb') as f:
-                    # Create chunks to avoid memory issues with large files
                     chunk_size = min(10 * 1024 * 1024, size_bytes)  # 10MB or file size
                     remaining_bytes = size_bytes
                     
@@ -241,7 +237,6 @@ class WorkloadSimulator:
         return False
     
     def process_with_real_data(self, action):
-        """Process a workload action with real data access"""
         logger.info(f"Starting action: {action} with real data interaction")
         
         start_time = time.time()
@@ -269,6 +264,7 @@ class WorkloadSimulator:
         if not hasattr(self, 'mc_configured'):
             self._configure_minio_clients()
         
+        # download input data
         input_files = []
         for data_ref in self.input_data:
             for attempt in range(3):  
@@ -290,11 +286,14 @@ class WorkloadSimulator:
         
         local_refs = 0
         total_refs = len(self.input_data) + len(self.output_data)
+        local_data_size = 0
+        total_data_size = 0
         
         for i, file_path in enumerate(input_files):
             if i < len(self.input_data):
-
                 urn = self.input_data[i]['urn']
+                size = self.input_data[i]['size_bytes']
+                total_data_size += size
                 bucket = urn.split('/')[0] if '/' in urn else urn
                 
                 is_local = False
@@ -307,11 +306,11 @@ class WorkloadSimulator:
                     ('region2' in bucket and 'region-2' in region)):
                     is_local = True
                     local_refs += 1
+                    local_data_size += size
                     logger.info(f"Data appears to be LOCAL: {urn} on node {node_name}")
                 else:
                     logger.info(f"Data appears to be REMOTE: {urn} on node {node_name}")
         
-
         if action in ['extract', 'collect']:
             self._perform_data_extraction(input_files)
         elif action in ['transform', 'process', 'analyze']:
@@ -321,8 +320,25 @@ class WorkloadSimulator:
         else:
             self._perform_generic_processing(input_files)
         
+        intensity_multiplier = self._get_intensity_multiplier()
+        if self.duration > 0:
+            simulated_duration = self.duration * intensity_multiplier
+            randomized_duration = max(2, min(120, simulated_duration * (0.8 + 0.4 * random.random())))
+            logger.info(f"Simulating workload execution for {randomized_duration:.1f} seconds")
+            
+            end_time = time.time() + randomized_duration
+            while time.time() < end_time:
+                # we want to do some actual CPU work
+                for _ in range(int(1000000 * intensity_multiplier)):
+                    _ = random.random() ** 2
+                
+                time.sleep(0.1)
+        
+        # upload output files
         uploaded_outputs = 0
         for data_ref in self.output_data:
+            total_data_size += data_ref['size_bytes']
+            
             for attempt in range(3): 
                 try:
                     success = self._upload_data(data_ref)
@@ -337,6 +353,7 @@ class WorkloadSimulator:
                             ('region1' in bucket and 'region-1' in region) or
                             ('region2' in bucket and 'region-2' in region)):
                             local_refs += 1
+                            local_data_size += data_ref['size_bytes']
                             logger.info(f"Output appears to be LOCAL: {data_ref['urn']} on node {node_name}")
                         else:
                             logger.info(f"Output appears to be REMOTE: {data_ref['urn']} on node {node_name}")
@@ -352,10 +369,12 @@ class WorkloadSimulator:
         duration = end_time - start_time
         
         data_locality_score = local_refs / total_refs if total_refs > 0 else 0
+        size_weighted_locality = local_data_size / total_data_size if total_data_size > 0 else 0
         
         logger.info(f"Completed action: {action} in {duration:.2f} seconds")
         logger.info(f"Processed {len(input_files)} input files, generated {uploaded_outputs} output files")
         logger.info(f"Data locality score: {data_locality_score:.2f} ({local_refs} local refs out of {total_refs} total)")
+        logger.info(f"Size-weighted data locality: {size_weighted_locality:.2f} ({local_data_size/1024/1024:.2f}MB local data out of {total_data_size/1024/1024:.2f}MB total)")
         
         return {
             'action': action,
@@ -365,12 +384,14 @@ class WorkloadSimulator:
             'input_files_processed': len(input_files),
             'output_files_generated': uploaded_outputs,
             'data_locality_score': data_locality_score,
+            'size_weighted_locality': size_weighted_locality,
             'local_refs': local_refs,
-            'total_refs': total_refs
+            'total_refs': total_refs,
+            'local_data_size': local_data_size,
+            'total_data_size': total_data_size
         }
-
+        
     def _configure_minio_clients(self):
-        """Configure MinIO clients for various services"""
         logger.info("Configuring MinIO clients")
         
         minio_services = [
@@ -406,7 +427,7 @@ class WorkloadSimulator:
                     if list_result.returncode == 0:
                         logger.info(f"Connection to {name} verified - listing buckets successful")
                         buckets = list_result.stdout.decode().strip().split('\n')
-                        if buckets and buckets[0]:  # There are buckets
+                        if buckets and buckets[0]:  # there are buckets
                             logger.info(f"Found buckets on {name}: {len(buckets)}")
                     else:
                         logger.warning(f"Connection to {name} failed verification: {list_result.stderr.decode()}")
@@ -424,7 +445,6 @@ class WorkloadSimulator:
     
     
     def _download_data(self, data_reference):
-        """Actually download data from MinIO or create mock data if it doesn't exist"""
         urn = data_reference['urn']
         size_bytes = data_reference['size_bytes']
         
@@ -439,7 +459,7 @@ class WorkloadSimulator:
         output_dir.mkdir(exist_ok=True)
         output_file = output_dir / f"{bucket}_{path.replace('/', '_')}"
         
-        minio_service = "minio"  # Default to central
+        minio_service = "minio"  # default to central
         if bucket in ["edge-data", "region1-bucket"]:
             minio_service = "region1"
         elif bucket in ["region2-bucket"]:
@@ -535,7 +555,6 @@ class WorkloadSimulator:
         return str(output_file)
 
     def run(self):
-        """Run the workflow with real data processing"""
         action = os.environ.get('WORKFLOW_ACTION', 'process')
         logger.info(f"Starting workflow action: {action}")
         
