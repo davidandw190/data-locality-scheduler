@@ -288,9 +288,18 @@ class DataInitializer:
         created_items = []
         
         custom_test_data = [
-            {"urn": "datasets/test-central.dat", "size": 10*1024*1024, "service": "minio"},
-            {"urn": "region1-bucket/test-region1.dat", "size": 10*1024*1024, "service": "region1"},
-            {"urn": "region2-bucket/test-region2.dat", "size": 10*1024*1024, "service": "region2"},
+            {"urn": "edge-data/sensor-data.json", "size": 20*1024*1024, "service": "region1"},
+            {"urn": "edge-data/sensor-data-training.json", "size": 50*1024*1024, "service": "region1"},
+            {"urn": "edge-data/inference-data.json", "size": 10*1024*1024, "service": "region1"},
+            
+            # Regional data placed in appropriate regions
+            {"urn": "region1-bucket/reference-models.h5", "size": 50*1024*1024, "service": "region1"},
+            {"urn": "region1-bucket/reference-data.json", "size": 25*1024*1024, "service": "region1"},
+            {"urn": "region2-bucket/reference-data.json", "size": 25*1024*1024, "service": "region2"},
+            
+            # Central data placed on cloud node
+            {"urn": "datasets/training-data.parquet", "size": 100*1024*1024, "service": "minio"},
+            {"urn": "intermediate/sample-features.npz", "size": 15*1024*1024, "service": "minio"},
         ]
         
         logger.info("Creating custom test data for better locality testing...")

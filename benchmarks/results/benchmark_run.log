@@ -387,3 +387,391 @@
 2025-04-08 11:06:16,335 - benchmark-runner - INFO - Results comparison completed
 2025-04-08 11:06:16,339 - benchmark-runner - INFO - Saved benchmark results to benchmarks/results/benchmark_results_955d46da_20250408_110616.json
 2025-04-08 11:06:16,339 - benchmark-runner - INFO - Saved benchmark summary to benchmarks/results/benchmark_summary_955d46da_20250408_110616.csv
+2025-04-08 16:06:40,027 - benchmark-runner - INFO - Loaded configuration from benchmarks/framework/benchmark_config.yaml
+2025-04-08 16:06:40,035 - benchmark-runner - INFO - Loaded Kubernetes config from default location
+2025-04-08 16:06:40,035 - benchmark-runner - INFO - Starting benchmark runs
+2025-04-08 16:06:40,035 - benchmark-runner - INFO - Preparing benchmark environment
+2025-04-08 16:06:40,218 - benchmark-runner - INFO - Using existing namespace: scheduler-benchmark
+2025-04-08 16:06:40,218 - benchmark-runner - INFO - Cleaning up any existing storage deployments...
+2025-04-08 16:06:45,465 - benchmark-runner - INFO - Deploying storage services
+2025-04-08 16:06:48,223 - benchmark-runner - INFO - Successfully deployed storage services
+2025-04-08 16:06:48,223 - benchmark-runner - INFO - Waiting for storage services to be ready
+2025-04-08 16:06:48,303 - benchmark-runner - INFO - Waiting for storage services: 0/3 pods running
+2025-04-08 16:06:48,304 - benchmark-runner - INFO - Pending pods: minio-central-7bbbf68b49-v675k (Pending), minio-edge-region1-7d9db96f58-nxrhv (Pending), minio-edge-region2-6587657df4-4rdr5 (Pending)
+2025-04-08 16:06:53,377 - benchmark-runner - INFO - Waiting for storage services: 2/3 pods running
+2025-04-08 16:06:53,377 - benchmark-runner - INFO - Pending pods: minio-central-7bbbf68b49-v675k (Pending)
+2025-04-08 16:06:58,459 - benchmark-runner - INFO - Waiting for storage services: 2/3 pods running
+2025-04-08 16:06:58,459 - benchmark-runner - INFO - Pending pods: minio-central-7bbbf68b49-v675k (Pending)
+2025-04-08 16:07:03,514 - benchmark-runner - INFO - Storage services are ready: 3 pods running with ready containers
+2025-04-08 16:07:03,514 - benchmark-runner - INFO - Initializing benchmark data
+2025-04-08 16:07:03,514 - benchmark-runner - INFO - Running data initializer: python benchmarks/framework/data_initializer.py --config benchmarks/framework/benchmark_config.yaml --workloads-dir benchmarks/workloads
+2025-04-08 16:14:23,941 - benchmark-runner - INFO - Successfully initialized benchmark data
+2025-04-08 16:14:23,942 - benchmark-runner - INFO - Waiting for data initialization to complete
+2025-04-08 16:14:33,942 - benchmark-runner - INFO - Collecting cluster information
+2025-04-08 16:14:36,274 - benchmark-runner - INFO - Collected information for 6 nodes
+2025-04-08 16:14:36,275 - benchmark-runner - INFO - Cluster Overview:
+2025-04-08 16:14:36,275 - benchmark-runner - INFO - - Total nodes: 6
+2025-04-08 16:14:36,275 - benchmark-runner - INFO - - Edge nodes: 5
+2025-04-08 16:14:36,275 - benchmark-runner - INFO - - Cloud nodes: 1
+2025-04-08 16:14:36,275 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:14:36,308 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:14:36,308 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:14:36,308 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:14:36,308 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:14:36,309 - benchmark-runner - INFO - Indexing data locations for data locality metrics
+2025-04-08 16:14:36,352 - benchmark-runner - INFO - Indexed 18 data items
+2025-04-08 16:14:36,352 - benchmark-runner - INFO - Running workload 'ml-training-pipeline' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-08 16:14:38,122 - benchmark-runner - INFO - Deployed workload ml-training-pipeline_data-locality-scheduler_1
+2025-04-08 16:14:38,122 - benchmark-runner - INFO - Waiting for workload ml-training-pipeline_data-locality-scheduler_1 to complete
+2025-04-08 16:14:38,170 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 5 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:14:41,223 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 5 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:14:44,301 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 3 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:14:47,349 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:14:50,400 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:14:53,471 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:14:56,528 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:14:59,585 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 3 running, 2 completed, 0 failed
+2025-04-08 16:15:02,656 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 3 running, 2 completed, 0 failed
+2025-04-08 16:15:05,723 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 3 completed, 0 failed
+2025-04-08 16:15:08,772 - benchmark-runner - INFO - Workload ml-training-pipeline_data-locality-scheduler_1 completed: 5 succeeded, 0 failed
+2025-04-08 16:15:08,772 - benchmark-runner - INFO - Collecting metrics for workload ml-training-pipeline_data-locality-scheduler_1
+2025-04-08 16:15:08,859 - benchmark-runner - INFO - Calculating data locality metrics for ml-training-pipeline_data-locality-scheduler_1
+2025-04-08 16:15:08,859 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:15:08,900 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:15:08,900 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:15:08,900 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:15:08,900 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:15:08,944 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:15:08,944 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:15:08,944 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:15:08,948 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:15:08,948 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:15:09,105 - benchmark-runner - INFO - Local data reference found: edge-data/sensor-data-training.json on node os-k8s-worker-node-1
+2025-04-08 16:15:09,138 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:15:09,138 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-data-training.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,138 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/collected-data.parquet (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,138 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.8000
+2025-04-08 16:15:09,139 - benchmark-runner - INFO - Local data reference found: region1-bucket/trained-model.h5 on node os-k8s-worker-node-1
+2025-04-08 16:15:09,139 - benchmark-runner - INFO - Local data reference found: edge-data/inference-data.json on node os-k8s-worker-node-1
+2025-04-08 16:15:09,139 - benchmark-runner - INFO - Local data reference found: edge-data/predictions.json on node os-k8s-worker-node-1
+2025-04-08 16:15:09,139 - benchmark-runner - INFO - Pod edge-inference-service-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 3 local, 0 same zone, 0 same region, 0 cross region out of 3 total refs
+2025-04-08 16:15:09,139 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/trained-model.h5 (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,139 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = edge-data/inference-data.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,139 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = edge-data/predictions.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,139 - benchmark-runner - INFO - Pod edge-inference-service-14fbf189-1 data locality score: 1.0000, Size-weighted: 1.0000
+2025-04-08 16:15:09,140 - benchmark-runner - INFO - Local data reference found: intermediate/collected-data.parquet on node os-k8s-worker-node-0
+2025-04-08 16:15:09,140 - benchmark-runner - INFO - Local data reference found: intermediate/features.npz on node os-k8s-worker-node-0
+2025-04-08 16:15:09,140 - benchmark-runner - INFO - Pod feature-extraction-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 2 local, 0 same zone, 0 same region, 0 cross region out of 2 total refs
+2025-04-08 16:15:09,140 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/collected-data.parquet (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,140 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/features.npz (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,140 - benchmark-runner - INFO - Pod feature-extraction-14fbf189-1 data locality score: 1.0000, Size-weighted: 1.0000
+2025-04-08 16:15:09,171 - benchmark-runner - INFO - Local data reference found: intermediate/features.npz on node os-k8s-worker-node-0
+2025-04-08 16:15:09,171 - benchmark-runner - INFO - Local data reference found: results/model-metrics.json on node os-k8s-worker-node-0
+2025-04-08 16:15:09,171 - benchmark-runner - INFO - Pod model-evaluation-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 2 local, 0 same zone, 1 same region, 0 cross region out of 3 total refs
+2025-04-08 16:15:09,172 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/trained-model.h5 (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,172 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = intermediate/features.npz (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,172 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/model-metrics.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,172 - benchmark-runner - INFO - Pod model-evaluation-14fbf189-1 data locality score: 0.8333, Size-weighted: 0.4545
+2025-04-08 16:15:09,172 - benchmark-runner - INFO - Local data reference found: intermediate/features.npz on node os-k8s-worker-node-0
+2025-04-08 16:15:09,172 - benchmark-runner - INFO - Pod model-training-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 2 same region, 0 cross region out of 3 total refs
+2025-04-08 16:15:09,172 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/features.npz (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:09,172 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region1-bucket/reference-models.h5 (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,173 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region1-bucket/trained-model.h5 (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Pod model-training-14fbf189-1 data locality score: 0.6667, Size-weighted: 0.4340
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Total data refs: 13, Local refs: 9, Same zone: 0, Same region: 4, Cross region: 0
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Overall data locality score: 0.6923
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Weighted locality score: 0.8154
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Size-weighted locality: 0.6503
+2025-04-08 16:15:09,173 - benchmark-runner - INFO - Network metrics for ml-training-pipeline_data-locality-scheduler_1:
+2025-04-08 16:15:09,173 - benchmark-runner - INFO -   - Total data size: 815.00 MB
+2025-04-08 16:15:09,173 - benchmark-runner - INFO -   - Local data access: 340.00 MB (41.7%)
+2025-04-08 16:15:09,174 - benchmark-runner - INFO -   - Same region data: 475.00 MB (58.3%)
+2025-04-08 16:15:09,174 - benchmark-runner - INFO -   - Cross-region data: 0.00 MB (0.0%)
+2025-04-08 16:15:09,174 - benchmark-runner - INFO -   - Edge-to-cloud data: 25.00 MB (3.1%)
+2025-04-08 16:15:10,272 - benchmark-runner - INFO - Cleaned up workload ml-training-pipeline_data-locality-scheduler_1
+2025-04-08 16:15:10,272 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_ml-training-pipeline_data-locality-scheduler_1.yaml
+2025-04-08 16:15:10,272 - benchmark-runner - INFO - Running workload 'ml-training-pipeline' with scheduler 'default-scheduler' (iteration 1)
+2025-04-08 16:15:11,966 - benchmark-runner - INFO - Deployed workload ml-training-pipeline_default-scheduler_1
+2025-04-08 16:15:11,966 - benchmark-runner - INFO - Waiting for workload ml-training-pipeline_default-scheduler_1 to complete
+2025-04-08 16:15:12,016 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 5 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:15:15,068 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 4 pending, 1 running, 0 completed, 0 failed
+2025-04-08 16:15:18,125 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 1 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:15:21,188 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:15:24,305 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 5 running, 0 completed, 0 failed
+2025-04-08 16:15:27,386 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 4 running, 1 completed, 0 failed
+2025-04-08 16:15:30,446 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 4 running, 1 completed, 0 failed
+2025-04-08 16:15:33,521 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 3 running, 2 completed, 0 failed
+2025-04-08 16:15:36,580 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 2 running, 3 completed, 0 failed
+2025-04-08 16:15:39,639 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 2 running, 3 completed, 0 failed
+2025-04-08 16:15:42,735 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1: 0 pending, 1 running, 4 completed, 0 failed
+2025-04-08 16:15:45,805 - benchmark-runner - INFO - Workload ml-training-pipeline_default-scheduler_1 completed: 5 succeeded, 0 failed
+2025-04-08 16:15:45,805 - benchmark-runner - INFO - Collecting metrics for workload ml-training-pipeline_default-scheduler_1
+2025-04-08 16:15:45,882 - benchmark-runner - INFO - Calculating data locality metrics for ml-training-pipeline_default-scheduler_1
+2025-04-08 16:15:45,882 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:15:45,921 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:15:45,921 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:15:45,921 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:15:45,921 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:15:45,955 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:15:45,956 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:15:45,956 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:15:45,961 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:15:45,961 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:15:46,226 - benchmark-runner - INFO - Local data reference found: intermediate/collected-data.parquet on node os-k8s-worker-node-0
+2025-04-08 16:15:46,226 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:15:46,226 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-data-training.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,226 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/collected-data.parquet (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,227 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.6000
+2025-04-08 16:15:46,227 - benchmark-runner - INFO - Pod edge-inference-service-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 0 local, 0 same zone, 3 same region, 0 cross region out of 3 total refs
+2025-04-08 16:15:46,227 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/trained-model.h5 (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,227 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = edge-data/inference-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,227 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = edge-data/predictions.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,227 - benchmark-runner - INFO - Pod edge-inference-service-14fbf189-1 data locality score: 0.5000, Size-weighted: 0.4000
+2025-04-08 16:15:46,228 - benchmark-runner - INFO - Local data reference found: intermediate/collected-data.parquet on node os-k8s-worker-node-0
+2025-04-08 16:15:46,228 - benchmark-runner - INFO - Local data reference found: intermediate/features.npz on node os-k8s-worker-node-0
+2025-04-08 16:15:46,228 - benchmark-runner - INFO - Pod feature-extraction-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 2 local, 0 same zone, 0 same region, 0 cross region out of 2 total refs
+2025-04-08 16:15:46,228 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/collected-data.parquet (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,228 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/features.npz (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,228 - benchmark-runner - INFO - Pod feature-extraction-14fbf189-1 data locality score: 1.0000, Size-weighted: 1.0000
+2025-04-08 16:15:46,259 - benchmark-runner - INFO - Pod model-evaluation-14fbf189-1 on node os-k8s-worker-node-2 (region-2/zone-2-edge): 0 local, 0 same zone, 0 same region, 3 cross region out of 3 total refs
+2025-04-08 16:15:46,259 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/trained-model.h5 (CROSS_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,259 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = intermediate/features.npz (CROSS_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,259 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/model-metrics.json (CROSS_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,259 - benchmark-runner - INFO - Pod model-evaluation-14fbf189-1 data locality score: 0.0000, Size-weighted: 0.0000
+2025-04-08 16:15:46,259 - benchmark-runner - INFO - Local data reference found: region1-bucket/reference-models.h5 on node os-k8s-worker-node-1
+2025-04-08 16:15:46,260 - benchmark-runner - INFO - Local data reference found: region1-bucket/trained-model.h5 on node os-k8s-worker-node-1
+2025-04-08 16:15:46,260 - benchmark-runner - INFO - Pod model-training-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 2 local, 0 same zone, 1 same region, 0 cross region out of 3 total refs
+2025-04-08 16:15:46,260 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/features.npz (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:15:46,260 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region1-bucket/reference-models.h5 (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,260 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region1-bucket/trained-model.h5 (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:15:46,260 - benchmark-runner - INFO - Pod model-training-14fbf189-1 data locality score: 0.8333, Size-weighted: 0.9660
+2025-04-08 16:15:46,260 - benchmark-runner - INFO - Total data refs: 13, Local refs: 5, Same zone: 0, Same region: 5, Cross region: 3
+2025-04-08 16:15:46,261 - benchmark-runner - INFO - Overall data locality score: 0.3846
+2025-04-08 16:15:46,261 - benchmark-runner - INFO - Weighted locality score: 0.5385
+2025-04-08 16:15:46,261 - benchmark-runner - INFO - Size-weighted locality: 0.5239
+2025-04-08 16:15:46,261 - benchmark-runner - INFO - Network metrics for ml-training-pipeline_default-scheduler_1:
+2025-04-08 16:15:46,261 - benchmark-runner - INFO -   - Total data size: 815.00 MB
+2025-04-08 16:15:46,261 - benchmark-runner - INFO -   - Local data access: 315.00 MB (38.7%)
+2025-04-08 16:15:46,261 - benchmark-runner - INFO -   - Same region data: 280.00 MB (34.4%)
+2025-04-08 16:15:46,261 - benchmark-runner - INFO -   - Cross-region data: 220.00 MB (27.0%)
+2025-04-08 16:15:46,262 - benchmark-runner - INFO -   - Edge-to-cloud data: 35.00 MB (4.3%)
+2025-04-08 16:15:46,986 - benchmark-runner - INFO - Cleaned up workload ml-training-pipeline_default-scheduler_1
+2025-04-08 16:15:46,986 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_ml-training-pipeline_default-scheduler_1.yaml
+2025-04-08 16:15:46,986 - benchmark-runner - INFO - Running workload 'cross-region-data-processing' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-08 16:15:48,703 - benchmark-runner - INFO - Deployed workload cross-region-data-processing_data-locality-scheduler_1
+2025-04-08 16:15:48,703 - benchmark-runner - INFO - Waiting for workload cross-region-data-processing_data-locality-scheduler_1 to complete
+2025-04-08 16:15:48,751 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 4 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:15:51,819 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 4 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:15:54,892 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 2 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:15:57,964 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 2 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:16:01,083 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:04,155 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:07,205 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 3 running, 1 completed, 0 failed
+2025-04-08 16:16:10,268 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 3 running, 1 completed, 0 failed
+2025-04-08 16:16:13,332 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 3 running, 1 completed, 0 failed
+2025-04-08 16:16:16,380 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1: 0 pending, 2 running, 2 completed, 0 failed
+2025-04-08 16:16:19,429 - benchmark-runner - INFO - Workload cross-region-data-processing_data-locality-scheduler_1 completed: 4 succeeded, 0 failed
+2025-04-08 16:16:19,429 - benchmark-runner - INFO - Collecting metrics for workload cross-region-data-processing_data-locality-scheduler_1
+2025-04-08 16:16:19,503 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-data-processing_data-locality-scheduler_1
+2025-04-08 16:16:19,503 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:16:19,539 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:16:19,540 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:16:19,540 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:16:19,540 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:16:19,580 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:16:19,580 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:16:19,580 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:16:19,585 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:16:19,585 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:16:19,756 - benchmark-runner - INFO - Local data reference found: results/aggregated-results.json on node os-k8s-worker-node-0
+2025-04-08 16:16:19,756 - benchmark-runner - INFO - Pod central-aggregator-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 1 same region, 1 cross region out of 3 total refs
+2025-04-08 16:16:19,756 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/processed-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:19,756 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region2-bucket/processed-data.json (CROSS_REGION) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:19,756 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/aggregated-results.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:19,756 - benchmark-runner - INFO - Pod central-aggregator-14fbf189-1 data locality score: 0.5000, Size-weighted: 0.3846
+2025-04-08 16:16:19,757 - benchmark-runner - INFO - Local data reference found: edge-data/sensor-readings.json on node os-k8s-worker-node-1
+2025-04-08 16:16:19,796 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:16:19,796 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-readings.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:19,796 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/preprocessed-readings.json (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:19,796 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.8000
+2025-04-08 16:16:19,797 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-readings.json on node os-k8s-worker-node-0
+2025-04-08 16:16:19,797 - benchmark-runner - INFO - Pod region1-processor-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 2 same region, 0 cross region out of 3 total refs
+2025-04-08 16:16:19,797 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-readings.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:19,797 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region1-bucket/reference-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:19,797 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region1-bucket/processed-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:19,797 - benchmark-runner - INFO - Pod region1-processor-14fbf189-1 data locality score: 0.6667, Size-weighted: 0.7000
+2025-04-08 16:16:19,797 - benchmark-runner - INFO - Local data reference found: region2-bucket/reference-data.json on node os-k8s-worker-node-2
+2025-04-08 16:16:19,798 - benchmark-runner - INFO - Local data reference found: region2-bucket/processed-data.json on node os-k8s-worker-node-2
+2025-04-08 16:16:19,798 - benchmark-runner - INFO - Pod region2-processor-14fbf189-1 on node os-k8s-worker-node-2 (region-2/zone-2-edge): 2 local, 0 same zone, 0 same region, 1 cross region out of 3 total refs
+2025-04-08 16:16:19,798 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-readings.json (CROSS_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:19,798 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region2-bucket/reference-data.json (LOCAL) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:19,798 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region2-bucket/processed-data.json (LOCAL) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:19,798 - benchmark-runner - INFO - Pod region2-processor-14fbf189-1 data locality score: 0.6667, Size-weighted: 0.5000
+2025-04-08 16:16:19,798 - benchmark-runner - INFO - Total data refs: 11, Local refs: 5, Same zone: 0, Same region: 4, Cross region: 2
+2025-04-08 16:16:19,799 - benchmark-runner - INFO - Overall data locality score: 0.4545
+2025-04-08 16:16:19,799 - benchmark-runner - INFO - Weighted locality score: 0.6000
+2025-04-08 16:16:19,799 - benchmark-runner - INFO - Size-weighted locality: 0.6386
+2025-04-08 16:16:19,799 - benchmark-runner - INFO - Network metrics for cross-region-data-processing_data-locality-scheduler_1:
+2025-04-08 16:16:19,799 - benchmark-runner - INFO -   - Total data size: 415.00 MB
+2025-04-08 16:16:19,799 - benchmark-runner - INFO -   - Local data access: 215.00 MB (51.8%)
+2025-04-08 16:16:19,799 - benchmark-runner - INFO -   - Same region data: 125.00 MB (30.1%)
+2025-04-08 16:16:19,799 - benchmark-runner - INFO -   - Cross-region data: 75.00 MB (18.1%)
+2025-04-08 16:16:19,800 - benchmark-runner - INFO -   - Edge-to-cloud data: 100.00 MB (24.1%)
+2025-04-08 16:16:20,263 - benchmark-runner - INFO - Cleaned up workload cross-region-data-processing_data-locality-scheduler_1
+2025-04-08 16:16:20,263 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_cross-region-data-processing_data-locality-scheduler_1.yaml
+2025-04-08 16:16:20,263 - benchmark-runner - INFO - Running workload 'cross-region-data-processing' with scheduler 'default-scheduler' (iteration 1)
+2025-04-08 16:16:23,990 - benchmark-runner - INFO - Deployed workload cross-region-data-processing_default-scheduler_1
+2025-04-08 16:16:23,990 - benchmark-runner - INFO - Waiting for workload cross-region-data-processing_default-scheduler_1 to complete
+2025-04-08 16:16:24,027 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 4 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:16:27,092 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 2 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:16:30,142 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:33,193 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:36,259 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:39,314 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 4 running, 0 completed, 0 failed
+2025-04-08 16:16:42,383 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 3 running, 1 completed, 0 failed
+2025-04-08 16:16:45,439 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1: 0 pending, 3 running, 1 completed, 0 failed
+2025-04-08 16:16:48,488 - benchmark-runner - INFO - Workload cross-region-data-processing_default-scheduler_1 completed: 4 succeeded, 0 failed
+2025-04-08 16:16:48,488 - benchmark-runner - INFO - Collecting metrics for workload cross-region-data-processing_default-scheduler_1
+2025-04-08 16:16:48,565 - benchmark-runner - INFO - Calculating data locality metrics for cross-region-data-processing_default-scheduler_1
+2025-04-08 16:16:48,565 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:16:48,596 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:16:48,597 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:16:48,597 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:16:48,597 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:16:48,630 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:16:48,630 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:16:48,630 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:16:48,636 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:16:48,636 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:16:48,826 - benchmark-runner - INFO - Local data reference found: results/aggregated-results.json on node os-k8s-worker-node-0
+2025-04-08 16:16:48,826 - benchmark-runner - INFO - Pod central-aggregator-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 1 same region, 1 cross region out of 3 total refs
+2025-04-08 16:16:48,827 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = region1-bucket/processed-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:48,827 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region2-bucket/processed-data.json (CROSS_REGION) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:48,827 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/aggregated-results.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:48,827 - benchmark-runner - INFO - Pod central-aggregator-14fbf189-1 data locality score: 0.5000, Size-weighted: 0.3846
+2025-04-08 16:16:48,827 - benchmark-runner - INFO - Local data reference found: edge-data/sensor-readings.json on node os-k8s-worker-node-1
+2025-04-08 16:16:48,861 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:16:48,861 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-readings.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:48,861 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/preprocessed-readings.json (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:48,861 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.8000
+2025-04-08 16:16:48,861 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-readings.json on node os-k8s-worker-node-0
+2025-04-08 16:16:48,861 - benchmark-runner - INFO - Pod region1-processor-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 2 same region, 0 cross region out of 3 total refs
+2025-04-08 16:16:48,861 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-readings.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:48,861 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region1-bucket/reference-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:48,862 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region1-bucket/processed-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Pod region1-processor-14fbf189-1 data locality score: 0.6667, Size-weighted: 0.7000
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Pod region2-processor-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 0 local, 0 same zone, 1 same region, 2 cross region out of 3 total refs
+2025-04-08 16:16:48,862 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-readings.json (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:16:48,862 - benchmark-runner - INFO -   data.scheduler.thesis/input-2 = region2-bucket/reference-data.json (CROSS_REGION) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:48,862 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = region2-bucket/processed-data.json (CROSS_REGION) - Storage on: os-k8s-worker-node-2 (region-2/zone-2-edge)
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Pod region2-processor-14fbf189-1 data locality score: 0.1667, Size-weighted: 0.2000
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Total data refs: 11, Local refs: 3, Same zone: 0, Same region: 5, Cross region: 3
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Overall data locality score: 0.2727
+2025-04-08 16:16:48,862 - benchmark-runner - INFO - Weighted locality score: 0.4545
+2025-04-08 16:16:48,863 - benchmark-runner - INFO - Size-weighted locality: 0.5663
+2025-04-08 16:16:48,863 - benchmark-runner - INFO - Network metrics for cross-region-data-processing_default-scheduler_1:
+2025-04-08 16:16:48,863 - benchmark-runner - INFO -   - Total data size: 415.00 MB
+2025-04-08 16:16:48,863 - benchmark-runner - INFO -   - Local data access: 165.00 MB (39.8%)
+2025-04-08 16:16:48,863 - benchmark-runner - INFO -   - Same region data: 175.00 MB (42.2%)
+2025-04-08 16:16:48,863 - benchmark-runner - INFO -   - Cross-region data: 75.00 MB (18.1%)
+2025-04-08 16:16:48,863 - benchmark-runner - INFO -   - Edge-to-cloud data: 100.00 MB (24.1%)
+2025-04-08 16:16:49,664 - benchmark-runner - INFO - Cleaned up workload cross-region-data-processing_default-scheduler_1
+2025-04-08 16:16:49,664 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_cross-region-data-processing_default-scheduler_1.yaml
+2025-04-08 16:16:49,665 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'data-locality-scheduler' (iteration 1)
+2025-04-08 16:16:51,329 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-08 16:16:51,329 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_data-locality-scheduler_1 to complete
+2025-04-08 16:16:51,399 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:16:54,447 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:16:57,498 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:00,553 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:03,586 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:06,623 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:09,665 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1: 0 pending, 1 running, 1 completed, 0 failed
+2025-04-08 16:17:12,710 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_data-locality-scheduler_1 completed: 2 succeeded, 0 failed
+2025-04-08 16:17:12,711 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-08 16:17:12,791 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-08 16:17:12,792 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:17:12,825 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:17:12,825 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:17:12,825 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:17:12,825 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:17:12,859 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:17:12,859 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:17:12,859 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:17:12,864 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:17:12,864 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:17:12,915 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-data.json on node os-k8s-worker-node-0
+2025-04-08 16:17:12,915 - benchmark-runner - INFO - Local data reference found: results/processed-results.json on node os-k8s-worker-node-0
+2025-04-08 16:17:12,915 - benchmark-runner - INFO - Pod cloud-data-processor-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 2 local, 0 same zone, 0 same region, 0 cross region out of 2 total refs
+2025-04-08 16:17:12,916 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-data.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:12,916 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/processed-results.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:12,916 - benchmark-runner - INFO - Pod cloud-data-processor-14fbf189-1 data locality score: 1.0000, Size-weighted: 1.0000
+2025-04-08 16:17:12,916 - benchmark-runner - INFO - Local data reference found: edge-data/sensor-data.json on node os-k8s-worker-node-1
+2025-04-08 16:17:12,973 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-1 (region-1/zone-1-edge): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:17:12,974 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-data.json (LOCAL) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:17:12,974 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/preprocessed-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:12,974 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.8000
+2025-04-08 16:17:12,974 - benchmark-runner - INFO - Total data refs: 4, Local refs: 3, Same zone: 0, Same region: 1, Cross region: 0
+2025-04-08 16:17:12,974 - benchmark-runner - INFO - Overall data locality score: 0.7500
+2025-04-08 16:17:12,974 - benchmark-runner - INFO - Weighted locality score: 0.8500
+2025-04-08 16:17:12,974 - benchmark-runner - INFO - Size-weighted locality: 0.8667
+2025-04-08 16:17:12,975 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_data-locality-scheduler_1:
+2025-04-08 16:17:12,975 - benchmark-runner - INFO -   - Total data size: 45.00 MB
+2025-04-08 16:17:12,975 - benchmark-runner - INFO -   - Local data access: 35.00 MB (77.8%)
+2025-04-08 16:17:12,975 - benchmark-runner - INFO -   - Same region data: 10.00 MB (22.2%)
+2025-04-08 16:17:12,975 - benchmark-runner - INFO -   - Cross-region data: 0.00 MB (0.0%)
+2025-04-08 16:17:12,975 - benchmark-runner - INFO -   - Edge-to-cloud data: 10.00 MB (22.2%)
+2025-04-08 16:17:13,452 - benchmark-runner - INFO - Cleaned up workload edge-to-cloud-pipeline_data-locality-scheduler_1
+2025-04-08 16:17:13,453 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_edge-to-cloud-pipeline_data-locality-scheduler_1.yaml
+2025-04-08 16:17:13,453 - benchmark-runner - INFO - Running workload 'edge-to-cloud-pipeline' with scheduler 'default-scheduler' (iteration 1)
+2025-04-08 16:17:14,878 - benchmark-runner - INFO - Deployed workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-08 16:17:14,878 - benchmark-runner - INFO - Waiting for workload edge-to-cloud-pipeline_default-scheduler_1 to complete
+2025-04-08 16:17:14,923 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:17:17,963 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 2 pending, 0 running, 0 completed, 0 failed
+2025-04-08 16:17:21,014 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:24,049 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:27,093 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:30,135 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 2 running, 0 completed, 0 failed
+2025-04-08 16:17:33,173 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1: 0 pending, 1 running, 1 completed, 0 failed
+2025-04-08 16:17:36,209 - benchmark-runner - INFO - Workload edge-to-cloud-pipeline_default-scheduler_1 completed: 2 succeeded, 0 failed
+2025-04-08 16:17:36,209 - benchmark-runner - INFO - Collecting metrics for workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-08 16:17:36,302 - benchmark-runner - INFO - Calculating data locality metrics for edge-to-cloud-pipeline_default-scheduler_1
+2025-04-08 16:17:36,302 - benchmark-runner - INFO - Mapping storage buckets to nodes
+2025-04-08 16:17:36,360 - benchmark-runner - INFO - Mapped 5 buckets to node os-k8s-worker-node-0 for minio-central
+2025-04-08 16:17:36,360 - benchmark-runner - INFO - Mapped 2 buckets to node os-k8s-worker-node-1 for minio-edge-region1
+2025-04-08 16:17:36,360 - benchmark-runner - INFO - Mapped 1 buckets to node os-k8s-worker-node-2 for minio-edge-region2
+2025-04-08 16:17:36,360 - benchmark-runner - INFO - Mapped buckets: {'datasets': {'minio-central': 'os-k8s-worker-node-0'}, 'intermediate': {'minio-central': 'os-k8s-worker-node-0'}, 'results': {'minio-central': 'os-k8s-worker-node-0'}, 'shared': {'minio-central': 'os-k8s-worker-node-0'}, 'test-bucket': {'minio-central': 'os-k8s-worker-node-0'}, 'edge-data': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region1-bucket': {'minio-edge-region1': 'os-k8s-worker-node-1'}, 'region2-bucket': {'minio-edge-region2': 'os-k8s-worker-node-2'}}
+2025-04-08 16:17:36,414 - benchmark-runner - INFO - Mapped storage service minio-central to node os-k8s-worker-node-0
+2025-04-08 16:17:36,415 - benchmark-runner - INFO - Mapped storage service minio-edge-region1 to node os-k8s-worker-node-1
+2025-04-08 16:17:36,415 - benchmark-runner - INFO - Mapped storage service minio-edge-region2 to node os-k8s-worker-node-2
+2025-04-08 16:17:36,420 - benchmark-runner - INFO - Storage nodes: {'minio-central': 'os-k8s-worker-node-0', 'minio-edge-region1': 'os-k8s-worker-node-1', 'minio-edge-region2': 'os-k8s-worker-node-2'}
+2025-04-08 16:17:36,420 - benchmark-runner - INFO - Bucket to nodes mapping: {'datasets': ['os-k8s-worker-node-0'], 'intermediate': ['os-k8s-worker-node-0'], 'results': ['os-k8s-worker-node-0'], 'shared': ['os-k8s-worker-node-0'], 'test-bucket': ['os-k8s-worker-node-0'], 'edge-data': ['os-k8s-worker-node-1'], 'region1-bucket': ['os-k8s-worker-node-1'], 'region2-bucket': ['os-k8s-worker-node-2']}
+2025-04-08 16:17:36,504 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-data.json on node os-k8s-worker-node-0
+2025-04-08 16:17:36,504 - benchmark-runner - INFO - Local data reference found: results/processed-results.json on node os-k8s-worker-node-0
+2025-04-08 16:17:36,504 - benchmark-runner - INFO - Pod cloud-data-processor-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 2 local, 0 same zone, 0 same region, 0 cross region out of 2 total refs
+2025-04-08 16:17:36,504 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = intermediate/preprocessed-data.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:36,504 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = results/processed-results.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:36,504 - benchmark-runner - INFO - Pod cloud-data-processor-14fbf189-1 data locality score: 1.0000, Size-weighted: 1.0000
+2025-04-08 16:17:36,569 - benchmark-runner - INFO - Local data reference found: intermediate/preprocessed-data.json on node os-k8s-worker-node-0
+2025-04-08 16:17:36,570 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 on node os-k8s-worker-node-0 (region-1/zone-1-cloud): 1 local, 0 same zone, 1 same region, 0 cross region out of 2 total refs
+2025-04-08 16:17:36,570 - benchmark-runner - INFO -   data.scheduler.thesis/input-1 = edge-data/sensor-data.json (SAME_REGION) - Storage on: os-k8s-worker-node-1 (region-1/zone-1-edge)
+2025-04-08 16:17:36,570 - benchmark-runner - INFO -   data.scheduler.thesis/output-1 = intermediate/preprocessed-data.json (LOCAL) - Storage on: os-k8s-worker-node-0 (region-1/zone-1-cloud)
+2025-04-08 16:17:36,570 - benchmark-runner - INFO - Pod edge-data-collector-14fbf189-1 data locality score: 0.7500, Size-weighted: 0.6000
+2025-04-08 16:17:36,570 - benchmark-runner - INFO - Total data refs: 4, Local refs: 3, Same zone: 0, Same region: 1, Cross region: 0
+2025-04-08 16:17:36,570 - benchmark-runner - INFO - Overall data locality score: 0.7500
+2025-04-08 16:17:36,570 - benchmark-runner - INFO - Weighted locality score: 0.8500
+2025-04-08 16:17:36,571 - benchmark-runner - INFO - Size-weighted locality: 0.7333
+2025-04-08 16:17:36,571 - benchmark-runner - INFO - Network metrics for edge-to-cloud-pipeline_default-scheduler_1:
+2025-04-08 16:17:36,571 - benchmark-runner - INFO -   - Total data size: 45.00 MB
+2025-04-08 16:17:36,571 - benchmark-runner - INFO -   - Local data access: 25.00 MB (55.6%)
+2025-04-08 16:17:36,571 - benchmark-runner - INFO -   - Same region data: 20.00 MB (44.4%)
+2025-04-08 16:17:36,571 - benchmark-runner - INFO -   - Cross-region data: 0.00 MB (0.0%)
+2025-04-08 16:17:36,571 - benchmark-runner - INFO -   - Edge-to-cloud data: 0.00 MB (0.0%)
+2025-04-08 16:17:37,192 - benchmark-runner - INFO - Cleaned up workload edge-to-cloud-pipeline_default-scheduler_1
+2025-04-08 16:17:37,192 - benchmark-runner - INFO - Temporary workload file saved at: benchmarks/results/tmp_edge-to-cloud-pipeline_default-scheduler_1.yaml
+2025-04-08 16:17:37,192 - benchmark-runner - INFO - Comparing results between schedulers
+2025-04-08 16:17:37,193 - benchmark-runner - INFO - Results comparison completed
+2025-04-08 16:17:37,203 - benchmark-runner - INFO - Saved benchmark results to benchmarks/results/benchmark_results_14fbf189_20250408_161737.json
+2025-04-08 16:17:37,204 - benchmark-runner - INFO - Saved benchmark summary to benchmarks/results/benchmark_summary_14fbf189_20250408_161737.csv
+2025-04-08 16:17:37,205 - benchmark-runner - INFO - Generated benchmark report: benchmarks/results/benchmark_report_14fbf189_20250408_161737.md
+2025-04-08 16:17:37,205 - benchmark-runner - INFO - Benchmark runs completed in 657.16 seconds

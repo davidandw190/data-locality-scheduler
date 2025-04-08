@@ -902,7 +902,7 @@ class BenchmarkRunner:
         storage_nodes = {}
         bucket_to_nodes = {}
 
-        # Get storage pod to node mappings
+        # get storage pod to node mappings
         try:
             pods = self.k8s_client.list_namespaced_pod(
                 namespace=namespace,
@@ -1140,8 +1140,7 @@ class BenchmarkRunner:
                             f"Storage on: {ref['storage_node']} ({ref['storage_region']}/{ref['storage_zone']})")
                 
                 if pod_total_refs > 0:
-                    # Calculate a weighted locality score
-                    # LOCAL: 1.0, SAME_ZONE: 0.8, SAME_REGION: 0.5, CROSS_REGION: 0.0
+                    # LOCAL: 1.0, SAME_ZONE: 0.7, SAME_REGION: 0.4, CROSS_REGION: 0.0
                     locality_weight_sum = (
                         pod_local_refs * 1.0 + 
                         pod_same_zone_refs * 0.8 + 
@@ -1153,8 +1152,8 @@ class BenchmarkRunner:
                     if pod_total_data_size > 0:
                         size_weighted_score = (
                             (pod_local_data_size * 1.0) + 
-                            (pod_same_zone_data_size * 0.8) + 
-                            (pod_same_region_data_size * 0.5)
+                            (pod_same_zone_data_size * 0.7) + 
+                            (pod_same_region_data_size * 0.4)
                         ) / pod_total_data_size
                     
                     pod_metric['data_locality'] = {
@@ -1187,8 +1186,8 @@ class BenchmarkRunner:
             
             weighted_locality_sum = (
                 local_data_refs * 1.0 + 
-                same_zone_refs * 0.8 + 
-                same_region_refs * 0.5
+                same_zone_refs * 0.7 + 
+                same_region_refs * 0.4
             )
             weighted_locality_score = weighted_locality_sum / total_data_refs
             
@@ -1196,8 +1195,8 @@ class BenchmarkRunner:
             if total_data_size > 0:
                 size_weighted_locality = (
                     (local_data_size * 1.0) + 
-                    (same_zone_data_size * 0.8) + 
-                    (same_region_data_size * 0.5)
+                    (same_zone_data_size * 0.7) + 
+                    (same_region_data_size * 0.4)
                 ) / total_data_size
             
             logger.info(f"Overall data locality score: {overall_locality_score:.4f}")
@@ -1652,6 +1651,36 @@ class BenchmarkRunner:
             f.write(f"Edge nodes: {edge_nodes}\n")
             f.write(f"Cloud nodes: {cloud_nodes}\n\n")
             
+            
+            f.write("## Data Locality Analysis\n\n")
+            f.write("This section provides detailed insights into how data locality awareness affects workload performance:\n\n")
+            
+            # Add transfer cost analysis
+            f.write("### Transfer Cost Analysis\n\n")
+            f.write("| Workload | Scheduler | Total Data (MB) | Network Transfer (MB) | Transfer Reduction |\n")
+            f.write("|----------|-----------|----------------|----------------------|-------------------|\n")
+            
+            for workload, comparison in self.results["comparison"].items():
+                if 'network_comparison' in comparison:
+                    if 'data-locality-scheduler' in comparison['network_comparison'] and 'default-scheduler' in comparison['network_comparison']:
+                        dl_data = comparison['network_comparison']['data-locality-scheduler']
+                        def_data = comparison['network_comparison']['default-scheduler']
+                        
+                        dl_total = dl_data.get('total_data_mb', 0)
+                        dl_local = dl_data.get('local_data_mb', 0)
+                        dl_transfer = dl_total - dl_local
+                        
+                        def_total = def_data.get('total_data_mb', 0)
+                        def_local = def_data.get('local_data_mb', 0)
+                        def_transfer = def_total - def_local
+                        
+                        reduction = ((def_transfer - dl_transfer) / def_transfer * 100) if def_transfer > 0 else 0
+                        
+                        f.write(f"| {workload} | data-locality-scheduler | {dl_total:.2f} | {dl_transfer:.2f} | {reduction:.2f}% |\n")
+                        f.write(f"| {workload} | default-scheduler | {def_total:.2f} | {def_transfer:.2f} | - |\n")
+            
+            f.write("\n")
+            
             f.write("## Workload Results\n\n")
             
             for workload in self.results["comparison"].keys():
@@ -1726,17 +1755,19 @@ class BenchmarkRunner:
                     
                     for scheduler, distribution in comparison['node_distribution_comparison'].items():
                         if scheduler != 'edge_utilization_improvement_percentage':
-                            edge = distribution['edge_placements']
-                            cloud = distribution['cloud_placements']
-                            edge_pct = distribution['edge_percentage']
-                            cloud_pct = distribution['cloud_percentage']
-                            f.write(f"| {scheduler} | {edge} | {cloud} | {edge_pct:.1f}% | {cloud_pct:.1f}% |\n")
+                            if isinstance(distribution, dict):
+                                edge = distribution.get('edge_placements', 0)
+                                cloud = distribution.get('cloud_placements', 0)
+                                edge_pct = distribution.get('edge_percentage', 0.0)
+                                cloud_pct = distribution.get('cloud_percentage', 0.0)
+                                f.write(f"| {scheduler} | {edge} | {cloud} | {edge_pct:.1f}% | {cloud_pct:.1f}% |\n")
                     
                     f.write("\n")
                     
                     if 'edge_utilization_improvement_percentage' in comparison['node_distribution_comparison']:
                         improvement = comparison['node_distribution_comparison']['edge_utilization_improvement_percentage']
                         f.write(f"**Edge Resource Utilization Improvement: {improvement:.2f}%**\n\n")
+
             
             f.write("## Overall Summary\n\n")
             
@@ -1798,21 +1829,27 @@ class BenchmarkRunner:
             f.write("### Edge Resource Utilization\n\n")
             
             edge_utilization_by_scheduler = {}
-            
+        
             for workload, comparison in self.results["comparison"].items():
                 if 'node_distribution_comparison' in comparison:
                     for scheduler, distribution in comparison['node_distribution_comparison'].items():
-                        if scheduler not in edge_utilization_by_scheduler:
-                            edge_utilization_by_scheduler[scheduler] = []
-                        
-                        edge_utilization_by_scheduler[scheduler].append(distribution['edge_percentage'])
+                        if isinstance(distribution, dict) and scheduler not in ['edge_utilization_improvement_percentage']:
+                            if scheduler not in edge_utilization_by_scheduler:
+                                edge_utilization_by_scheduler[scheduler] = []
+                            
+                            if 'edge_percentage' in distribution:
+                                edge_utilization_by_scheduler[scheduler].append(distribution['edge_percentage'])
             
+            f.write("### Edge Resource Utilization\n\n")
             f.write("| Scheduler | Average Edge Utilization |\n")
             f.write("|-----------|---------------------------|\n")
             
             for scheduler, percentages in edge_utilization_by_scheduler.items():
-                avg_edge_utilization = sum(percentages) / len(percentages)
-                f.write(f"| {scheduler} | {avg_edge_utilization:.2f}% |\n")
+                if percentages:  # only if we have data
+                    avg_edge_utilization = sum(percentages) / len(percentages)
+                    f.write(f"| {scheduler} | {avg_edge_utilization:.2f}% |\n")
+                else:
+                    f.write(f"| {scheduler} | N/A |\n")
             
             f.write("\n")
             

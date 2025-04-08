@@ -32,19 +32,19 @@ workloads:
   iterations: 1
   data_intensity: "high"
   compute_intensity: "high"
-  max_wait_time: 300
+  max_wait_time: 600
 - name: "cross-region-data-processing"
   description: "Cross-region data processing with region-specific handling"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
-  max_wait_time: 300
+  max_wait_time: 600
 - name: "edge-to-cloud-pipeline"
   description: "IoT data processing pipeline from edge to cloud"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
-  max_wait_time: 300
+  max_wait_time: 600
 
 # - name: "cross-region-analytics"
 #   description: "Analytics workload using data from multiple regions"

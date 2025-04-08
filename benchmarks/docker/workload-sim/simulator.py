@@ -285,9 +285,21 @@ class WorkloadSimulator:
                 logger.info(f"Input {i+1}: {self.input_data[i]['urn']} -> {file_path}")
         
         local_refs = 0
+        # same_zone_refs = 0
+        # same_region_refs = 0
+        # cross_region_refs = 0
         total_refs = len(self.input_data) + len(self.output_data)
         local_data_size = 0
         total_data_size = 0
+        # same_zone_data_size = 0
+        # same_region_data_size = 0
+        # cross_region_data_size = 0
+        
+        
+        # edge_to_cloud_transfers = 0
+        # cloud_to_edge_transfers = 0
+        # edge_to_cloud_data_size = 0
+        # cloud_to_edge_data_size = 0
         
         for i, file_path in enumerate(input_files):
             if i < len(self.input_data):
