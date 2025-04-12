@@ -63,7 +63,6 @@ class DataInitializer:
                                         'data_type': parts[4] if len(parts) > 4 else 'generic'
                                     })
                             
-                            # Extract output data references
                             elif k.startswith('data.scheduler.thesis/output-'):
                                 parts = v.split(',')
                                 if len(parts) >= 2:
@@ -83,7 +82,6 @@ class DataInitializer:
     
     
     def _configure_minio_client(self):
-        """Configure MinIO client to access benchmark storage"""
         try:
             logger.info("Configuring MinIO client connections")
             
@@ -292,12 +290,10 @@ class DataInitializer:
             {"urn": "edge-data/sensor-data-training.json", "size": 50*1024*1024, "service": "region1"},
             {"urn": "edge-data/inference-data.json", "size": 10*1024*1024, "service": "region1"},
             
-            # Regional data placed in appropriate regions
             {"urn": "region1-bucket/reference-models.h5", "size": 50*1024*1024, "service": "region1"},
             {"urn": "region1-bucket/reference-data.json", "size": 25*1024*1024, "service": "region1"},
             {"urn": "region2-bucket/reference-data.json", "size": 25*1024*1024, "service": "region2"},
             
-            # Central data placed on cloud node
             {"urn": "datasets/training-data.parquet", "size": 100*1024*1024, "service": "minio"},
             {"urn": "intermediate/sample-features.npz", "size": 15*1024*1024, "service": "minio"},
         ]

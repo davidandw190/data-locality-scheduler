@@ -129,8 +129,6 @@ class BenchmarkRunner:
             raise FileNotFoundError(f"Storage manifest not found: {storage_manifests}")
     
     
-    
-    
     def _wait_for_storage_readiness(self):
         logger.info("Waiting for storage services to be ready")
         
@@ -141,7 +139,6 @@ class BenchmarkRunner:
         
         while time.time() - start_time < timeout and not ready:
             try:
-                # Check if storage pods are ready
                 pods = self.k8s_client.list_namespaced_pod(
                     namespace=namespace,
                     label_selector="app=minio"
@@ -1892,28 +1889,20 @@ class BenchmarkRunner:
             f.write("\n")
             
             f.write("## Conclusion\n\n")
-            
-            has_improvement = False
-            improvements_list = []
-            
+            improvements = []
+
             if data_locality_improvements and sum(data_locality_improvements) / len(data_locality_improvements) > 0:
-                improvements_list.append(f"a {sum(data_locality_improvements) / len(data_locality_improvements):.2f}% improvement in data locality scores")
-                has_improvement = True
-            
+                improvements.append(f"Data locality scores: +{sum(data_locality_improvements) / len(data_locality_improvements):.2f}%")
+
             if local_data_improvements and sum(local_data_improvements) / len(local_data_improvements) > 0:
-                improvements_list.append(f"a {sum(local_data_improvements) / len(local_data_improvements):.2f}% increase in local data access")
-                has_improvement = True
-            
+                improvements.append(f"Local data access: +{sum(local_data_improvements) / len(local_data_improvements):.2f}%")
+
             if cross_region_reductions and sum(cross_region_reductions) / len(cross_region_reductions) > 0:
-                improvements_list.append(f"a {sum(cross_region_reductions) / len(cross_region_reductions):.2f}% reduction in cross-region data transfers")
-                has_improvement = True
-            
+                improvements.append(f"Cross-region transfers: -{sum(cross_region_reductions) / len(cross_region_reductions):.2f}%")
+
             if latency_improvements and sum(latency_improvements) / len(latency_improvements) > 0:
-                improvements_list.append(f"a {sum(latency_improvements) / len(latency_improvements):.2f}% reduction in scheduling latency")
-                has_improvement = True
-            
-            edge_utilization_improvement = None
-            
+                improvements.append(f"Scheduling latency: -{sum(latency_improvements) / len(latency_improvements):.2f}%")
+
             if 'data-locality-scheduler' in edge_utilization_by_scheduler and 'default-scheduler' in edge_utilization_by_scheduler:
                 default_edge = sum(edge_utilization_by_scheduler['default-scheduler']) / len(edge_utilization_by_scheduler['default-scheduler'])
                 custom_edge = sum(edge_utilization_by_scheduler['data-locality-scheduler']) / len(edge_utilization_by_scheduler['data-locality-scheduler'])
@@ -1922,32 +1911,15 @@ class BenchmarkRunner:
                     edge_utilization_improvement = ((custom_edge - default_edge) / default_edge) * 100
                     
                     if edge_utilization_improvement > 0:
-                        improvements_list.append(f"a {edge_utilization_improvement:.2f}% increase in edge resource utilization")
-                        has_improvement = True
-            
-            f.write("This benchmark compared the data-locality scheduler with the default Kubernetes scheduler ")
-            f.write("across various workloads in an edge-cloud environment. ")
-            
-            if has_improvement:
-                f.write("The data-locality scheduler demonstrated ")
-                
-                if len(improvements_list) > 2:
-                    f.write(f"{', '.join(improvements_list[:-1])}, and {improvements_list[-1]} ")
-                elif len(improvements_list) == 2:
-                    f.write(f"{improvements_list[0]} and {improvements_list[1]} ")
-                else:
-                    f.write(f"{improvements_list[0]} ")
-                
-                f.write("compared to the default Kubernetes scheduler. ")
-            
-            f.write("These results validate the effectiveness of data-locality-aware scheduling in edge-cloud environments, ")
-            f.write("particularly for data-intensive workloads.\n\n")
-            
-            f.write("The benchmarking methodology included rigorous testing of multiple workloads with varying ")
-            f.write("characteristics across multiple iterations to ensure statistical validity. ")
-            f.write("The data-locality scheduler demonstrates its ability to optimize placement decisions ")
-            f.write("by considering the location of data, resulting in more efficient resource utilization ")
-            f.write("and potentially reduced data transfer costs.\n")
+                        improvements.append(f"Edge resource utilization: +{edge_utilization_improvement:.2f}%")
+
+            f.write("Data-locality scheduler vs. default Kubernetes scheduler:\n\n")
+
+            if improvements:
+                for improvement in improvements:
+                    f.write(f"• {improvement}\n")
+            else:
+                f.write("• No significant improvements observed\n")
         
         logger.info(f"Generated benchmark report: {report_file}")
         
