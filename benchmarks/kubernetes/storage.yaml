@@ -1,0 +1,272 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-central
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: central
+  annotations:
+    "scheduler.thesis/storage-service": "true"
+    "scheduler.thesis/storage-type": "object"
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: api
+  selector:
+    app: minio
+    role: central
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-central
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: central
+
+spec:
+  selector:
+    matchLabels:
+      app: minio
+      role: central
+  template:
+    metadata:
+      labels:
+        app: minio
+        role: central
+        storage-type: object
+    spec:
+      nodeSelector:
+        node-capability/node-type: cloud
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-capability/node-type
+                operator: In
+                values:
+                - cloud
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: node-capability/node-type
+                operator: Exists
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:latest
+        args:
+        - server
+        - /data
+        env:
+        - name: MINIO_ROOT_USER
+          value: "minioadmin"
+        - name: MINIO_ROOT_PASSWORD
+          value: "minioadmin"
+        ports:
+        - containerPort: 9000
+          name: api
+        volumeMounts:
+        - name: storage
+          mountPath: /data
+      volumes:
+      - name: storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-edge-region1
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: edge
+    region: region-1
+  annotations:
+    "scheduler.thesis/storage-service": "true"
+    "scheduler.thesis/storage-type": "object"
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: api
+  selector:
+    app: minio
+    role: edge
+    region: region-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-edge-region1
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: edge
+    region: region-1
+spec:
+  selector:
+    matchLabels:
+      app: minio
+      role: edge
+      region: region-1
+  template:
+    metadata:
+      labels:
+        app: minio
+        role: edge
+        region: region-1
+        storage-type: object
+    spec:
+      nodeSelector:
+        node-capability/node-type: edge
+        topology.kubernetes.io/region: region-1
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:latest
+        args:
+        - server
+        - /data
+        env:
+        - name: MINIO_ROOT_USER
+          value: "minioadmin"
+        - name: MINIO_ROOT_PASSWORD
+          value: "minioadmin"
+        ports:
+        - containerPort: 9000
+          name: api
+        volumeMounts:
+        - name: storage
+          mountPath: /data
+      volumes:
+      - name: storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-edge-region2
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: edge
+    region: region-2
+  annotations:
+    "scheduler.thesis/storage-service": "true"
+    "scheduler.thesis/storage-type": "object"
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: api
+  selector:
+    app: minio
+    role: edge
+    region: region-2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-edge-region2
+  namespace: scheduler-benchmark
+  labels:
+    app: minio
+    role: edge
+    region: region-2
+spec:
+  selector:
+    matchLabels:
+      app: minio
+      role: edge
+      region: region-2
+  template:
+    metadata:
+      labels:
+        app: minio
+        role: edge
+        region: region-2
+        storage-type: object
+    spec:
+      nodeSelector:
+        node-capability/node-type: edge
+        topology.kubernetes.io/region: region-2
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:latest
+        args:
+        - server
+        - /data
+        env:
+        - name: MINIO_ROOT_USER
+          value: "minioadmin"
+        - name: MINIO_ROOT_PASSWORD
+          value: "minioadmin"
+        ports:
+        - containerPort: 9000
+          name: api
+        volumeMounts:
+        - name: storage
+          mountPath: /data
+      volumes:
+      - name: storage
+        emptyDir: {}
+---
+# Setup job to create buckets
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bucket-setup
+  namespace: scheduler-benchmark
+spec:
+  template:
+    spec:
+      containers:
+      - name: mc
+        image: minio/mc
+        command: [ "/bin/sh", "-c" ]
+        args:
+        - |
+          sleep 10
+          # Add servers
+          mc config host add central http://minio-central:9000 minioadmin minioadmin
+          mc config host add edge1 http://minio-edge-region1:9000 minioadmin minioadmin
+          mc config host add edge2 http://minio-edge-region2:9000 minioadmin minioadmin
+
+          # Create buckets
+          mc mb -p central/datasets
+          mc mb -p central/intermediate
+          mc mb -p central/results
+          mc mb -p central/shared
+
+          mc mb -p edge1/edge-data
+          mc mb -p edge1/region1-bucket
+
+          mc mb -p edge2/region2-bucket
+
+          # Create test files
+          dd if=/dev/urandom of=/tmp/test-file-10mb.bin bs=1M count=10
+          dd if=/dev/urandom of=/tmp/test-file-20mb.bin bs=1M count=20
+
+          # Upload files
+          mc cp /tmp/test-file-10mb.bin central/datasets/sample.bin
+          mc cp /tmp/test-file-10mb.bin edge1/edge-data/sample.bin
+          mc cp /tmp/test-file-10mb.bin edge2/region2-bucket/sample.bin
+
+          echo "Bucket setup completed successfully"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+      restartPolicy: Never
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 60
