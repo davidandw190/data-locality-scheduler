@@ -1,0 +1,74 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: scheduler-metrics
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: scheduler-metrics-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: eo-workflow-metrics
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: eo-workflow-metrics
+  endpoints:
+  - port: metrics
+    interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: data-locality-scheduler
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: data-locality-scheduler
+  namespaceSelector:
+    matchNames:
+    - data-locality-scheduler
+  endpoints:
+  - port: http
+    interval: 15s
+    path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: eo-workflow-monitor
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: webhook
+  namespaceSelector:
+    matchNames:
+    - eo-workflow
+  endpoints:
+  - port: http
+    interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: eo-workflow-pods
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: webhook
+  namespaceSelector:
+    matchNames:
+    - eo-workflow
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 15s
