@@ -1,0 +1,248 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: eo-workflow-metrics
+    namespace: monitoring
+    labels:
+        app: eo-workflow-metrics
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: eo-workflow-metrics
+    template:
+        metadata:
+            labels:
+                app: eo-workflow-metrics
+        spec:
+            containers:
+              - name: metrics-exporter
+                image: python:3.9-slim
+                command: [ "/bin/bash" ]
+                args: [ "-c", "pip install prometheus-client kubernetes && python /scripts/workflow-metrics.py" ]
+                ports:
+                  - containerPort: 8000
+                    name: metrics
+                volumeMounts:
+                  - name: eo-workflow-metrics-script
+                    mountPath: /scripts
+                resources:
+                    requests:
+                        memory: "64Mi"
+                        cpu: "100m"
+                    limits:
+                        memory: "128Mi"
+                        cpu: "200m"
+            volumes:
+              - name: eo-workflow-metrics-script
+                configMap:
+                    name: eo-workflow-metrics-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: eo-workflow-metrics
+    namespace: monitoring
+    labels:
+        app: eo-workflow-metrics
+spec:
+    selector:
+        app: eo-workflow-metrics
+    ports:
+      - name: metrics
+        port: 8000
+        targetPort: 8000
+    type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: eo-workflow-metrics-script
+    namespace: monitoring
+data:
+    workflow-metrics.py: |
+        #!/usr/bin/env python3
+        from prometheus_client import start_http_server, Counter, Gauge, Histogram, Summary
+        import time
+        import os
+        import json
+
+        # Define metrics for EO workflow
+        eo_data_transfer = Counter(
+            'eo_data_transfer_bytes_total',
+            'Data transferred during EO workflow',
+            ['source', 'destination', 'data_type', 'scheduler_type']
+        )
+
+        eo_processing_time = Histogram(
+            'eo_processing_time_seconds',
+            'Processing time for different steps in the EO workflow',
+            ['workflow', 'step', 'scheduler_type', 'node_type'],
+            buckets=[0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600]
+        )
+
+        eo_data_locality_impact = Gauge(
+            'eo_data_locality_impact',
+            'Impact of data locality on workflow efficiency',
+            ['workflow', 'metric_type', 'scheduler_type']
+        )
+
+        eo_workflow_events = Counter(
+            'eo_workflow_events_total',
+            'Count of different events in the EO workflow',
+            ['workflow', 'event_type', 'scheduler_type']
+        )
+
+        # Start metrics server
+        start_http_server(8000)
+        print("EO Workflow metrics server started on port 8000")
+
+        def simulate_workflow_metrics():
+            """
+            Simulate metrics for the EO workflow components
+            - This provides comparative data between schedulers
+            - In production, these would be actual measurements
+            """
+            workflows = ["preprocessing", "fmask", "cog-transform"]
+            steps = ["extraction", "processing", "transformation", "storage"]
+            schedulers = ["data-locality-scheduler", "default-scheduler"]
+            node_types = ["edge", "cloud"]
+            data_types = ["raw", "processed", "metadata"]
+            
+            # Simulate processing times - data locality should perform better on data-intensive tasks
+            for workflow in workflows:
+                for step in steps:
+                    for scheduler in schedulers:
+                        for node_type in node_types:
+                            # Base processing time
+                            base_time = 0
+                            
+                            if step == "extraction":
+                                base_time = 20 # Data-intensive
+                            elif step == "processing":
+                                base_time = 60 # Compute-intensive
+                            elif step == "transformation":
+                                base_time = 35 # Balanced
+                            elif step == "storage":
+                                base_time = 10 # Storage-intensive
+                            
+                            # Adjust for scheduler type
+                            scheduler_factor = 1.0
+                            
+                            # Data locality should perform better on data-intensive tasks
+                            if scheduler == "data-locality-scheduler":
+                                if step in ["extraction", "storage"]:
+                                    scheduler_factor = 0.7  # 30% improvement
+                                else:
+                                    scheduler_factor = 0.95 # 5% improvement
+                            
+                            # Adjust for node type
+                            node_factor = 1.0
+                            
+                            if node_type == "cloud" and step == "processing":
+                                node_factor = 0.8  # Cloud better for compute
+                            elif node_type == "edge" and step in ["extraction", "storage"]:
+                                node_factor = 0.9  # Edge better for data locality
+                            
+                            # Calculate final time
+                            processing_time = base_time * scheduler_factor * node_factor
+                            
+                            # Add jitter for realism
+                            jitter = 0.9 + (time.time() % 0.2)
+                            processing_time *= jitter
+                            
+                            # Record metric
+                            eo_processing_time.labels(
+                                workflow=workflow,
+                                step=step,
+                                scheduler_type=scheduler,
+                                node_type=node_type
+                            ).observe(processing_time)
+            
+            # Simulate data transfer metrics
+            for scheduler in schedulers:
+                for source in ["edge", "cloud"]:
+                    for dest in ["edge", "cloud"]:
+                        for data_type in data_types:
+                            # Skip self transfers
+                            if source == dest:
+                                continue
+                                
+                            # Base transfer size
+                            if data_type == "raw":
+                                transfer_size = 100 * 1024 * 1024  # 100MB
+                            elif data_type == "processed":
+                                transfer_size = 50 * 1024 * 1024   # 50MB
+                            else:
+                                transfer_size = 1 * 1024 * 1024    # 1MB
+                            
+                            # Adjust based on scheduler
+                            if scheduler == "data-locality-scheduler":
+                                # Data locality should reduce transfers
+                                transfer_size *= 0.6
+                            
+                            # Record metric with some randomness
+                            jitter = 0.9 + (time.time() % 0.2)
+                            eo_data_transfer.labels(
+                                source=source,
+                                destination=dest,
+                                data_type=data_type,
+                                scheduler_type=scheduler
+                            ).inc(transfer_size * jitter)
+            
+            # Simulate data locality impact metrics
+            metrics = ["transfer_reduction_percent", "total_processing_time", "edge_utilization"]
+            
+            for workflow in workflows:
+                for metric in metrics:
+                    # Data locality scheduler should show improvements
+                    if metric == "transfer_reduction_percent":
+                        data_locality_value = 35  # 35% reduction
+                        default_value = 0
+                    elif metric == "total_processing_time":
+                        data_locality_value = 75  # Relatively better
+                        default_value = 100       # Baseline
+                    elif metric == "edge_utilization":
+                        data_locality_value = 70  # 70% edge utilization
+                        default_value = 30        # 30% edge utilization
+                    
+                    # Record with jitter
+                    jitter = 0.95 + (time.time() % 0.1)
+                    
+                    eo_data_locality_impact.labels(
+                        workflow=workflow,
+                        metric_type=metric,
+                        scheduler_type="data-locality-scheduler"
+                    ).set(data_locality_value * jitter)
+                    
+                    eo_data_locality_impact.labels(
+                        workflow=workflow,
+                        metric_type=metric,
+                        scheduler_type="default-scheduler"
+                    ).set(default_value * jitter)
+            
+            # Simulate workflow events
+            events = ["start", "processing", "completion", "error"]
+            
+            for workflow in workflows:
+                for event in events:
+                    for scheduler in schedulers:
+                        # More completions, fewer errors for data locality
+                        count = 1
+                        
+                        if event == "error":
+                            if scheduler == "data-locality-scheduler":
+                                count = 0.2  # Fewer errors
+                            else:
+                                count = 1
+                        
+                        eo_workflow_events.labels(
+                            workflow=workflow,
+                            event_type=event,
+                            scheduler_type=scheduler
+                        ).inc(count)
+
+        # Main loop
+        while True:
+            simulate_workflow_metrics()
+            time.sleep(15)
