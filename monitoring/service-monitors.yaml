@@ -14,6 +14,43 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
+  name: kube-scheduler
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-scheduler
+  namespaceSelector:
+    matchNames:
+    - kube-system
+  endpoints:
+  - port: http-metrics
+    interval: 15s
+    metricRelabelings:
+    - sourceLabels: [ __name__ ]
+      regex: scheduler_.*
+      action: keep
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-metrics
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: prometheus-node-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s
+    metricRelabelings:
+    - sourceLabels: [ __name__ ]
+      regex: node_.*
+      action: keep
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
   name: eo-workflow-metrics
   namespace: monitoring
 spec:

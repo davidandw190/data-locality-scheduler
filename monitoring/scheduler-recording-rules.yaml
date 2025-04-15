@@ -1,0 +1,30 @@
+# # Create a file named scheduler-recording-rules.yaml
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: scheduler-recording-rules
+#   namespace: monitoring
+# data:
+#   scheduler-rules.yaml: |
+#     groups:
+#     - name: scheduler-comparison
+#       interval: 30s
+#       rules:
+#       - record: scheduler:pod_locality_ratio
+#         expr: |
+#           sum by (scheduler_name) (rate(scheduler_pod_placement_total{node_type="edge"}[5m])) / 
+#           sum by (scheduler_name) (rate(scheduler_pod_placement_total[5m]))
+      
+#       - record: scheduler:data_transfer_efficiency
+#         expr: |
+#           sum by (scheduler_type) (rate(eo_data_transfer_bytes_total{destination="local"}[5m])) / 
+#           sum by (scheduler_type) (rate(eo_data_transfer_bytes_total[5m]))
+      
+#       - record: scheduler:cross_region_transfer_ratio
+#         expr: |
+#           sum by (scheduler_type) (rate(eo_data_transfer_bytes_total{source_region!="$region", destination_region!="$region"}[5m])) / 
+#           sum by (scheduler_type) (rate(eo_data_transfer_bytes_total[5m]))
+      
+#       - record: scheduler:processing_time_by_type
+#         expr: |
+#           histogram_quantile(0.95, sum by (le, scheduler_type, workflow) (rate(eo_processing_time_seconds_bucket[5m])))

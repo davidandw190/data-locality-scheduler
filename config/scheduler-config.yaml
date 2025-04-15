@@ -57,3 +57,6 @@ verboseLogging: true
 detailedMetrics: true
 enableProfiling: false
 enableAPIEndpoint: true
+
+metricsEndpoint: "/metrics"
+metricsPort: 8080

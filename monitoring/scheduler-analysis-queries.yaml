@@ -1,0 +1,36 @@
+# # Create a file named scheduler-analysis-queries.yaml
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: scheduler-analysis-queries
+#   namespace: monitoring
+# data:
+#   # Data Locality Efficiency
+#   data_locality_ratio: |
+#     sum(rate(scheduler_pod_placement_total{node_type="edge", scheduler_name="data-locality-scheduler"}[5m])) / 
+#     sum(rate(scheduler_pod_placement_total{scheduler_name="data-locality-scheduler"}[5m]))
+
+#   # Cross-Region Transfer
+#   cross_region_transfer_bytes: |
+#     sum(rate(eo_data_transfer_bytes_total{scheduler_type="$scheduler"}[5m])) by (source, destination)
+
+#   # Data Transfer by Region
+#   data_transfer_by_region: |
+#     sum(rate(eo_data_transfer_bytes_total{scheduler_type="$scheduler"}[5m])) by (region)
+
+#   # Scheduler Decision Latency Comparison
+#   scheduler_decision_latency: |
+#     histogram_quantile(0.95, sum(rate(scheduler_decision_time_seconds_bucket{scheduler_name=~"$scheduler"}[5m])) by (le, scheduler_name))
+
+#   # Workflow Processing Time by Stage and Scheduler
+#   workflow_processing_time: |
+#     histogram_quantile(0.95, sum(rate(eo_processing_time_seconds_bucket{scheduler_type=~"$scheduler", workflow=~"$workflow"}[5m])) by (le, step, scheduler_type))
+
+#   # Edge vs Cloud Utilization
+#   edge_cloud_utilization_ratio: |
+#     sum by (node_type, scheduler_name) (kube_pod_info{namespace=~"eo-workflow|data-locality-scheduler"} * on (node) group_left(node_type) kube_node_labels{label_node_capability_node_type=~"edge|cloud"})
+
+#   # Data Locality Advantage Percentage
+#   data_locality_advantage: |
+#     (sum(rate(eo_data_transfer_bytes_total{scheduler_type="data-locality-scheduler", destination="local"}[15m])) / sum(rate(eo_data_transfer_bytes_total{scheduler_type="data-locality-scheduler"}[15m]))) /
+#     (sum(rate(eo_data_transfer_bytes_total{scheduler_type="default-scheduler", destination="local"}[15m])) / sum(rate(eo_data_transfer_bytes_total{scheduler_type="default-scheduler"}[15m]))) * 100 - 100

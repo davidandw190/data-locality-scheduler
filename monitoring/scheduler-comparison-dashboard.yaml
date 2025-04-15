@@ -23,680 +23,250 @@ data:
       },
       "editable": true,
       "gnetId": null,
-      "graphTooltip": 0,
+      "graphTooltip": 1,
       "id": 1,
-      "links": [],
+      "title": "Scheduler Comparison Dashboard",
       "panels": [
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Scheduling Latency",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 0
           },
-          "hiddenSeries": false,
-          "id": 2,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 1,
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(eo_processing_time_seconds_bucket{workflow=~\"$workflow\", step=~\"$step\"}[5m])) by (le, scheduler_type))",
-              "interval": "",
-              "legendFormat": "{{scheduler_type}}",
-              "refId": "A"
+              "expr": "histogram_quantile(0.95, sum(rate(scheduler_decision_time_seconds_bucket{scheduler_name=~\"$scheduler\"}[5m])) by (le, scheduler_name))",
+              "legendFormat": "95th {{scheduler_name}}"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(scheduler_decision_time_seconds_bucket{scheduler_name=~\"$scheduler\"}[5m])) by (le, scheduler_name))",
+              "legendFormat": "50th {{scheduler_name}}"
             }
           ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Processing Time Comparison (p95)",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
           "yaxes": [
             {
               "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "label": "Latency"
             },
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "short"
             }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          ]
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Pod Placement by Node Type",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 0
           },
-          "hiddenSeries": false,
-          "id": 3,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 2,
           "targets": [
             {
-              "expr": "sum(rate(eo_data_transfer_bytes_total{scheduler_type=~\"data-locality-scheduler\"}[5m]))",
-              "interval": "",
-              "legendFormat": "Data Locality Scheduler",
-              "refId": "A"
-            },
-            {
-              "expr": "sum(rate(eo_data_transfer_bytes_total{scheduler_type=~\"default-scheduler\"}[5m]))",
-              "interval": "",
-              "legendFormat": "Default Scheduler",
-              "refId": "B"
+              "expr": "sum by (scheduler_name, node_type) (rate(scheduler_pod_placement_total{scheduler_name=~\"$scheduler\"}[10m]))",
+              "legendFormat": "{{scheduler_name}} - {{node_type}}"
             }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Data Transfer Rate Comparison",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "Bps",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          ]
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Edge Node Utilization",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 8
           },
-          "hiddenSeries": false,
-          "id": 4,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 3,
           "targets": [
             {
-              "expr": "edge_utilization_ratio{scheduler_name=~\"$scheduler\"}",
-              "interval": "",
-              "legendFormat": "{{scheduler_name}} - {{region}}",
-              "refId": "A"
+              "expr": "sum(kube_pod_info{node=~\".*edge.*\"}) by (scheduler_name) / sum(kube_pod_info) by (scheduler_name)",
+              "legendFormat": "Edge Nodes - {{scheduler_name}}"
             }
           ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Edge Node Utilization",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
           "yaxes": [
             {
               "format": "percentunit",
-              "label": null,
-              "logBase": 1,
-              "max": "1",
-              "min": "0",
-              "show": true
+              "max": 1,
+              "min": 0
             },
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "short"
             }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          ]
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Data Transfer (Between Nodes)",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 8
           },
-          "hiddenSeries": false,
-          "id": 5,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 4,
           "targets": [
             {
-              "expr": "sum by (node_type, scheduler_name) (rate(scheduler_pod_placement_total{scheduler_name=~\"$scheduler\"}[10m]))",
-              "interval": "",
-              "legendFormat": "{{scheduler_name}} - {{node_type}}",
-              "refId": "A"
+              "expr": "sum(rate(node_network_transmit_bytes_total{instance=~\"$node\"}[5m])) by (scheduler_name)",
+              "legendFormat": "TX {{scheduler_name}}"
+            },
+            {
+              "expr": "sum(rate(node_network_receive_bytes_total{instance=~\"$node\"}[5m])) by (scheduler_name)",
+              "legendFormat": "RX {{scheduler_name}}"
             }
           ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Pod Placement by Node Type",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
           "yaxes": [
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "Bps"
             },
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "short"
             }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          ]
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Node Resource Usage Comparison",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 16
           },
-          "hiddenSeries": false,
-          "id": 6,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 5,
           "targets": [
             {
-              "expr": "eo_data_locality_impact{metric_type=\"transfer_reduction_percent\", workflow=~\"$workflow\"}",
-              "interval": "",
-              "legendFormat": "{{scheduler_type}} - {{workflow}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Data Transfer Reduction (%)",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "percent",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\".*data-locality-scheduler.*\"}[5m]))",
+              "legendFormat": "CPU - Data Locality"
             },
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\".*kube-scheduler.*\"}[5m]))",
+              "legendFormat": "CPU - Default"
             }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          ]
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
+          "title": "Scheduling Success/Failure Rate",
+          "type": "graph",
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 16
           },
-          "hiddenSeries": false,
-          "id": 7,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.7",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "id": 6,
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(eo_processing_time_seconds_bucket{workflow=~\"$workflow\", step=~\"extraction|storage\"}[5m])) by (le, scheduler_type))",
-              "interval": "",
-              "legendFormat": "{{scheduler_type}} - Data-intensive",
-              "refId": "A"
+              "expr": "sum(increase(scheduler_scheduling_attempts_total{scheduler_name=~\"$scheduler\"}[5m])) by (scheduler_name)",
+              "legendFormat": "Attempts {{scheduler_name}}"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(eo_processing_time_seconds_bucket{workflow=~\"$workflow\", step=~\"processing|transformation\"}[5m])) by (le, scheduler_type))",
-              "interval": "",
-              "legendFormat": "{{scheduler_type}} - Compute-intensive",
-              "refId": "B"
+              "expr": "sum(increase(scheduler_scheduling_failures_total{scheduler_name=~\"$scheduler\"}[5m])) by (scheduler_name)",
+              "legendFormat": "Failures {{scheduler_name}}"
+            }
+          ]
+        },
+        {
+          "title": "Data Locality Impact Score",
+          "type": "gauge",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 24
+          },
+          "id": 7,
+          "options": {
+            "minValue": 0,
+            "maxValue": 100,
+            "showThresholdLabels": true,
+            "showThresholdMarkers": true
+          },
+          "targets": [
+            {
+              "expr": "avg(scheduler_data_locality_score{scheduler_name=\"data-locality-scheduler\"})",
+              "legendFormat": "Data Locality Impact"
+            }
+          ]
+        },
+        {
+          "title": "Pod Startup Time by Scheduler",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 24
+          },
+          "id": 8,
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(pod_startup_latency_seconds_bucket{scheduler_name=~\"$scheduler\"}[5m])) by (le, scheduler_name))",
+              "legendFormat": "{{scheduler_name}}"
             }
           ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Data vs Compute-intensive Processing Time",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
           "yaxes": [
             {
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "s"
             },
             {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "format": "short"
+            }
+          ]
+        },
+        {
+          "title": "Network Latency by Region",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 24
+          },
+          "id": 9,
+          "targets": [
+            {
+              "expr": "avg(node_network_transmit_latency_seconds{scheduler_name=~\"$scheduler\"}) by (region, scheduler_name)",
+              "legendFormat": "{{region}} - {{scheduler_name}}"
             }
           ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "yaxes": [
+            {
+              "format": "s"
+            },
+            {
+              "format": "short"
+            }
+          ]
         }
       ],
-      "refresh": "10s",
-      "schemaVersion": 26,
-      "style": "dark",
-      "tags": [],
       "templating": {
         "list": [
           {
-            "allValue": null,
-            "current": {
-              "selected": true,
-              "text": "All",
-              "value": "$__all"
-            },
-            "datasource": "Prometheus",
-            "definition": "label_values(eo_processing_time_seconds_bucket, workflow)",
-            "hide": 0,
-            "includeAll": true,
-            "label": "Workflow",
-            "multi": false,
-            "name": "workflow",
-            "options": [],
-            "query": "label_values(eo_processing_time_seconds_bucket, workflow)",
-            "refresh": 1,
-            "regex": "",
-            "skipUrlSync": false,
-            "sort": 0,
-            "tagValuesQuery": "",
-            "tags": [],
-            "tagsQuery": "",
+            "name": "scheduler",
             "type": "query",
-            "useTags": false
-          },
-          {
-            "allValue": null,
-            "current": {
-              "selected": true,
-              "text": "All",
-              "value": "$__all"
-            },
             "datasource": "Prometheus",
-            "definition": "label_values(eo_processing_time_seconds_bucket, step)",
-            "hide": 0,
-            "includeAll": true,
-            "label": "Step",
-            "multi": false,
-            "name": "step",
-            "options": [],
-            "query": "label_values(eo_processing_time_seconds_bucket, step)",
+            "query": "label_values(scheduler_decision_time_seconds_bucket, scheduler_name)",
             "refresh": 1,
-            "regex": "",
-            "skipUrlSync": false,
-            "sort": 0,
-            "tagValuesQuery": "",
-            "tags": [],
-            "tagsQuery": "",
-            "type": "query",
-            "useTags": false
-          },
-          {
-            "allValue": null,
-            "current": {
-              "selected": true,
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
-            },
-            "datasource": "Prometheus",
-            "definition": "label_values(edge_utilization_ratio, scheduler_name)",
-            "hide": 0,
             "includeAll": true,
             "label": "Scheduler",
-            "multi": true,
-            "name": "scheduler",
-            "options": [],
-            "query": "label_values(edge_utilization_ratio, scheduler_name)",
+            "multi": true
+          },
+          {
+            "name": "node",
+            "type": "query", 
+            "datasource": "Prometheus",
+            "query": "label_values(node_network_transmit_bytes_total, instance)",
             "refresh": 1,
-            "regex": "",
-            "skipUrlSync": false,
-            "sort": 0,
-            "tagValuesQuery": "",
-            "tags": [],
-            "tagsQuery": "",
-            "type": "query",
-            "useTags": false
+            "includeAll": true,
+            "label": "Node",
+            "multi": true
           }
         ]
       },
@@ -704,9 +274,5 @@ data:
         "from": "now-6h",
         "to": "now"
       },
-      "timepicker": {},
-      "timezone": "",
-      "title": "Scheduler Comparison Dashboard",
-      "uid": "scheduler-comparison",
-      "version": 1
+      "refresh": "10s"
     }
