@@ -1,0 +1,45 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: data-locality-scheduler-rules
+  namespace: monitoring
+  labels:
+    prometheus: prometheus-kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: data-locality-scheduler.rules
+    rules:
+    - alert: DataLocalitySchedulerHighFailureRate
+      expr: rate(data_locality_scheduler_failures_total[5m]) / rate(data_locality_scheduler_attempts_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Data Locality Scheduler has a high failure rate"
+        description: "The scheduler is failing to schedule pods at a rate of {{ $value | humanizePercentage }} over the last 5 minutes"
+
+    - alert: DataLocalitySchedulerHighLatency
+      expr: histogram_quantile(0.95, sum(rate(data_locality_scheduler_latency_seconds_bucket[5m])) by (le)) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Data Locality Scheduler has high latency"
+        description: "The 95th percentile of scheduling latency is {{ $value }} seconds over the last 5 minutes"
+
+    # Recording rules for derived metrics
+    - record: scheduler:edge_utilization_ratio
+      expr: sum(scheduler_pod_placement_total{node_type="edge"}) / sum(scheduler_pod_placement_total)
+
+    - record: scheduler:local_data_percentage
+      expr: sum(scheduler_data_transfer_bytes_total{is_local="true"}) / sum(scheduler_data_transfer_bytes_total) * 100
+
+    - record: scheduler:cross_region_data_percentage
+      expr: sum(scheduler_data_transfer_bytes_total{is_cross_region="true"}) / sum(scheduler_data_transfer_bytes_total) * 100
+
+    - record: scheduler:data_locality_improvement
+      expr: scheduler:local_data_percentage / 100
+
+    - record: scheduler:resource_efficiency_average
+      expr: avg(scheduler_resource_efficiency)
