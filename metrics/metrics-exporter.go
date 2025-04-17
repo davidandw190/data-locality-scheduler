@@ -43,7 +43,25 @@ var (
 			Name: "scheduler_data_transfer_bytes_total",
 			Help: "Amount of data transferred between nodes due to scheduling decisions",
 		},
-		[]string{"source_node", "destination_node", "data_type", "is_local", "is_cross_region"},
+		[]string{"source_node", "destination_node", "data_type", "transfer_type", "source_type", "destination_type"},
+	)
+
+	// Bandwidth utilization metrics
+	bandwidthUtilization = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "scheduler_bandwidth_utilization_bytes_per_second",
+			Help: "Bandwidth utilization between nodes based on scheduling decisions",
+		},
+		[]string{"source_node", "destination_node", "transfer_type"},
+	)
+
+	// Transfer time metrics
+	dataTransferTimeSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "scheduler_data_transfer_time_seconds",
+			Help: "Estimated time to transfer data between nodes based on bandwidth",
+		},
+		[]string{"source_node", "destination_node", "transfer_type"},
 	)
 
 	// Resource efficiency
@@ -63,15 +81,52 @@ var (
 		},
 		[]string{"region", "zone"},
 	)
+
+	// Transfer type counts
+	transferTypeCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "scheduler_transfer_type_count",
+			Help: "Count of transfers by type",
+		},
+		[]string{"transfer_type"},
+	)
+)
+
+type NodeInfo struct {
+	Name      string
+	Type      string
+	Region    string
+	Zone      string
+	IpAddress string
+}
+
+const (
+	TransferTypeLocal       = "local"
+	TransferTypeSameZone    = "same_zone"
+	TransferTypeSameRegion  = "same_region"
+	TransferTypeCrossRegion = "cross_region"
+	TransferTypeEdgeCloud   = "edge_cloud"
+	TransferTypeCloudEdge   = "cloud_edge"
+)
+
+// Bandwidth configuration from scheduler config
+const (
+	LocalBandwidth       = 1000000000.0 // 1 GB/s - from scheduler config
+	SameZoneBandwidth    = 600000000.0  // 600 MB/s
+	SameRegionBandwidth  = 200000000.0  // 200 MB/s
+	CrossRegionBandwidth = 50000000.0   // 50 MB/s
+	EdgeCloudBandwidth   = 25000000.0   // 25 MB/s
 )
 
 func init() {
-	// Register the metrics with Prometheus
 	prometheus.MustRegister(nodeDataLocalityScore)
 	prometheus.MustRegister(podPlacementByNodeType)
 	prometheus.MustRegister(dataTransferBytes)
+	prometheus.MustRegister(bandwidthUtilization)
+	prometheus.MustRegister(dataTransferTimeSeconds)
 	prometheus.MustRegister(resourceEfficiency)
 	prometheus.MustRegister(edgeUtilizationRatio)
+	prometheus.MustRegister(transferTypeCount)
 }
 
 func main() {
@@ -82,18 +137,15 @@ func main() {
 	flag.StringVar(&listenAddr, "listen-address", ":8080", "Address to listen on for HTTP requests")
 	flag.Parse()
 
-	// Create Kubernetes client
 	var config *rest.Config
 	var err error
 
 	if kubeconfig == "" {
-		// Use in-cluster config
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			log.Fatalf("Error getting in-cluster config: %v", err)
 		}
 	} else {
-		// Use kubeconfig
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			log.Fatalf("Error building kubeconfig: %v", err)
@@ -105,11 +157,13 @@ func main() {
 		log.Fatalf("Error creating Kubernetes client: %v", err)
 	}
 
-	// Start metrics collection
 	go collectMetrics(clientset)
 
-	// Expose the metrics
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 	log.Printf("Starting metrics server on %s", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
@@ -117,23 +171,27 @@ func main() {
 func collectMetrics(clientset *kubernetes.Clientset) {
 	for {
 		ctx := context.Background()
-		collectNodeMetrics(ctx, clientset)
-		collectPodMetrics(ctx, clientset)
-		calculateEdgeUtilization(ctx, clientset)
-		calculateResourceEfficiency(ctx, clientset)
+		nodeInfoMap, err := buildNodeInfoMap(ctx, clientset)
+		if err != nil {
+			log.Printf("Error building node info map: %v", err)
+		} else {
+			collectNodeMetrics(ctx, clientset, nodeInfoMap)
+			collectPodMetrics(ctx, clientset, nodeInfoMap)
+			calculateEdgeUtilization(ctx, clientset, nodeInfoMap)
+			calculateResourceEfficiency(ctx, clientset, nodeInfoMap)
+		}
 
-		// Sleep for 30 seconds before collecting metrics again
 		time.Sleep(30 * time.Second)
 	}
 }
 
-func collectNodeMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
+func buildNodeInfoMap(ctx context.Context, clientset *kubernetes.Clientset) (map[string]NodeInfo, error) {
 	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Printf("Error listing nodes: %v", err)
-		return
+		return nil, err
 	}
 
+	nodeInfoMap := make(map[string]NodeInfo)
 	for _, node := range nodes.Items {
 		nodeType := "unknown"
 		if typeLabel, ok := node.Labels["node-capability/node-type"]; ok {
@@ -150,17 +208,87 @@ func collectNodeMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
 			zone = zoneLabel
 		}
 
-		// Calculate data locality score based on node capabilities
+		ipAddress := ""
+		for _, address := range node.Status.Addresses {
+			if address.Type == "InternalIP" {
+				ipAddress = address.Address
+				break
+			}
+		}
+
+		nodeInfoMap[node.Name] = NodeInfo{
+			Name:      node.Name,
+			Type:      nodeType,
+			Region:    region,
+			Zone:      zone,
+			IpAddress: ipAddress,
+		}
+	}
+
+	return nodeInfoMap, nil
+}
+
+func determineTransferType(sourceNode, destNode NodeInfo) string {
+	// If source and destination are the same node
+	if sourceNode.Name == destNode.Name {
+		return TransferTypeLocal
+	}
+
+	// Edge to cloud or cloud to edge
+	if sourceNode.Type == "edge" && destNode.Type == "cloud" {
+		return TransferTypeEdgeCloud
+	}
+	if sourceNode.Type == "cloud" && destNode.Type == "edge" {
+		return TransferTypeCloudEdge
+	}
+
+	// Same zone
+	if sourceNode.Zone == destNode.Zone {
+		return TransferTypeSameZone
+	}
+
+	// Same region
+	if sourceNode.Region == destNode.Region {
+		return TransferTypeSameRegion
+	}
+
+	// Cross region
+	return TransferTypeCrossRegion
+}
+
+func getBandwidthForTransferType(transferType string) float64 {
+	switch transferType {
+	case TransferTypeLocal:
+		return LocalBandwidth
+	case TransferTypeSameZone:
+		return SameZoneBandwidth
+	case TransferTypeSameRegion:
+		return SameRegionBandwidth
+	case TransferTypeEdgeCloud, TransferTypeCloudEdge:
+		return EdgeCloudBandwidth
+	case TransferTypeCrossRegion:
+		return CrossRegionBandwidth
+	default:
+		return CrossRegionBandwidth
+	}
+}
+
+func collectNodeMetrics(ctx context.Context, clientset *kubernetes.Clientset, nodeInfoMap map[string]NodeInfo) {
+	for nodeName, nodeInfo := range nodeInfoMap {
 		localityScore := 50.0 // Default score
 
-		// Adjust score based on storage capability
+		node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			log.Printf("Error getting node %s: %v", nodeName, err)
+			continue
+		}
+
 		if storageType, ok := node.Labels["node-capability/storage-type"]; ok {
 			if storageType == "object" {
 				localityScore += 20.0
 			}
 		}
 
-		// Count number of storage buckets on the node
 		bucketCount := 0
 		for label := range node.Labels {
 			if strings.HasPrefix(label, "node-capability/storage-bucket-") {
@@ -168,7 +296,6 @@ func collectNodeMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
 			}
 		}
 
-		// Adjust score based on number of hosted buckets
 		if bucketCount > 0 {
 			localityScore += float64(bucketCount) * 2.0
 			if localityScore > 100.0 {
@@ -176,71 +303,48 @@ func collectNodeMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
 			}
 		}
 
-		// Record the score
 		nodeDataLocalityScore.With(prometheus.Labels{
-			"node":      node.Name,
-			"node_type": nodeType,
-			"region":    region,
-			"zone":      zone,
+			"node":      nodeName,
+			"node_type": nodeInfo.Type,
+			"region":    nodeInfo.Region,
+			"zone":      nodeInfo.Zone,
 		}).Set(localityScore)
 	}
 }
 
-func collectPodMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
+func collectPodMetrics(ctx context.Context, clientset *kubernetes.Clientset, nodeInfoMap map[string]NodeInfo) {
 	pods, err := clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Printf("Error listing pods: %v", err)
 		return
 	}
 
-	// Reset counters for pod placement (to track changes)
 	podPlacementByNodeType.Reset()
 
-	nodeCache := make(map[string]map[string]string)
+	localTransfers := 0
+	sameZoneTransfers := 0
+	sameRegionTransfers := 0
+	crossRegionTransfers := 0
+	edgeCloudTransfers := 0
 
 	for _, pod := range pods.Items {
 		if pod.Spec.NodeName == "" {
-			// Pod hasn't been scheduled yet
 			continue
 		}
 
-		// Get or cache node information
-		nodeInfo, exists := nodeCache[pod.Spec.NodeName]
+		nodeInfo, exists := nodeInfoMap[pod.Spec.NodeName]
 		if !exists {
-			node, err := clientset.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
-			if err != nil {
-				log.Printf("Error getting node %s: %v", pod.Spec.NodeName, err)
-				continue
-			}
-
-			nodeInfo = map[string]string{
-				"node_type": "unknown",
-				"region":    "unknown",
-				"zone":      "unknown",
-			}
-
-			if typeLabel, ok := node.Labels["node-capability/node-type"]; ok {
-				nodeInfo["node_type"] = typeLabel
-			}
-			if regionLabel, ok := node.Labels["topology.kubernetes.io/region"]; ok {
-				nodeInfo["region"] = regionLabel
-			}
-			if zoneLabel, ok := node.Labels["topology.kubernetes.io/zone"]; ok {
-				nodeInfo["zone"] = zoneLabel
-			}
-
-			nodeCache[pod.Spec.NodeName] = nodeInfo
+			log.Printf("Node info not found for %s", pod.Spec.NodeName)
+			continue
 		}
 
-		// Record pod placement
 		podPlacementByNodeType.With(prometheus.Labels{
-			"node_type":     nodeInfo["node_type"],
-			"region":        nodeInfo["region"],
-			"zone":          nodeInfo["zone"],
+			"node_type":     nodeInfo.Type,
+			"region":        nodeInfo.Region,
+			"zone":          nodeInfo.Zone,
 			"pod_namespace": pod.Namespace,
 		}).Inc()
 
-		// Check for data locality annotations to calculate data transfer metrics
 		if pod.Annotations != nil {
 			for key, value := range pod.Annotations {
 				if strings.HasPrefix(key, "data.scheduler.thesis/input-") ||
@@ -254,68 +358,161 @@ func collectPodMetrics(ctx context.Context, clientset *kubernetes.Clientset) {
 						size, err := strconv.ParseInt(sizeStr, 10, 64)
 						if err != nil {
 							size = 1024 * 1024 // 1MB default
+							log.Printf("Error parsing size for %s: %v, using default", dataURN, err)
 						}
 
-						// Determine data locality attributes
-						sourceNode := "unknown"
-						isLocal := "false"
-						isCrossRegion := "false"
 						dataType := "generic"
-
 						if len(parts) > 4 {
 							dataType = strings.TrimSpace(parts[4])
 						}
 
-						// Check if data is on same node (local)
 						if strings.HasPrefix(key, "data.scheduler.thesis/input-") {
-							// For input data, find where it's stored
-							sourceBucket := strings.Split(dataURN, "/")[0]
-							potentialNodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-								LabelSelector: "node-capability/storage-bucket-" + sourceBucket + "=true",
-							})
+							sourceNodes := findStorageNodesForData(ctx, clientset, dataURN)
 
-							if err == nil && len(potentialNodes.Items) > 0 {
-								sourceNode = potentialNodes.Items[0].Name
-
-								if sourceNode == pod.Spec.NodeName {
-									isLocal = "true"
-								} else {
-									// Check if cross-region
-									sourceRegion := ""
-									if regionLabel, ok := potentialNodes.Items[0].Labels["topology.kubernetes.io/region"]; ok {
-										sourceRegion = regionLabel
+							if len(sourceNodes) > 0 {
+								for _, sourceNodeName := range sourceNodes {
+									sourceNodeInfo, sourceExists := nodeInfoMap[sourceNodeName]
+									if !sourceExists {
+										log.Printf("Source node info not found for %s", sourceNodeName)
+										continue
 									}
 
-									if sourceRegion != "" && sourceRegion != nodeInfo["region"] {
-										isCrossRegion = "true"
+									transferType := determineTransferType(sourceNodeInfo, nodeInfo)
+
+									dataTransferBytes.With(prometheus.Labels{
+										"source_node":      sourceNodeName,
+										"destination_node": pod.Spec.NodeName,
+										"data_type":        dataType,
+										"transfer_type":    transferType,
+										"source_type":      sourceNodeInfo.Type,
+										"destination_type": nodeInfo.Type,
+									}).Add(float64(size))
+
+									bandwidth := getBandwidthForTransferType(transferType)
+									transferTime := float64(size) / bandwidth
+
+									bandwidthUtilization.With(prometheus.Labels{
+										"source_node":      sourceNodeName,
+										"destination_node": pod.Spec.NodeName,
+										"transfer_type":    transferType,
+									}).Set(bandwidth)
+
+									dataTransferTimeSeconds.With(prometheus.Labels{
+										"source_node":      sourceNodeName,
+										"destination_node": pod.Spec.NodeName,
+										"transfer_type":    transferType,
+									}).Set(transferTime)
+
+									switch transferType {
+									case TransferTypeLocal:
+										localTransfers++
+									case TransferTypeSameZone:
+										sameZoneTransfers++
+									case TransferTypeSameRegion:
+										sameRegionTransfers++
+									case TransferTypeCrossRegion:
+										crossRegionTransfers++
+									case TransferTypeEdgeCloud, TransferTypeCloudEdge:
+										edgeCloudTransfers++
 									}
 								}
 							}
+						} else if strings.HasPrefix(key, "data.scheduler.thesis/output-") {
+							destNodes := findStorageNodesForData(ctx, clientset, dataURN)
 
-							// Record the data transfer
-							dataTransferBytes.With(prometheus.Labels{
-								"source_node":      sourceNode,
-								"destination_node": pod.Spec.NodeName,
-								"data_type":        dataType,
-								"is_local":         isLocal,
-								"is_cross_region":  isCrossRegion,
-							}).Add(float64(size))
+							if len(destNodes) > 0 {
+								for _, destNodeName := range destNodes {
+									destNodeInfo, destExists := nodeInfoMap[destNodeName]
+									if !destExists {
+										log.Printf("Destination node info not found for %s", destNodeName)
+										continue
+									}
+
+									transferType := determineTransferType(nodeInfo, destNodeInfo)
+
+									dataTransferBytes.With(prometheus.Labels{
+										"source_node":      pod.Spec.NodeName,
+										"destination_node": destNodeName,
+										"data_type":        dataType,
+										"transfer_type":    transferType,
+										"source_type":      nodeInfo.Type,
+										"destination_type": destNodeInfo.Type,
+									}).Add(float64(size))
+
+									bandwidth := getBandwidthForTransferType(transferType)
+									transferTime := float64(size) / bandwidth
+
+									bandwidthUtilization.With(prometheus.Labels{
+										"source_node":      pod.Spec.NodeName,
+										"destination_node": destNodeName,
+										"transfer_type":    transferType,
+									}).Set(bandwidth)
+
+									dataTransferTimeSeconds.With(prometheus.Labels{
+										"source_node":      pod.Spec.NodeName,
+										"destination_node": destNodeName,
+										"transfer_type":    transferType,
+									}).Set(transferTime)
+
+									switch transferType {
+									case TransferTypeLocal:
+										localTransfers++
+									case TransferTypeSameZone:
+										sameZoneTransfers++
+									case TransferTypeSameRegion:
+										sameRegionTransfers++
+									case TransferTypeCrossRegion:
+										crossRegionTransfers++
+									case TransferTypeEdgeCloud, TransferTypeCloudEdge:
+										edgeCloudTransfers++
+									}
+								}
+							}
 						}
 					}
 				}
 			}
 		}
 	}
+
+	transferTypeCount.With(prometheus.Labels{"transfer_type": TransferTypeLocal}).Add(float64(localTransfers))
+	transferTypeCount.With(prometheus.Labels{"transfer_type": TransferTypeSameZone}).Add(float64(sameZoneTransfers))
+	transferTypeCount.With(prometheus.Labels{"transfer_type": TransferTypeSameRegion}).Add(float64(sameRegionTransfers))
+	transferTypeCount.With(prometheus.Labels{"transfer_type": TransferTypeCrossRegion}).Add(float64(crossRegionTransfers))
+	transferTypeCount.With(prometheus.Labels{"transfer_type": TransferTypeEdgeCloud}).Add(float64(edgeCloudTransfers))
 }
 
-func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clientset) {
+func findStorageNodesForData(ctx context.Context, clientset *kubernetes.Clientset, dataURN string) []string {
+	parts := strings.SplitN(dataURN, "/", 2)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	bucket := parts[0]
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: "node-capability/storage-bucket-" + bucket + "=true",
+	})
+
+	if err != nil {
+		log.Printf("Error finding storage nodes for %s: %v", bucket, err)
+		return nil
+	}
+
+	var nodeNames []string
+	for _, node := range nodes.Items {
+		nodeNames = append(nodeNames, node.Name)
+	}
+
+	return nodeNames
+}
+
+func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clientset, nodeInfoMap map[string]NodeInfo) {
 	pods, err := clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Printf("Error listing pods: %v", err)
 		return
 	}
 
-	// Track pods by region/zone
 	regionZonePodCounts := make(map[string]map[string]map[string]int)
 
 	for _, pod := range pods.Items {
@@ -323,27 +520,15 @@ func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clients
 			continue
 		}
 
-		node, err := clientset.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
-		if err != nil {
+		nodeInfo, exists := nodeInfoMap[pod.Spec.NodeName]
+		if !exists {
 			continue
 		}
 
-		region := "unknown"
-		if regionLabel, ok := node.Labels["topology.kubernetes.io/region"]; ok {
-			region = regionLabel
-		}
+		region := nodeInfo.Region
+		zone := nodeInfo.Zone
+		nodeType := nodeInfo.Type
 
-		zone := "unknown"
-		if zoneLabel, ok := node.Labels["topology.kubernetes.io/zone"]; ok {
-			zone = zoneLabel
-		}
-
-		nodeType := "unknown"
-		if typeLabel, ok := node.Labels["node-capability/node-type"]; ok {
-			nodeType = typeLabel
-		}
-
-		// Initialize maps if needed
 		if _, exists := regionZonePodCounts[region]; !exists {
 			regionZonePodCounts[region] = make(map[string]map[string]int)
 		}
@@ -355,7 +540,6 @@ func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clients
 			}
 		}
 
-		// Increment pod count
 		regionZonePodCounts[region][zone]["total"]++
 		if nodeType == "edge" {
 			regionZonePodCounts[region][zone]["edge"]++
@@ -364,7 +548,6 @@ func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clients
 		}
 	}
 
-	// Calculate edge utilization ratio by region/zone
 	for region, zoneMap := range regionZonePodCounts {
 		for zone, counts := range zoneMap {
 			if counts["total"] > 0 {
@@ -378,25 +561,23 @@ func calculateEdgeUtilization(ctx context.Context, clientset *kubernetes.Clients
 	}
 }
 
-func calculateResourceEfficiency(ctx context.Context, clientset *kubernetes.Clientset) {
-	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		log.Printf("Error listing nodes: %v", err)
-		return
-	}
-
-	for _, node := range nodes.Items {
-		// Get pods on this node
-		fieldSelector := "spec.nodeName=" + node.Name
+func calculateResourceEfficiency(ctx context.Context, clientset *kubernetes.Clientset, nodeInfoMap map[string]NodeInfo) {
+	for nodeName := range nodeInfoMap {
+		fieldSelector := "spec.nodeName=" + nodeName
 		pods, err := clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
 			FieldSelector: fieldSelector,
 		})
 		if err != nil {
-			log.Printf("Error listing pods on node %s: %v", node.Name, err)
+			log.Printf("Error listing pods on node %s: %v", nodeName, err)
 			continue
 		}
 
-		// Calculate requested resources
+		node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			log.Printf("Error getting node %s: %v", nodeName, err)
+			continue
+		}
+
 		var totalCPURequests int64 = 0
 		var totalMemoryRequests int64 = 0
 
@@ -409,22 +590,20 @@ func calculateResourceEfficiency(ctx context.Context, clientset *kubernetes.Clie
 				if container.Resources.Requests.Cpu() != nil {
 					totalCPURequests += container.Resources.Requests.Cpu().MilliValue()
 				} else {
-					totalCPURequests += 100 // Default 100m
+					totalCPURequests += 100 // Default 100m CPU
 				}
 
 				if container.Resources.Requests.Memory() != nil {
 					totalMemoryRequests += container.Resources.Requests.Memory().Value()
 				} else {
-					totalMemoryRequests += 200 * 1024 * 1024 // Default 200Mi
+					totalMemoryRequests += 200 * 1024 * 1024 // Default 200Mi memory
 				}
 			}
 		}
 
-		// Get node capacity
 		cpuCapacity := node.Status.Capacity.Cpu().MilliValue()
 		memoryCapacity := node.Status.Capacity.Memory().Value()
 
-		// Calculate efficiency (higher is better)
 		cpuEfficiency := 100.0
 		memoryEfficiency := 100.0
 
@@ -460,14 +639,13 @@ func calculateResourceEfficiency(ctx context.Context, clientset *kubernetes.Clie
 			}
 		}
 
-		// Record efficiency metrics
 		resourceEfficiency.With(prometheus.Labels{
-			"node":          node.Name,
+			"node":          nodeName,
 			"resource_type": "cpu",
 		}).Set(cpuEfficiency)
 
 		resourceEfficiency.With(prometheus.Labels{
-			"node":          node.Name,
+			"node":          nodeName,
 			"resource_type": "memory",
 		}).Set(memoryEfficiency)
 	}

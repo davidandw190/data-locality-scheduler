@@ -462,7 +462,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "scheduler:data_locality_improvement * 100",
+              "expr": "scheduler:local_data_percentage",
               "legendFormat": "Data Locality Score",
               "range": true,
               "refId": "A"
@@ -970,7 +970,7 @@ data:
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
-                  "mode": "none"
+                  "mode": "normal"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
@@ -988,7 +988,83 @@ data:
               },
               "unit": "bytes"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Local Transfers"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Same Zone Transfers"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Same Region Transfers"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cross Region Transfers"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Edge-Cloud Transfers"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "purple",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 8,
@@ -996,10 +1072,11 @@ data:
             "x": 0,
             "y": 25
           },
-          "id": 11,
+          "id": 20,
           "options": {
             "legend": {
               "calcs": [
+                "sum",
                 "mean",
                 "max"
               ],
@@ -1012,7 +1089,6 @@ data:
               "sort": "none"
             }
           },
-          "pluginVersion": "10.0.1",
           "targets": [
             {
               "datasource": {
@@ -1020,13 +1096,57 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum(rate(scheduler_data_transfer_bytes_total[5m])) by (source_node, destination_node)",
-              "legendFormat": "{{source_node}} -> {{destination_node}}",
+              "expr": "sum(rate(scheduler_data_transfer_bytes_total{transfer_type=\"local\"}[5m]))",
+              "legendFormat": "Local Transfers",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(scheduler_data_transfer_bytes_total{transfer_type=\"same_zone\"}[5m]))",
+              "legendFormat": "Same Zone Transfers",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code", 
+              "expr": "sum(rate(scheduler_data_transfer_bytes_total{transfer_type=\"same_region\"}[5m]))",
+              "legendFormat": "Same Region Transfers",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(scheduler_data_transfer_bytes_total{transfer_type=\"cross_region\"}[5m]))",
+              "legendFormat": "Cross Region Transfers",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(scheduler_data_transfer_bytes_total{transfer_type=~\"edge_cloud|cloud_edge\"}[5m]))",
+              "legendFormat": "Edge-Cloud Transfers",
+              "range": true,
+              "refId": "E"
             }
           ],
-          "title": "Data Transfer Volume",
+          "title": "Data Transfer by Type",
           "type": "timeseries"
         },
         {
@@ -1042,7 +1162,7 @@ data:
               "custom": {
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
-                "axisLabel": "Percentage",
+                "axisLabel": "Bandwidth",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
                 "drawStyle": "line",
@@ -1070,8 +1190,6 @@ data:
                 }
               },
               "mappings": [],
-              "max": 100,
-              "min": 0,
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -1081,40 +1199,8 @@ data:
                   }
                 ]
               },
-              "unit": "percent"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Cross Region Data (%)"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "red",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Local Data (%)"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "green",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              }
-            ]
+              "unit": "Bps"
+            }
           },
           "gridPos": {
             "h": 8,
@@ -1122,7 +1208,7 @@ data:
             "x": 12,
             "y": 25
           },
-          "id": 12,
+          "id": 21,
           "options": {
             "legend": {
               "calcs": [
@@ -1138,7 +1224,6 @@ data:
               "sort": "none"
             }
           },
-          "pluginVersion": "10.0.1",
           "targets": [
             {
               "datasource": {
@@ -1146,8 +1231,8 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "scheduler:local_data_percentage",
-              "legendFormat": "Local Data (%)",
+              "expr": "avg(scheduler_bandwidth_utilization_bytes_per_second{transfer_type=\"local\"}) by (transfer_type)",
+              "legendFormat": "Local Transfer Bandwidth",
               "range": true,
               "refId": "A"
             },
@@ -1157,14 +1242,372 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "scheduler:cross_region_data_percentage",
-              "hide": false,
-              "legendFormat": "Cross Region Data (%)",
+              "expr": "avg(scheduler_bandwidth_utilization_bytes_per_second{transfer_type=\"same_zone\"}) by (transfer_type)",
+              "legendFormat": "Same Zone Bandwidth",
               "range": true,
               "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_bandwidth_utilization_bytes_per_second{transfer_type=\"same_region\"}) by (transfer_type)",
+              "legendFormat": "Same Region Bandwidth",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_bandwidth_utilization_bytes_per_second{transfer_type=\"cross_region\"}) by (transfer_type)",
+              "legendFormat": "Cross Region Bandwidth",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_bandwidth_utilization_bytes_per_second{transfer_type=~\"edge_cloud|cloud_edge\"}) by (transfer_type)",
+              "legendFormat": "Edge-Cloud Bandwidth",
+              "range": true,
+              "refId": "E"
             }
           ],
-          "title": "Data Locality Metrics",
+          "title": "Bandwidth Utilization by Transfer Type",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Local"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Same Zone"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Same Region"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cross Region"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Edge-Cloud"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "purple",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "id": 22,
+          "options": {
+            "displayLabels": [
+              "percent",
+              "name"
+            ],
+            "legend": {
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "values": [
+                "value",
+                "percent"
+              ]
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(scheduler_data_transfer_bytes_total{transfer_type=\"local\"})",
+              "legendFormat": "Local",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(scheduler_data_transfer_bytes_total{transfer_type=\"same_zone\"})",
+              "legendFormat": "Same Zone",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(scheduler_data_transfer_bytes_total{transfer_type=\"same_region\"})",
+              "legendFormat": "Same Region",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(scheduler_data_transfer_bytes_total{transfer_type=\"cross_region\"})",
+              "legendFormat": "Cross Region",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(scheduler_data_transfer_bytes_total{transfer_type=~\"edge_cloud|cloud_edge\"})",
+              "legendFormat": "Edge-Cloud",
+              "range": true,
+              "refId": "E"
+            }
+          ],
+          "title": "Data Transfer Distribution",
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Transfer Time",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 33
+          },
+          "id": 23,
+          "options": {
+            "legend": {
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_data_transfer_time_seconds{transfer_type=\"local\"}) by (transfer_type)",
+              "legendFormat": "Local Transfer Time",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_data_transfer_time_seconds{transfer_type=\"same_zone\"}) by (transfer_type)",
+              "legendFormat": "Same Zone Transfer Time",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_data_transfer_time_seconds{transfer_type=\"same_region\"}) by (transfer_type)",
+              "legendFormat": "Same Region Transfer Time",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_data_transfer_time_seconds{transfer_type=\"cross_region\"}) by (transfer_type)",
+              "legendFormat": "Cross Region Transfer Time",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "avg(scheduler_data_transfer_time_seconds{transfer_type=~\"edge_cloud|cloud_edge\"}) by (transfer_type)",
+              "legendFormat": "Edge-Cloud Transfer Time",
+              "range": true,
+              "refId": "E"
+            }
+          ],
+          "title": "Transfer Time by Type",
           "type": "timeseries"
         },
         {
@@ -1235,7 +1678,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 33
+            "y": 41
           },
           "id": 13,
           "options": {
@@ -1314,7 +1757,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 33
+            "y": 41
           },
           "id": 14,
           "options": {
@@ -1348,6 +1791,167 @@ data:
           ],
           "title": "CPU Resource Availability",
           "type": "bargauge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Percentage",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 25,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Local Data Access (%)"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 3
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cross-Region Transfer Reduction (%)"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 49
+          },
+          "id": 24,
+          "options": {
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "scheduler:local_data_percentage",
+              "legendFormat": "Local Data Access (%)",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "100 - scheduler:cross_region_data_percentage",
+              "legendFormat": "Cross-Region Transfer Reduction (%)",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "100 - scheduler:edge_cloud_data_percentage",
+              "legendFormat": "Edge-Cloud Transfer Optimization (%)",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "scheduler:edge_utilization_ratio * 100",
+              "legendFormat": "Edge Resource Utilization (%)",
+              "range": true,
+              "refId": "D"
+            }
+          ],
+          "title": "Data Locality Impact - Academic Metrics",
+          "type": "timeseries"
         },
         {
           "datasource": {
@@ -1411,7 +2015,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 41
+            "y": 57
           },
           "id": 15,
           "options": {
@@ -1505,7 +2109,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 41
+            "y": 57
           },
           "id": 16,
           "options": {
@@ -1536,191 +2140,6 @@ data:
           ],
           "title": "Scheduler Memory Usage",
           "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 0,
-            "y": 49
-          },
-          "id": 17,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "area",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.0.1",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "sum(kube_pod_container_info{namespace=\"data-locality-scheduler\", pod=~\"data-locality.*|minio.*\"})",
-              "legendFormat": "Total Containers",
-              "range": true,
-              "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "sum(kube_pod_info{namespace=\"data-locality-scheduler\", pod=~\"data-locality.*|minio.*\"})",
-              "hide": false,
-              "legendFormat": "Total Pods",
-              "range": true,
-              "refId": "B"
-            }
-          ],
-          "title": "Scheduler System Overview",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Summary metrics showing the academic impact of the data locality scheduler",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "yellow",
-                    "value": 20
-                  },
-                  {
-                    "color": "green",
-                    "value": 50
-                  }
-                ]
-              },
-              "unit": "percent"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 16,
-            "x": 8,
-            "y": 49
-          },
-          "id": 18,
-          "options": {
-            "displayMode": "gradient",
-            "minVizHeight": 10,
-            "minVizWidth": 0,
-            "orientation": "horizontal",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "text": {}
-          },
-          "pluginVersion": "10.0.1",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "scheduler:local_data_percentage",
-              "legendFormat": "Local Data Access (%)",
-              "range": true,
-              "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "100 - scheduler:cross_region_data_percentage",
-              "hide": false,
-              "legendFormat": "Cross-Region Reduction (%)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "scheduler_edge_utilization_ratio{region=\"region-1\"} * 100",
-              "hide": false,
-              "legendFormat": "Region 1 Edge Utilization (%)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "scheduler_edge_utilization_ratio{region=\"region-2\"} * 100",
-              "hide": false,
-              "legendFormat": "Region 2 Edge Utilization (%)",
-              "range": true,
-              "refId": "D"
-            }
-          ],
-          "title": "Data Locality Scheduler Impact - Academic Metrics",
-          "type": "bargauge"
         }
       ],
       "refresh": "",

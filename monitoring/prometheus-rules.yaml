@@ -28,18 +28,44 @@ spec:
         summary: "Data Locality Scheduler has high latency"
         description: "The 95th percentile of scheduling latency is {{ $value }} seconds over the last 5 minutes"
 
-    # Recording rules for derived metrics
+    - record: scheduler:data_transfer_bytes_by_type_total
+      expr: sum(scheduler_data_transfer_bytes_total) by (transfer_type)
+
+    - record: scheduler:data_transfer_bytes_total
+      expr: sum(scheduler_data_transfer_bytes_total)
+
+    - record: scheduler:local_data_bytes_total
+      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="local"})
+
+    - record: scheduler:cross_zone_bytes_total
+      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="same_zone"})
+
+    - record: scheduler:cross_region_bytes_total
+      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="cross_region"})
+
+    - record: scheduler:edge_cloud_bytes_total
+      expr: sum(scheduler_data_transfer_bytes_total{transfer_type=~"edge_cloud|cloud_edge"})
+
+    - record: scheduler:local_data_percentage
+      expr: scheduler:local_data_bytes_total / scheduler:data_transfer_bytes_total * 100
+
+    - record: scheduler:cross_region_data_percentage
+      expr: scheduler:cross_region_bytes_total / scheduler:data_transfer_bytes_total * 100
+
+    - record: scheduler:edge_cloud_data_percentage
+      expr: scheduler:edge_cloud_bytes_total / scheduler:data_transfer_bytes_total * 100
+
+    # data transfer rates
+    - record: scheduler:data_transfer_rate_by_type
+      expr: rate(scheduler:data_transfer_bytes_by_type_total[5m])
+
+    - record: scheduler:bandwidth_utilization_by_type
+      expr: sum(scheduler_bandwidth_utilization_bytes_per_second) by (transfer_type)
+
+    # edge utilization
     - record: scheduler:edge_utilization_ratio
       expr: sum(scheduler_pod_placement_total{node_type="edge"}) / sum(scheduler_pod_placement_total)
 
-    - record: scheduler:local_data_percentage
-      expr: sum(scheduler_data_transfer_bytes_total{is_local="true"}) / sum(scheduler_data_transfer_bytes_total) * 100
-
-    - record: scheduler:cross_region_data_percentage
-      expr: sum(scheduler_data_transfer_bytes_total{is_cross_region="true"}) / sum(scheduler_data_transfer_bytes_total) * 100
-
-    - record: scheduler:data_locality_improvement
-      expr: scheduler:local_data_percentage / 100
-
+    # resource efficiency
     - record: scheduler:resource_efficiency_average
-      expr: avg(scheduler_resource_efficiency)
+      expr: avg(scheduler_resource_efficiency) by (resource_type)

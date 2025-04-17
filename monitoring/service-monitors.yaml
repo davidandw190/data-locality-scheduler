@@ -24,7 +24,7 @@ metadata:
   name: data-locality-scheduler
   namespace: monitoring
   labels:
-    release: prometheus # This should match the Prometheus operator's label selector
+    release: prometheus
 spec:
   selector:
     matchLabels:
