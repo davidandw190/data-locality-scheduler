@@ -60,3 +60,5 @@ enableAPIEndpoint: true
 
 metricsEndpoint: "/metrics"
 metricsPort: 8080
+
+metricsHistorySize: 100

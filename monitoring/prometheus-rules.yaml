@@ -8,64 +8,56 @@ metadata:
     role: alert-rules
 spec:
   groups:
-  - name: data-locality-scheduler.rules
+  - name: data-locality.rules
     rules:
-    - alert: DataLocalitySchedulerHighFailureRate
-      expr: rate(data_locality_scheduler_failures_total[5m]) / rate(data_locality_scheduler_attempts_total[5m]) > 0.1
-      for: 5m
-      labels:
-        severity: warning
-      annotations:
-        summary: "Data Locality Scheduler has a high failure rate"
-        description: "The scheduler is failing to schedule pods at a rate of {{ $value | humanizePercentage }} over the last 5 minutes"
+    # Data locality metrics
+    - record: data_locality:local_data_percentage
+      expr: local_data_access_percentage
 
-    - alert: DataLocalitySchedulerHighLatency
-      expr: histogram_quantile(0.95, sum(rate(data_locality_scheduler_latency_seconds_bucket[5m])) by (le)) > 2
-      for: 5m
-      labels:
-        severity: warning
-      annotations:
-        summary: "Data Locality Scheduler has high latency"
-        description: "The 95th percentile of scheduling latency is {{ $value }} seconds over the last 5 minutes"
+    - record: data_locality:same_region_data_percentage
+      expr: same_region_data_percentage
 
-    - record: scheduler:data_transfer_bytes_by_type_total
-      expr: sum(scheduler_data_transfer_bytes_total) by (transfer_type)
+    - record: data_locality:cross_region_data_percentage
+      expr: cross_region_data_percentage
 
-    - record: scheduler:data_transfer_bytes_total
-      expr: sum(scheduler_data_transfer_bytes_total)
+    # Efficiency metrics
+    - record: data_locality:scheduler_efficiency
+      expr: 1 - (cross_region_data_percentage / 100)
 
-    - record: scheduler:local_data_bytes_total
-      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="local"})
+    - record: data_locality:edge_utilization_ratio
+      expr: avg(region_edge_utilization_ratio)
 
-    - record: scheduler:cross_zone_bytes_total
-      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="same_zone"})
+    # Node scoring averages
+    - record: data_locality:avg_node_data_locality_score_by_type
+      expr: avg(node_data_locality_score) by (node_type)
 
-    - record: scheduler:cross_region_bytes_total
-      expr: sum(scheduler_data_transfer_bytes_total{transfer_type="cross_region"})
+    - record: data_locality:avg_node_data_locality_score_by_region
+      expr: avg(node_data_locality_score) by (region)
 
-    - record: scheduler:edge_cloud_bytes_total
-      expr: sum(scheduler_data_transfer_bytes_total{transfer_type=~"edge_cloud|cloud_edge"})
+    # Resource efficiency
+    - record: data_locality:avg_resource_efficiency
+      expr: avg(resource_efficiency) by (resource_type)
 
-    - record: scheduler:local_data_percentage
-      expr: scheduler:local_data_bytes_total / scheduler:data_transfer_bytes_total * 100
+    # Improvement metrics (for benchmarking)
+    - record: data_locality:transfer_reduction_percentage
+      expr: (data_locality:local_data_percentage + (data_locality:same_region_data_percentage * 0.8)) / 100
 
-    - record: scheduler:cross_region_data_percentage
-      expr: scheduler:cross_region_bytes_total / scheduler:data_transfer_bytes_total * 100
+    # Data item locality
+    - record: data_locality:total_data_items
+      expr: sum(data_item_locality_count)
 
-    - record: scheduler:edge_cloud_data_percentage
-      expr: scheduler:edge_cloud_bytes_total / scheduler:data_transfer_bytes_total * 100
+    - record: data_locality:local_data_items_percentage
+      expr: data_item_locality_count{locality_type="local"} / data_locality:total_data_items * 100
 
-    # data transfer rates
-    - record: scheduler:data_transfer_rate_by_type
-      expr: rate(scheduler:data_transfer_bytes_by_type_total[5m])
+    - record: data_locality:same_region_data_items_percentage
+      expr: data_item_locality_count{locality_type="same_region"} / data_locality:total_data_items * 100
 
-    - record: scheduler:bandwidth_utilization_by_type
-      expr: sum(scheduler_bandwidth_utilization_bytes_per_second) by (transfer_type)
+    - record: data_locality:cross_region_data_items_percentage
+      expr: data_item_locality_count{locality_type="cross_region"} / data_locality:total_data_items * 100
 
-    # edge utilization
-    - record: scheduler:edge_utilization_ratio
-      expr: sum(scheduler_pod_placement_total{node_type="edge"}) / sum(scheduler_pod_placement_total)
+    # Pod placement optimization
+    - record: data_locality:pods_with_optimal_placement_percentage
+      expr: sum(pod_locality_profile_count{profile="all_local"}) / sum(pod_locality_profile_count) * 100
 
-    # resource efficiency
-    - record: scheduler:resource_efficiency_average
-      expr: avg(scheduler_resource_efficiency) by (resource_type)
+    - record: data_locality:pods_with_suboptimal_placement_percentage
+      expr: sum(pod_locality_profile_count{profile="no_local"}) / sum(pod_locality_profile_count) * 100

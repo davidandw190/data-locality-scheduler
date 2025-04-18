@@ -19,9 +19,27 @@ spec:
       containers:
       - name: metrics-exporter
         image: davidandw190/data-locality-metrics:latest
+        args:
+        - "--scheduler-url=http://data-locality-scheduler.data-locality-scheduler.svc.cluster.local:8080"
+        - "--metrics-interval=30s"
         ports:
         - containerPort: 8080
           name: http
+        env:
+        - name: LOG_LEVEL
+          value: "debug"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           requests:
             cpu: 100m

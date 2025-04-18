@@ -92,6 +92,7 @@ type Scheduler struct {
 	retryMutex           sync.Mutex
 	cacheExpiration      time.Duration
 	config               *SchedulerConfig
+	metricsCollector     *SchedulerMetricsCollector
 }
 
 type PriorityFunc func(pod *v1.Pod, nodes []v1.Node) ([]NodeScore, error)
@@ -197,8 +198,9 @@ func NewScheduler(clientset kubernetes.Interface, config *SchedulerConfig) *Sche
 				Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // From 100ms to ~51s
 			}, []string{"node_type", "pod_type"}),
 		},
-		recorder:   recorder,
-		retryCount: make(map[string]int),
+		metricsCollector: NewSchedulerMetricsCollector(),
+		recorder:         recorder,
+		retryCount:       make(map[string]int),
 	}
 
 	scheduler.bandwidthGraph.SetTopologyDefaults(
@@ -2415,6 +2417,19 @@ func (s *Scheduler) bindPod(ctx context.Context, pod *v1.Pod, nodeName string) e
 		},
 	}
 
+	// Calculate data locality score and record metrics before binding
+	inputData, outputData, _ := s.extractDataDependencies(pod)
+	dataLocalityScore := 50 // Default score
+	if s.dataLocalityPriority != nil {
+		score, err := s.dataLocalityPriority.Score(pod, nodeName)
+		if err == nil {
+			dataLocalityScore = score
+		}
+	}
+
+	// Record detailed scheduling metrics
+	s.recordSchedulingMetrics(pod, nodeName, dataLocalityScore, inputData, outputData)
+
 	return s.clientset.CoreV1().Pods(pod.Namespace).Bind(ctx, binding, metav1.CreateOptions{})
 }
 
@@ -2616,6 +2631,30 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		fmt.Fprintf(w, `{"status":"success","duration":"%v"}`, duration)
 	})
 
+	// Setup metrics endpoints for data locality statistics and scheduling decisions
+	if s.metricsCollector != nil {
+		// Endpoint to retrieve data locality statistics
+		mux.HandleFunc("/data-locality-stats", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			stats := s.metricsCollector.GetDataLocalityStats()
+			if err := json.NewEncoder(w).Encode(stats); err != nil {
+				klog.Errorf("Failed to encode data locality stats: %v", err)
+				http.Error(w, "Error encoding response", http.StatusInternalServerError)
+			}
+		})
+
+		// Endpoint to retrieve recent scheduling decisions
+		mux.HandleFunc("/recent-scheduling-decisions", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			decisions := s.metricsCollector.GetRecentSchedulingDecisions()
+			if err := json.NewEncoder(w).Encode(decisions); err != nil {
+				klog.Errorf("Failed to encode scheduling decisions: %v", err)
+				http.Error(w, "Error encoding response", http.StatusInternalServerError)
+			}
+		})
+	}
+
+	// Register standard Prometheus metrics handler
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{

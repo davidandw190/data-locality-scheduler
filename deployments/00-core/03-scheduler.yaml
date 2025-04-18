@@ -64,9 +64,12 @@ data:
     maxResourceScore: 100
     defaultScore: 50
 
+    # Metrics options
+    detailedMetrics: true
+    metricsHistorySize: 100  # Number of scheduling decisions to keep in memory
+
     # Debug options
     verboseLogging: true
-    detailedMetrics: true
     enableProfiling: false
     enableAPIEndpoint: true
 ---
@@ -86,6 +89,10 @@ spec:
     metadata:
       labels:
         app: data-locality-scheduler
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: data-locality-scheduler
       containers:
@@ -95,44 +102,77 @@ spec:
         args:
         - "--config=/etc/scheduler/scheduler-config.yaml"
         - "--verbose=true"
-        # - "ls -la /etc/scheduler && cat /etc/scheduler/scheduler-config.yaml && exec /app/data-locality-scheduler --config=/etc/scheduler/scheduler-config.yaml --verbose=true"
+        - "--detailed-metrics=true"
         env:
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         ports:
         - containerPort: 8080
           name: http
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /readyz
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8080
           initialDelaySeconds: 15
           periodSeconds: 20
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 200m
+            memory: 256Mi
           limits:
-            cpu: 300m
-            memory: 512Mi
+            cpu: 500m
+            memory: 1Gi
         volumeMounts:
         - name: config-volume
           mountPath: /etc/scheduler
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
       volumes:
       - name: config-volume
         configMap:
           name: data-locality-scheduler-config
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 10
+            preference:
+              matchExpressions:
+              - key: node-capability/node-type
+                operator: In
+                values:
+                - cloud
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
 ---
 apiVersion: v1
 kind: Service
@@ -145,7 +185,7 @@ metadata:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
     prometheus.io/path: "/metrics"
-    description: "Service exposing health check and API endpoints for the scheduler"
+    description: "Service exposing health check, metrics, and API endpoints for the scheduler"
 spec:
   selector:
     app: data-locality-scheduler
