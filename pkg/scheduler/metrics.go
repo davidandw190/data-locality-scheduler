@@ -13,7 +13,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// SchedulerMetricsCollector maintains scheduling decision metrics
 type SchedulerMetricsCollector struct {
 	mu                       sync.RWMutex
 	schedulingDecisions      []SchedulingDecision
@@ -22,7 +21,6 @@ type SchedulerMetricsCollector struct {
 	regionTransferStatistics map[string]RegionTransferStats  // region -> stats
 }
 
-// SchedulingDecision represents a single scheduling decision with data locality information
 type SchedulingDecision struct {
 	PodName           string    `json:"podName"`
 	PodNamespace      string    `json:"podNamespace"`
@@ -47,7 +45,6 @@ type SchedulingDecision struct {
 	DecisionFactors      map[string]float64  `json:"decisionFactors"`
 }
 
-// DataItemLocation represents a data item and its location relative to the scheduled pod
 type DataItemLocation struct {
 	URN          string   `json:"urn"`
 	Size         int64    `json:"size"`
@@ -56,7 +53,6 @@ type DataItemLocation struct {
 	Locations    []string `json:"locations"`
 }
 
-// DataTransferSummary provides a summary of data transfer metrics for a pod
 type DataTransferSummary struct {
 	EstimatedTransferTime   float64 `json:"estimatedTransferTime"`
 	EstimatedBandwidthUsage float64 `json:"estimatedBandwidthUsage"`
@@ -64,7 +60,6 @@ type DataTransferSummary struct {
 	LocalAccessPercentage   float64 `json:"localAccessPercentage"`  // % of data size accessible locally
 }
 
-// PodDataLocalityStats tracks data locality statistics for a pod
 type PodDataLocalityStats struct {
 	PodName              string
 	PodNamespace         string
@@ -83,7 +78,6 @@ type PodDataLocalityStats struct {
 	LastUpdated          time.Time
 }
 
-// RegionTransferStats tracks data transfer stats between regions
 type RegionTransferStats struct {
 	Region                string
 	TotalDataTransferred  int64
@@ -97,7 +91,6 @@ type RegionTransferStats struct {
 	CrossRegionPercentage float64
 }
 
-// NewSchedulerMetricsCollector creates a new metrics collector
 func NewSchedulerMetricsCollector() *SchedulerMetricsCollector {
 	return &SchedulerMetricsCollector{
 		schedulingDecisions:      make([]SchedulingDecision, 0, 100),
@@ -107,18 +100,15 @@ func NewSchedulerMetricsCollector() *SchedulerMetricsCollector {
 	}
 }
 
-// RecordSchedulingDecision records a scheduling decision with data locality information
 func (c *SchedulerMetricsCollector) RecordSchedulingDecision(decision SchedulingDecision) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Keep only the last 100 decisions to prevent memory growth
 	if len(c.schedulingDecisions) >= 100 {
 		c.schedulingDecisions = c.schedulingDecisions[1:]
 	}
 	c.schedulingDecisions = append(c.schedulingDecisions, decision)
 
-	// Update pod data locality stats
 	c.podDataLocalityStats[decision.PodUID] = PodDataLocalityStats{
 		PodName:              decision.PodName,
 		PodNamespace:         decision.PodNamespace,
@@ -137,16 +127,13 @@ func (c *SchedulerMetricsCollector) RecordSchedulingDecision(decision Scheduling
 		LastUpdated:          decision.Timestamp,
 	}
 
-	// Update node data locality score
 	currentScore := float64(decision.DataLocalityScore)
 	if existingScore, ok := c.nodeDataLocalityScore[decision.NodeName]; ok {
-		// Weight existing score more heavily (75%) to avoid big swings
 		c.nodeDataLocalityScore[decision.NodeName] = existingScore*0.75 + currentScore*0.25
 	} else {
 		c.nodeDataLocalityScore[decision.NodeName] = currentScore
 	}
 
-	// Update region transfer statistics
 	if stats, ok := c.regionTransferStatistics[decision.NodeRegion]; ok {
 		stats.TotalDataTransferred += decision.TotalDataItemSize
 		stats.IntraRegionTransfer += decision.LocalDataSize + decision.SameRegionDataSize
@@ -164,12 +151,10 @@ func (c *SchedulerMetricsCollector) RecordSchedulingDecision(decision Scheduling
 	}
 }
 
-// GetDataLocalityStats returns data locality statistics
 func (c *SchedulerMetricsCollector) GetDataLocalityStats() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Calculate overall statistics
 	totalPods := len(c.podDataLocalityStats)
 	if totalPods == 0 {
 		return map[string]interface{}{
@@ -197,7 +182,6 @@ func (c *SchedulerMetricsCollector) GetDataLocalityStats() map[string]interface{
 
 	avgDataLocalityScore /= float64(totalPods)
 
-	// Calculate percentages
 	var localPercentage, sameRegionPercentage, crossRegionPercentage float64
 
 	if totalDataSize > 0 {
@@ -206,7 +190,6 @@ func (c *SchedulerMetricsCollector) GetDataLocalityStats() map[string]interface{
 		crossRegionPercentage = float64(totalCrossRegionSize) / float64(totalDataSize) * 100
 	}
 
-	// Count pods by locality profile
 	podsWithAllLocalData := 0
 	podsWithMajorityLocalData := 0
 	podsWithNoLocalData := 0
@@ -250,7 +233,6 @@ func (c *SchedulerMetricsCollector) GetDataLocalityStats() map[string]interface{
 	}
 }
 
-// GetRecentSchedulingDecisions returns recent scheduling decisions
 func (c *SchedulerMetricsCollector) GetRecentSchedulingDecisions() []SchedulingDecision {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -261,12 +243,10 @@ func (c *SchedulerMetricsCollector) GetRecentSchedulingDecisions() []SchedulingD
 	return decisions
 }
 
-// SetupMetricsEndpoints registers HTTP endpoints for metrics
 func (s *Scheduler) SetupMetricsEndpoints(mux *http.ServeMux) {
 	metricsCollector := NewSchedulerMetricsCollector()
 	s.metricsCollector = metricsCollector
 
-	// Endpoint to retrieve data locality statistics
 	mux.HandleFunc("/data-locality-stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		stats := metricsCollector.GetDataLocalityStats()
@@ -276,7 +256,6 @@ func (s *Scheduler) SetupMetricsEndpoints(mux *http.ServeMux) {
 		}
 	})
 
-	// Endpoint to retrieve recent scheduling decisions
 	mux.HandleFunc("/recent-scheduling-decisions", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		decisions := metricsCollector.GetRecentSchedulingDecisions()
@@ -287,7 +266,6 @@ func (s *Scheduler) SetupMetricsEndpoints(mux *http.ServeMux) {
 	})
 }
 
-// recordSchedulingMetrics records detailed metrics when a pod is scheduled
 func (s *Scheduler) recordSchedulingMetrics(pod *v1.Pod, nodeName string, dataLocalityScore int, inputData []DataDependency, outputData []DataDependency) {
 	if s.metricsCollector == nil {
 		return
@@ -314,12 +292,10 @@ func (s *Scheduler) recordSchedulingMetrics(pod *v1.Pod, nodeName string, dataLo
 		nodeZone = zoneVal
 	}
 
-	// Process data items
 	var dataItems []DataItemLocation
 	var localDataItems, sameRegionDataItems, crossRegionDataItems int
 	var totalDataSize, localDataSize, sameRegionDataSize, crossRegionDataSize int64
 
-	// Process input data
 	for _, data := range inputData {
 		storageNodes := s.storageIndex.GetStorageNodesForData(data.URN)
 		if len(storageNodes) == 0 {
@@ -371,7 +347,6 @@ func (s *Scheduler) recordSchedulingMetrics(pod *v1.Pod, nodeName string, dataLo
 		}
 	}
 
-	// Process output data similarly
 	for _, data := range outputData {
 		parts := strings.SplitN(data.URN, "/", 2)
 		if len(parts) == 0 {
@@ -422,7 +397,6 @@ func (s *Scheduler) recordSchedulingMetrics(pod *v1.Pod, nodeName string, dataLo
 		}
 	}
 
-	// Calculate data transfer summary
 	dataLocalityPercentage := 0.0
 	localAccessPercentage := 0.0
 
@@ -434,7 +408,6 @@ func (s *Scheduler) recordSchedulingMetrics(pod *v1.Pod, nodeName string, dataLo
 		localAccessPercentage = float64(localDataSize) / float64(totalDataSize) * 100
 	}
 
-	// Create and record decision
 	decision := SchedulingDecision{
 		PodName:              pod.Name,
 		PodNamespace:         pod.Namespace,

@@ -99,6 +99,13 @@ type Config struct {
 	KubeConfig      string
 }
 
+type NodeInfo struct {
+	Name     string
+	NodeType string
+	Region   string
+	Zone     string
+}
+
 func main() {
 	var config Config
 
@@ -457,7 +464,7 @@ func collectEdgeUtilizationMetrics(client *kubernetes.Clientset) {
 		podsByRegionAndType[nodeRegion][nodeType]++
 	}
 
-	// Calculate edge utilization ratio by region
+	// edge utilization ratio by region
 	for region, typeCounts := range podsByRegionAndType {
 		total := 0
 		edgeCount := 0
@@ -476,7 +483,6 @@ func collectEdgeUtilizationMetrics(client *kubernetes.Clientset) {
 	}
 }
 
-// Helper function to get a float64 value from a map with type assertion
 func getFloat64(m map[string]interface{}, key string) (float64, bool) {
 	if val, ok := m[key]; ok {
 		switch v := val.(type) {
@@ -495,7 +501,6 @@ func getFloat64(m map[string]interface{}, key string) (float64, bool) {
 	return 0, false
 }
 
-// Helper function to check if a slice contains a string
 func contains(slice []string, str string) bool {
 	for _, item := range slice {
 		if item == str {
@@ -505,15 +510,6 @@ func contains(slice []string, str string) bool {
 	return false
 }
 
-// NodeInfo contains information about a node
-type NodeInfo struct {
-	Name     string
-	NodeType string
-	Region   string
-	Zone     string
-}
-
-// fetchNodeInformation retrieves node information from Kubernetes
 func fetchNodeInformation() map[string]NodeInfo {
 	nodeInfoMap := make(map[string]NodeInfo)
 	config, err := rest.InClusterConfig()

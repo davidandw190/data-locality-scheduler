@@ -2631,9 +2631,7 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		fmt.Fprintf(w, `{"status":"success","duration":"%v"}`, duration)
 	})
 
-	// Setup metrics endpoints for data locality statistics and scheduling decisions
 	if s.metricsCollector != nil {
-		// Endpoint to retrieve data locality statistics
 		mux.HandleFunc("/data-locality-stats", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			stats := s.metricsCollector.GetDataLocalityStats()
@@ -2643,7 +2641,6 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 			}
 		})
 
-		// Endpoint to retrieve recent scheduling decisions
 		mux.HandleFunc("/recent-scheduling-decisions", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			decisions := s.metricsCollector.GetRecentSchedulingDecisions()
@@ -2654,7 +2651,6 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		})
 	}
 
-	// Register standard Prometheus metrics handler
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
