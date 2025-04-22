@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-exporter-rules
+  namespace: monitoring
+  labels:
+    prometheus: prometheus-kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: node-exporter.rules
+    rules:
+    - record: node:cpu_usage_percent
+      expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+    - record: node:memory_usage_percent
+      expr: 100 * (1 - ((node_memory_MemFree_bytes + node_memory_Cached_bytes + node_memory_Buffers_bytes) / node_memory_MemTotal_bytes))
+    - record: node:network_receive_bytes
+      expr: irate(node_network_receive_bytes_total{device!="lo"}[5m])
+    - record: node:network_transmit_bytes
+      expr: irate(node_network_transmit_bytes_total{device!="lo"}[5m])

@@ -139,7 +139,12 @@ kind: Service
 metadata:
   name: data-locality-scheduler
   namespace: data-locality-scheduler
+  labels:
+    app: data-locality-scheduler
   annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
     description: "Service exposing health check and API endpoints for the scheduler"
 spec:
   selector:

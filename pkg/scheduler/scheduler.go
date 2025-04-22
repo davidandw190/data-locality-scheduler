@@ -17,6 +17,7 @@ import (
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -60,6 +61,17 @@ type schedulerMetrics struct {
 	schedulingFailures prometheus.Counter
 	cacheHits          prometheus.Counter
 	cacheMisses        prometheus.Counter
+
+	nodeDataLocalityScore  *prometheus.GaugeVec
+	podPlacementByNodeType *prometheus.CounterVec
+	dataTransferTime       *prometheus.HistogramVec
+	dataTransferBytes      *prometheus.CounterVec
+	bandwidthUtilization   *prometheus.GaugeVec
+	storageAccessLatency   *prometheus.HistogramVec
+	edgeUtilizationRatio   *prometheus.GaugeVec
+
+	resourceEfficiency *prometheus.GaugeVec
+	podStartupLatency  *prometheus.HistogramVec
 }
 
 type Scheduler struct {
@@ -137,6 +149,53 @@ func NewScheduler(clientset kubernetes.Interface, config *SchedulerConfig) *Sche
 				Name: "data_locality_scheduler_cache_misses_total",
 				Help: "Total resource cache misses",
 			}),
+			nodeDataLocalityScore: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "scheduler_node_data_locality_score",
+				Help: "Data locality score for each node (0-100)",
+			}, []string{"node", "node_type", "region", "zone"}),
+
+			podPlacementByNodeType: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "scheduler_pod_placement_total",
+				Help: "Count of pods placed on different node types",
+			}, []string{"node_type", "region", "zone", "pod_namespace"}),
+
+			dataTransferTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name:    "scheduler_data_transfer_time_seconds",
+				Help:    "Estimated time to transfer data for scheduled workloads",
+				Buckets: prometheus.ExponentialBuckets(0.01, 2, 12), // From 10ms to ~20s
+			}, []string{"source_node", "destination_node", "data_type"}),
+
+			dataTransferBytes: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "scheduler_data_transfer_bytes_total",
+				Help: "Amount of data transferred between nodes due to scheduling decisions",
+			}, []string{"source_node", "destination_node", "data_type"}),
+
+			bandwidthUtilization: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "scheduler_bandwidth_utilization_bytes_per_second",
+				Help: "Bandwidth utilization between nodes based on scheduling decisions",
+			}, []string{"source_node", "destination_node"}),
+
+			storageAccessLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name:    "scheduler_storage_access_latency_seconds",
+				Help:    "Latency of storage access operations based on scheduling decisions",
+				Buckets: prometheus.ExponentialBuckets(0.001, 2, 10),
+			}, []string{"node", "storage_type"}),
+
+			edgeUtilizationRatio: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "scheduler_edge_utilization_ratio",
+				Help: "Ratio of pods scheduled on edge nodes (0.0-1.0)",
+			}, []string{"region", "zone"}),
+
+			resourceEfficiency: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "scheduler_resource_efficiency",
+				Help: "Resource efficiency score based on pod-node fit (0-100)",
+			}, []string{"node", "resource_type"}),
+
+			podStartupLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name:    "scheduler_pod_startup_latency_seconds",
+				Help:    "Time from scheduling to pod running state",
+				Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // From 100ms to ~51s
+			}, []string{"node_type", "pod_type"}),
 		},
 		recorder:   recorder,
 		retryCount: make(map[string]int),
@@ -863,6 +922,8 @@ func (s *Scheduler) scheduleOne(ctx context.Context) {
 func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string, error) {
 	klog.Infof("Finding best node for pod %s/%s", pod.Namespace, pod.Name)
 
+	startTime := time.Now()
+
 	if pod.Annotations != nil {
 		dataAnnotations := []string{}
 		for k := range pod.Annotations {
@@ -952,10 +1013,456 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 	}
 
 	selectedNode := nodeScores[0].Name
+
+	if selectedNode != "" {
+		s.metrics.schedulingLatency.Observe(time.Since(startTime).Seconds())
+
+		// Get node type, region, zone
+		nodeObj, err := s.clientset.CoreV1().Nodes().Get(ctx, selectedNode, metav1.GetOptions{})
+		if err == nil {
+			nodeType := "unknown"
+			region := "unknown"
+			zone := "unknown"
+
+			if val, ok := nodeObj.Labels["node-capability/node-type"]; ok {
+				nodeType = val
+			}
+			if val, ok := nodeObj.Labels["topology.kubernetes.io/region"]; ok {
+				region = val
+			}
+			if val, ok := nodeObj.Labels["topology.kubernetes.io/zone"]; ok {
+				zone = val
+			}
+
+			// Record pod placement by node type
+			s.metrics.podPlacementByNodeType.WithLabelValues(
+				nodeType, region, zone, pod.Namespace,
+			).Inc()
+		}
+
+		// Track data locality scores
+		s.recordDataLocalityMetrics(pod, selectedNode)
+	}
+
 	klog.Infof("Selected node %s with highest score %d for pod %s/%s",
 		selectedNode, nodeScores[0].Score, pod.Namespace, pod.Name)
 
 	return selectedNode, nil
+}
+
+func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
+	// Get node details
+	nodeObj, err := s.clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.Warningf("Failed to get node %s for metrics: %v", nodeName, err)
+		return
+	}
+
+	nodeType := "unknown"
+	region := "unknown"
+	zone := "unknown"
+
+	if val, ok := nodeObj.Labels["node-capability/node-type"]; ok {
+		nodeType = val
+	}
+	if val, ok := nodeObj.Labels["topology.kubernetes.io/region"]; ok {
+		region = val
+	}
+	if val, ok := nodeObj.Labels["topology.kubernetes.io/zone"]; ok {
+		zone = val
+	}
+
+	// Record the node data locality score (from your existing dataLocalityPriority calculation)
+	// This assumes your scheduler already calculates this value
+	if s.dataLocalityPriority != nil {
+		score, err := s.dataLocalityPriority.Score(pod, nodeName)
+		if err == nil {
+			s.metrics.nodeDataLocalityScore.WithLabelValues(
+				nodeName, nodeType, region, zone,
+			).Set(float64(score))
+		}
+	}
+
+	// Calculate and record edge utilization ratio
+	s.updateEdgeUtilizationRatio(region, zone)
+
+	inputData, outputData, err := s.extractDataDependencies(pod)
+	if err == nil {
+		s.recordDataTransferMetrics(pod, nodeName, inputData, outputData)
+	}
+
+	// Record resource efficiency
+	s.recordResourceEfficiencyMetrics(pod, nodeName)
+}
+
+// Extract data dependencies from pod (reuse your existing logic if available)
+func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []DataDependency, error) {
+	var inputData []DataDependency
+	var outputData []DataDependency
+	var parseErrors []string
+
+	if pod.Annotations == nil {
+		return inputData, outputData, nil
+	}
+
+	// input data dependencies
+	for k, v := range pod.Annotations {
+		if strings.HasPrefix(k, "data.scheduler.thesis/input-") {
+			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			parts := strings.Split(v, ",")
+			if len(parts) < 2 {
+				parseErrors = append(parseErrors,
+					fmt.Sprintf("invalid format for %s: %s (need at least URN,size)", k, v))
+				continue
+			}
+
+			urn := strings.TrimSpace(parts[0])
+			if urn == "" {
+				parseErrors = append(parseErrors, fmt.Sprintf("empty URN in %s", k))
+				continue
+			}
+
+			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+			if err != nil {
+				parseErrors = append(parseErrors, fmt.Sprintf("invalid size in %s: %s", k, parts[1]))
+				size = 1024 * 1024 // 1MB default
+			}
+
+			processingTime := 0
+			priority := 5 // default priority
+			dataType := "generic"
+
+			if len(parts) > 2 {
+				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
+					processingTime = pt
+				}
+			}
+
+			if len(parts) > 3 {
+				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
+					priority = p
+				}
+			}
+
+			if len(parts) > 4 {
+				dataType = strings.TrimSpace(parts[4])
+			}
+
+			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			if weight < 1.0 {
+				weight = 1.0
+			}
+
+			inputData = append(inputData, DataDependency{
+				URN:            urn,
+				SizeBytes:      size,
+				ProcessingTime: processingTime,
+				Priority:       priority,
+				DataType:       dataType,
+				Weight:         weight,
+			})
+		} else if strings.HasPrefix(k, "data.scheduler.thesis/output-") {
+			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			parts := strings.Split(v, ",")
+			if len(parts) < 2 {
+				parseErrors = append(parseErrors,
+					fmt.Sprintf("invalid format for %s: %s (need at least URN,size)", k, v))
+				continue
+			}
+
+			urn := strings.TrimSpace(parts[0])
+			if urn == "" {
+				parseErrors = append(parseErrors, fmt.Sprintf("empty URN in %s", k))
+				continue
+			}
+
+			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+			if err != nil {
+				parseErrors = append(parseErrors, fmt.Sprintf("invalid size in %s: %s", k, parts[1]))
+				size = 1024 * 1024 // 1MB default
+			}
+
+			processingTime := 0
+			priority := 5 // default priority
+			dataType := "generic"
+
+			if len(parts) > 2 {
+				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
+					processingTime = pt
+				}
+			}
+
+			if len(parts) > 3 {
+				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
+					priority = p
+				}
+			}
+
+			if len(parts) > 4 {
+				dataType = strings.TrimSpace(parts[4])
+			}
+
+			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			if weight < 1.0 {
+				weight = 1.0
+			}
+
+			outputData = append(outputData, DataDependency{
+				URN:            urn,
+				SizeBytes:      size,
+				ProcessingTime: processingTime,
+				Priority:       priority,
+				DataType:       dataType,
+				Weight:         weight,
+			})
+		}
+	}
+
+	if eoInput, ok := pod.Annotations["data.scheduler.thesis/eo-input"]; ok {
+		parts := strings.Split(eoInput, ",")
+		if len(parts) >= 2 {
+			urn := strings.TrimSpace(parts[0])
+			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+			if err != nil {
+				size = 100 * 1024 * 1024 // 100MB default
+			}
+
+			weight := 8.0 * math.Log1p(float64(size)/float64(1024*1024))
+
+			inputData = append(inputData, DataDependency{
+				URN:            urn,
+				SizeBytes:      size,
+				ProcessingTime: 30,
+				Priority:       8,
+				DataType:       "eo-imagery",
+				Weight:         weight,
+			})
+		}
+	}
+
+	if eoOutput, ok := pod.Annotations["data.scheduler.thesis/eo-output"]; ok {
+		parts := strings.Split(eoOutput, ",")
+		if len(parts) >= 2 {
+			urn := strings.TrimSpace(parts[0])
+			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+			if err != nil {
+				size = 50 * 1024 * 1024 // 50MB default
+			}
+
+			weight := 7.0 * math.Log1p(float64(size)/float64(1024*1024))
+
+			outputData = append(outputData, DataDependency{
+				URN:            urn,
+				SizeBytes:      size,
+				ProcessingTime: 0,
+				Priority:       7,
+				DataType:       "cog",
+				Weight:         weight,
+			})
+		}
+	}
+
+	if len(parseErrors) > 0 {
+		return inputData, outputData, fmt.Errorf("data dependency parsing errors: %s",
+			strings.Join(parseErrors, "; "))
+	}
+
+	return inputData, outputData, nil
+}
+
+// Record data transfer metrics based on the pod's data dependencies
+func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inputData, outputData []DataDependency) {
+	// For each input dependency, calculate transfer time and size
+	for _, data := range inputData {
+		// Find storage nodes for this data
+		storageNodes := s.storageIndex.GetStorageNodesForData(data.URN)
+		if len(storageNodes) == 0 {
+			// Try to get bucket nodes
+			parts := strings.SplitN(data.URN, "/", 2)
+			if len(parts) > 0 {
+				bucket := parts[0]
+				storageNodes = s.storageIndex.GetBucketNodes(bucket)
+			}
+		}
+
+		// Skip if this data is already on target node
+		if containsString(storageNodes, nodeName) {
+			continue
+		}
+
+		// Find best source node
+		var bestSourceNode string
+		bestTransferTime := math.MaxFloat64
+
+		for _, sourceNode := range storageNodes {
+			transferTime := s.bandwidthGraph.EstimateTransferTimeBetweenNodes(
+				sourceNode, nodeName, data.SizeBytes)
+			if transferTime < bestTransferTime {
+				bestTransferTime = transferTime
+				bestSourceNode = sourceNode
+			}
+		}
+
+		if bestSourceNode != "" {
+			// Record transfer metrics
+			dataType := "unknown"
+			if strings.Contains(data.URN, "eo-scenes") {
+				dataType = "eo-imagery"
+			} else if strings.Contains(data.URN, "fmask") {
+				dataType = "mask"
+			} else if strings.Contains(data.URN, "cog") {
+				dataType = "cog"
+			}
+
+			s.metrics.dataTransferTime.WithLabelValues(
+				bestSourceNode, nodeName, dataType,
+			).Observe(bestTransferTime)
+
+			s.metrics.dataTransferBytes.WithLabelValues(
+				bestSourceNode, nodeName, dataType,
+			).Add(float64(data.SizeBytes))
+
+			// Calculate and record bandwidth utilization
+			// bandwidth := s.bandwidthGraph.GetBandwidth(bestSourceNode, nodeName)
+			s.metrics.bandwidthUtilization.WithLabelValues(
+				bestSourceNode, nodeName,
+			).Set(float64(data.SizeBytes) / bestTransferTime)
+		}
+	}
+
+	// Similar logic for output data
+	for _, data := range outputData {
+		parts := strings.SplitN(data.URN, "/", 2)
+		if len(parts) == 0 {
+			continue
+		}
+
+		bucket := parts[0]
+		storageNodes := s.storageIndex.GetBucketNodes(bucket)
+
+		// Skip if this node is a storage node for the bucket
+		if containsString(storageNodes, nodeName) {
+			continue
+		}
+
+		// Find best destination node
+		var bestDestNode string
+		bestTransferTime := math.MaxFloat64
+
+		for _, destNode := range storageNodes {
+			transferTime := s.bandwidthGraph.EstimateTransferTimeBetweenNodes(
+				nodeName, destNode, data.SizeBytes)
+			if transferTime < bestTransferTime {
+				bestTransferTime = transferTime
+				bestDestNode = destNode
+			}
+		}
+
+		if bestDestNode != "" {
+			// Record transfer metrics
+			dataType := "unknown"
+			if strings.Contains(data.URN, "eo-scenes") {
+				dataType = "eo-imagery"
+			} else if strings.Contains(data.URN, "fmask") {
+				dataType = "mask"
+			} else if strings.Contains(data.URN, "cog") {
+				dataType = "cog"
+			}
+
+			s.metrics.dataTransferTime.WithLabelValues(
+				nodeName, bestDestNode, dataType,
+			).Observe(bestTransferTime)
+
+			s.metrics.dataTransferBytes.WithLabelValues(
+				nodeName, bestDestNode, dataType,
+			).Add(float64(data.SizeBytes))
+
+			// Calculate and record bandwidth utilization
+			// bandwidth := s.bandwidthGraph.GetBandwidth(nodeName, bestDestNode)
+			s.metrics.bandwidthUtilization.WithLabelValues(
+				nodeName, bestDestNode,
+			).Set(float64(data.SizeBytes) / bestTransferTime)
+		}
+	}
+}
+
+// Update the edge utilization ratio metric
+func (s *Scheduler) updateEdgeUtilizationRatio(region, zone string) {
+	// Get all nodes
+	nodes, err := s.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return
+	}
+
+	// Get all pods
+	pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return
+	}
+
+	// Count pods on each node type
+	edgeCount := 0
+	totalCount := 0
+
+	podsByNode := make(map[string]int)
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName != "" {
+			podsByNode[pod.Spec.NodeName]++
+			totalCount++
+		}
+	}
+
+	for _, node := range nodes.Items {
+		if value, ok := node.Labels["node-capability/node-type"]; ok && value == "edge" {
+			edgeCount += podsByNode[node.Name]
+		}
+	}
+
+	// Calculate and record ratio
+	if totalCount > 0 {
+		ratio := float64(edgeCount) / float64(totalCount)
+		s.metrics.edgeUtilizationRatio.WithLabelValues(region, zone).Set(ratio)
+	}
+}
+
+// Record resource efficiency metrics
+func (s *Scheduler) recordResourceEfficiencyMetrics(pod *v1.Pod, nodeName string) {
+	node, err := s.clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+
+	// Calculate CPU efficiency
+	var requestedCPU int64
+	for _, container := range pod.Spec.Containers {
+		if container.Resources.Requests.Cpu() != nil {
+			requestedCPU += container.Resources.Requests.Cpu().MilliValue()
+		} else {
+			requestedCPU += 100 // Default 100m
+		}
+	}
+
+	allocatableCPU := node.Status.Allocatable.Cpu().MilliValue()
+	if allocatableCPU > 0 {
+		cpuEfficiency := 100 - (float64(requestedCPU) / float64(allocatableCPU) * 100)
+		s.metrics.resourceEfficiency.WithLabelValues(nodeName, "cpu").Set(cpuEfficiency)
+	}
+
+	// Calculate memory efficiency
+	var requestedMemory int64
+	for _, container := range pod.Spec.Containers {
+		if container.Resources.Requests.Memory() != nil {
+			requestedMemory += container.Resources.Requests.Memory().Value()
+		} else {
+			requestedMemory += 200 * 1024 * 1024 // Default 200Mi
+		}
+	}
+
+	allocatableMemory := node.Status.Allocatable.Memory().Value()
+	if allocatableMemory > 0 {
+		memoryEfficiency := 100 - (float64(requestedMemory) / float64(allocatableMemory) * 100)
+		s.metrics.resourceEfficiency.WithLabelValues(nodeName, "memory").Set(memoryEfficiency)
+	}
 }
 
 func (s *Scheduler) recordSchedulingFailure(ctx context.Context, pod *v1.Pod, err error) {
@@ -2108,6 +2615,8 @@ func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"status":"success","duration":"%v"}`, duration)
 	})
+
+	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.HealthServerPort),
