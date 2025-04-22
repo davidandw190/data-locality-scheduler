@@ -36,19 +36,17 @@ func main() {
 		sameRegionBandwidthMBps  float64
 		crossRegionBandwidthMBps float64
 		edgeCloudBandwidthMBps   float64
-		enableMetricsExport      bool
 	)
 
-	// basic flags
+	// Basic flags
 	flag.StringVar(&configFile, "config", "", "Path to configuration file (YAML)")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file")
 	flag.StringVar(&master, "master", "", "The address of the Kubernetes API server")
 	flag.StringVar(&config.SchedulerName, "scheduler-name", config.SchedulerName, "Name of the scheduler")
 	flag.BoolVar(&config.EnableMockData, "enable-mock-data", config.EnableMockData, "Enable mock MinIO data creation for testing")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
-	flag.BoolVar(&enableMetricsExport, "enable-metrics-export", true, "Enable detailed metrics collection and exposure")
 
-	// performance and caching flags
+	// Performance and caching flags
 	flag.IntVar(&config.PercentageOfNodesToScore, "percentage-nodes-to-score", config.PercentageOfNodesToScore,
 		"Percentage of nodes to score (1-100)")
 	flag.BoolVar(&config.ResourceCacheEnabled, "enable-resource-cache", config.ResourceCacheEnabled,
@@ -60,7 +58,7 @@ func main() {
 	flag.DurationVar(&config.SchedulerInterval, "scheduler-interval", config.SchedulerInterval,
 		"Interval between scheduling attempts")
 
-	// scoring weights
+	// Scoring weights
 	flag.Float64Var(&config.ResourceWeight, "resource-weight", config.ResourceWeight,
 		"Weight for resource availability score")
 	flag.Float64Var(&config.NodeAffinityWeight, "node-affinity-weight", config.NodeAffinityWeight,
@@ -72,7 +70,7 @@ func main() {
 	flag.Float64Var(&config.DataLocalityWeight, "data-locality-weight", config.DataLocalityWeight,
 		"Weight for data locality score")
 
-	// bandwidth settings in MB/s (convert to bytes/s when storing in config)
+	// Bandwidth settings in MB/s (convert to bytes/s when storing in config)
 	flag.Float64Var(&localBandwidthMBps, "local-bandwidth-mbps", config.LocalBandwidth/1e6,
 		"Bandwidth for local (same-node) transfers in MB/s")
 	flag.Float64Var(&sameZoneBandwidthMBps, "same-zone-bandwidth-mbps", config.SameZoneBandwidth/1e6,
@@ -88,18 +86,19 @@ func main() {
 	flag.IntVar(&config.HealthServerPort, "health-port", config.HealthServerPort,
 		"Port for health check and API server")
 
-	// default resource settings
+	// Default resource settings
 	flag.Int64Var(&config.DefaultCPURequest, "default-cpu-request", config.DefaultCPURequest,
 		"Default CPU request in millicores for containers without explicit requests")
 	flag.Int64Var(&config.DefaultMemoryRequest, "default-memory-request", config.DefaultMemoryRequest,
 		"Default memory request in bytes for containers without explicit requests")
 
-	// debug flags
+	// Debug flags
 	flag.BoolVar(&config.VerboseLogging, "verbose", config.VerboseLogging, "Enable verbose logging")
 	flag.BoolVar(&config.DetailedMetrics, "detailed-metrics", config.DetailedMetrics, "Collect detailed metrics")
 	flag.BoolVar(&config.EnableProfiling, "enable-profiling", config.EnableProfiling, "Enable performance profiling")
 	flag.BoolVar(&config.EnableAPIEndpoint, "enable-api", config.EnableAPIEndpoint, "Enable API endpoint for management")
 
+	flag.Parse()
 	flag.Parse()
 
 	wasFlagPassed := func(name string) bool {
@@ -111,7 +110,6 @@ func main() {
 		})
 		return found
 	}
-
 	if showVersion {
 		fmt.Printf("Data Locality Scheduler v%s (built %s)\n", version, buildTime)
 		os.Exit(0)
@@ -145,7 +143,6 @@ func main() {
 			config.EdgeCloudBandwidth = edgeCloudBandwidthMBps * 1e6
 		}
 	}
-
 	if wasFlagPassed("same-region-bandwidth-mbps") {
 		config.SameRegionBandwidth = sameRegionBandwidthMBps * 1e6
 	}
@@ -155,8 +152,6 @@ func main() {
 	if wasFlagPassed("edge-cloud-bandwidth-mbps") {
 		config.EdgeCloudBandwidth = edgeCloudBandwidthMBps * 1e6
 	}
-
-	config.DetailedMetrics = enableMetricsExport
 
 	if err := config.Validate(); err != nil {
 		klog.Fatalf("Invalid configuration: %s", err.Error())
@@ -213,10 +208,7 @@ func main() {
 
 	sched := scheduler.NewScheduler(clientset, config)
 
-	klog.Infof("Starting %s with metrics collection %s...",
-		config.SchedulerName,
-		map[bool]string{true: "enabled", false: "disabled"}[enableMetricsExport])
-
+	klog.Infof("Starting %s...", config.SchedulerName)
 	if err := sched.Run(ctx); err != nil {
 		klog.Fatalf("Error running scheduler: %s", err.Error())
 	}

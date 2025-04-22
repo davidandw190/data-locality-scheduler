@@ -4,8 +4,7 @@ metadata:
   name: data-locality-scheduler
   namespace: monitoring
   labels:
-    prometheus: prometheus-kube-prometheus
-    app: data-locality-scheduler
+    release: prometheus
 spec:
   selector:
     matchLabels:
@@ -24,8 +23,8 @@ metadata:
   name: data-locality-metrics
   namespace: monitoring
   labels:
-    prometheus: prometheus-kube-prometheus
     app: data-locality-metrics
+    prometheus: prometheus-kube-prometheus
 spec:
   selector:
     matchLabels:
