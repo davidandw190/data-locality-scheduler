@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-locality-webhook
+  namespace: data-locality-scheduler
+  labels:
+    app: data-locality-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-locality-webhook
+  template:
+    metadata:
+      labels:
+        app: data-locality-webhook
+    spec:
+      serviceAccountName: data-locality-webhook
+      containers:
+      - name: webhook
+        image: davidandw190/knative-data-locality-webhook:latest
+        imagePullPolicy: Always
+        args:
+        - "--log-level=info"
+        ports:
+        - containerPort: 8443
+          name: webhook-api
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /etc/webhook/certs
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: data-locality-webhook-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-locality-webhook
+  namespace: data-locality-scheduler
+spec:
+  ports:
+  - port: 443
+    targetPort: 8443
+  selector:
+    app: data-locality-webhook
