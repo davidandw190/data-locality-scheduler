@@ -16,8 +16,6 @@ type DataDependency struct {
 	URN            string
 	SizeBytes      int64
 	ProcessingTime int // optional-seconds
-	Priority       int
-	DataType       string
 	Weight         float64
 }
 
@@ -93,7 +91,8 @@ func (p *DataLocalityPriority) Score(pod *v1.Pod, nodeName string) (int, error) 
 		pod.Namespace, pod.Name, len(inputData), len(outputData))
 
 	for i, dep := range inputData {
-		klog.V(5).Infof("Input dependency %d: %s (size: %d bytes)", i+1, dep.URN, dep.SizeBytes)
+		klog.V(5).Infof("Input dependency %d: %s (size: %d bytes, processing time: %d s)",
+			i+1, dep.URN, dep.SizeBytes, dep.ProcessingTime)
 	}
 
 	storageNodes := make(map[string][]string)
@@ -160,7 +159,7 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 	// input data dependencies
 	for k, v := range pod.Annotations {
 		if strings.HasPrefix(k, "data.scheduler.thesis/input-") {
-			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			// format: urn,size_bytes[,processing_time]
 			parts := strings.Split(v, ",")
 			if len(parts) < 2 {
 				parseErrors = append(parseErrors,
@@ -181,40 +180,30 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 			}
 
 			processingTime := 0
-			priority := 5 // default priority
-			dataType := "generic"
-
 			if len(parts) > 2 {
 				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
 					processingTime = pt
 				}
 			}
 
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
-					priority = p
-				}
-			}
-
-			if len(parts) > 4 {
-				dataType = strings.TrimSpace(parts[4])
-			}
-
-			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 			if weight < 1.0 {
 				weight = 1.0
+			}
+
+			if processingTime > 0 {
+				procFactor := 1.0 + (math.Log1p(float64(processingTime)) / 5.0)
+				weight *= procFactor
 			}
 
 			inputData = append(inputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
-				DataType:       dataType,
 				Weight:         weight,
 			})
 		} else if strings.HasPrefix(k, "data.scheduler.thesis/output-") {
-			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			// format: urn,size_bytes[,processing_time]
 			parts := strings.Split(v, ",")
 			if len(parts) < 2 {
 				parseErrors = append(parseErrors,
@@ -235,26 +224,13 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 			}
 
 			processingTime := 0
-			priority := 5 // default priority
-			dataType := "generic"
-
 			if len(parts) > 2 {
 				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
 					processingTime = pt
 				}
 			}
 
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
-					priority = p
-				}
-			}
-
-			if len(parts) > 4 {
-				dataType = strings.TrimSpace(parts[4])
-			}
-
-			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 			if weight < 1.0 {
 				weight = 1.0
 			}
@@ -263,13 +239,12 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
-				DataType:       dataType,
 				Weight:         weight,
 			})
 		}
 	}
 
+	// TODO: remove in the future
 	if eoInput, ok := pod.Annotations["data.scheduler.thesis/eo-input"]; ok {
 		parts := strings.Split(eoInput, ",")
 		if len(parts) >= 2 {
@@ -279,14 +254,12 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				size = 100 * 1024 * 1024 // 100MB default
 			}
 
-			weight := 8.0 * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 
 			inputData = append(inputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
-				ProcessingTime: 30,
-				Priority:       8,
-				DataType:       "eo-imagery",
+				ProcessingTime: 30, // default processing time for EO data
 				Weight:         weight,
 			})
 		}
@@ -301,14 +274,12 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 				size = 50 * 1024 * 1024 // 50MB default
 			}
 
-			weight := 7.0 * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 
 			outputData = append(outputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: 0,
-				Priority:       7,
-				DataType:       "cog",
 				Weight:         weight,
 			})
 		}
@@ -353,7 +324,7 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 
 		if containsString(storageNodes, nodeName) {
 			klog.V(4).Infof("Data %s is co-located on node %s - optimal score", data.URN, nodeName)
-			weightedScore += float64(p.config.MaxScore) * data.Weight * 3.0 // Triple the weight
+			weightedScore += float64(p.config.MaxScore) * data.Weight * 3.0 // Triple the weight for co-location
 			totalWeight += data.Weight * 3.0
 
 			klog.V(3).Infof("Node %s is a storage node for this pod's data", nodeName)
@@ -425,24 +396,26 @@ func (p *DataLocalityPriority) calculateInputDataScore(inputData []DataDependenc
 			}
 		}
 
+		// size-based weight adjustment
 		sizeFactor := 1.0
-		if data.SizeBytes > 50*1024*1024 { // 500MB
+		if data.SizeBytes > 50*1024*1024 { // 50MB
 			sizeFactor = 1.5 // 50% more important for large files
 		} else if data.SizeBytes > 1024*1024*1024 { // 1GB
 			sizeFactor = 2.0 // 100% more important for very large files
 		}
 
-		priorityFactor := 1.0
-		if data.Priority >= 8 {
-			priorityFactor = 1.3 // 30% more important for high priority
+		// processing time factor - longer processing times make data locality more important
+		procFactor := 1.0
+		if data.ProcessingTime > 0 {
+			procFactor = 1.0 + math.Min(float64(data.ProcessingTime)/60.0, 0.5) // Max 50% bonus
 		}
 
-		adjustedWeight := data.Weight * sizeFactor * priorityFactor
+		adjustedWeight := data.Weight * sizeFactor * procFactor
 		weightedScore += float64(score) * adjustedWeight
 		totalWeight += adjustedWeight
 
-		klog.V(5).Infof("Data %s scored %d on node %s (weighted: %.2f)",
-			data.URN, score, nodeName, float64(score)*adjustedWeight)
+		klog.V(5).Infof("Data %s scored %d on node %s (weighted: %.2f, processing time: %d s)",
+			data.URN, score, nodeName, float64(score)*adjustedWeight, data.ProcessingTime)
 	}
 
 	if totalWeight == 0 {
@@ -501,8 +474,14 @@ func (p *DataLocalityPriority) calculateOutputDataScore(outputData []DataDepende
 
 		score := calculateScoreFromTransferTime(bestTransferTime, p.config.MaxScore)
 
-		weightedScore += float64(score) * data.Weight
-		totalWeight += data.Weight
+		sizeFactor := 1.0
+		if data.SizeBytes > 100*1024*1024 { // 100MB
+			sizeFactor = 1.3 // 30% more important for large output files
+		}
+
+		adjustedWeight := data.Weight * sizeFactor
+		weightedScore += float64(score) * adjustedWeight
+		totalWeight += adjustedWeight
 	}
 
 	if totalWeight == 0 {

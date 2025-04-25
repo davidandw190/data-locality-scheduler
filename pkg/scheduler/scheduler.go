@@ -1087,7 +1087,7 @@ func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
 	s.recordResourceEfficiencyMetrics(pod, nodeName)
 }
 
-func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []DataDependency, error) {
+func (p *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []DataDependency, error) {
 	var inputData []DataDependency
 	var outputData []DataDependency
 	var parseErrors []string
@@ -1099,7 +1099,7 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 	// input data dependencies
 	for k, v := range pod.Annotations {
 		if strings.HasPrefix(k, "data.scheduler.thesis/input-") {
-			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			// format: urn,size_bytes[,processing_time]
 			parts := strings.Split(v, ",")
 			if len(parts) < 2 {
 				parseErrors = append(parseErrors,
@@ -1120,40 +1120,30 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 			}
 
 			processingTime := 0
-			priority := 5 // default priority
-			dataType := "generic"
-
 			if len(parts) > 2 {
 				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
 					processingTime = pt
 				}
 			}
 
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
-					priority = p
-				}
-			}
-
-			if len(parts) > 4 {
-				dataType = strings.TrimSpace(parts[4])
-			}
-
-			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 			if weight < 1.0 {
 				weight = 1.0
+			}
+
+			if processingTime > 0 {
+				procFactor := 1.0 + (math.Log1p(float64(processingTime)) / 5.0)
+				weight *= procFactor
 			}
 
 			inputData = append(inputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
-				DataType:       dataType,
 				Weight:         weight,
 			})
 		} else if strings.HasPrefix(k, "data.scheduler.thesis/output-") {
-			// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+			// format: urn,size_bytes[,processing_time]
 			parts := strings.Split(v, ",")
 			if len(parts) < 2 {
 				parseErrors = append(parseErrors,
@@ -1174,26 +1164,13 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 			}
 
 			processingTime := 0
-			priority := 5 // default priority
-			dataType := "generic"
-
 			if len(parts) > 2 {
 				if pt, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
 					processingTime = pt
 				}
 			}
 
-			if len(parts) > 3 {
-				if p, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
-					priority = p
-				}
-			}
-
-			if len(parts) > 4 {
-				dataType = strings.TrimSpace(parts[4])
-			}
-
-			weight := float64(priority) * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 			if weight < 1.0 {
 				weight = 1.0
 			}
@@ -1202,13 +1179,12 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: processingTime,
-				Priority:       priority,
-				DataType:       dataType,
 				Weight:         weight,
 			})
 		}
 	}
 
+	// TODO: will be removed in the future
 	if eoInput, ok := pod.Annotations["data.scheduler.thesis/eo-input"]; ok {
 		parts := strings.Split(eoInput, ",")
 		if len(parts) >= 2 {
@@ -1218,19 +1194,18 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 				size = 100 * 1024 * 1024 // 100MB default
 			}
 
-			weight := 8.0 * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 
 			inputData = append(inputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: 30,
-				Priority:       8,
-				DataType:       "eo-imagery",
 				Weight:         weight,
 			})
 		}
 	}
 
+	// TODO: will be removed in the future
 	if eoOutput, ok := pod.Annotations["data.scheduler.thesis/eo-output"]; ok {
 		parts := strings.Split(eoOutput, ",")
 		if len(parts) >= 2 {
@@ -1240,14 +1215,12 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 				size = 50 * 1024 * 1024 // 50MB default
 			}
 
-			weight := 7.0 * math.Log1p(float64(size)/float64(1024*1024))
+			weight := math.Log1p(float64(size) / float64(1024*1024))
 
 			outputData = append(outputData, DataDependency{
 				URN:            urn,
 				SizeBytes:      size,
 				ProcessingTime: 0,
-				Priority:       7,
-				DataType:       "cog",
 				Weight:         weight,
 			})
 		}
