@@ -1,0 +1,29 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: data-locality-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: data-locality-scheduler/data-locality-webhook-cert
+webhooks:
+- name: pod-annotator.data-locality-scheduler.svc
+  clientConfig:
+    service:
+      name: data-locality-webhook
+      namespace: data-locality-scheduler
+      path: "/mutate"
+      port: 443
+  rules:
+  - apiGroups: [ "" ]
+    apiVersions: [ "v1" ]
+    operations: [ "CREATE" ]
+    resources: [ "pods" ]
+    scope: "Namespaced"
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values: [ "eo-workflow", "data-locality-scheduler", "knative-serving" ]
+  sideEffects: None
+  admissionReviewVersions: [ "v1" ]
+  failurePolicy: Ignore
+  timeoutSeconds: 5

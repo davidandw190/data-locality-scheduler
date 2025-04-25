@@ -1,14 +1,20 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: test-data-processor
-  namespace: eo-workflow
+  name: region1-processor
+  namespace: data-locality-scheduler
   annotations:
-    # static service-level data dependencies
-    data.scheduler.thesis/input-1: "test-bucket/input.dat,1048576,10,5,test"
+    scheduler.knative.dev/scheduler-name: "data-locality-scheduler"
     scheduler.thesis/data-intensive: "true"
+    data.scheduler.thesis/input-1: "region1-specific-data/test-file.txt,1024000000,30"
 spec:
   template:
+    metadata:
+      annotations:
+        data.scheduler.thesis/process-events: "true"
+        scheduler.knative.dev/scheduler-name: "data-locality-scheduler"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
     spec:
       containers:
       - image: gcr.io/knative-samples/helloworld-go:latest
@@ -16,4 +22,4 @@ spec:
         - containerPort: 8080
         env:
         - name: TARGET
-          value: "Data Processing Service"
+          value: "Region 1 Data Processor"
