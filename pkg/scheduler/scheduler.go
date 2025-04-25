@@ -1017,7 +1017,6 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 	if selectedNode != "" {
 		s.metrics.schedulingLatency.Observe(time.Since(startTime).Seconds())
 
-		// Get node type, region, zone
 		nodeObj, err := s.clientset.CoreV1().Nodes().Get(ctx, selectedNode, metav1.GetOptions{})
 		if err == nil {
 			nodeType := "unknown"
@@ -1034,13 +1033,11 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 				zone = val
 			}
 
-			// Record pod placement by node type
 			s.metrics.podPlacementByNodeType.WithLabelValues(
 				nodeType, region, zone, pod.Namespace,
 			).Inc()
 		}
 
-		// Track data locality scores
 		s.recordDataLocalityMetrics(pod, selectedNode)
 	}
 
@@ -1051,7 +1048,6 @@ func (s *Scheduler) findBestNodeForPod(ctx context.Context, pod *v1.Pod) (string
 }
 
 func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
-	// Get node details
 	nodeObj, err := s.clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Warningf("Failed to get node %s for metrics: %v", nodeName, err)
@@ -1072,8 +1068,6 @@ func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
 		zone = val
 	}
 
-	// Record the node data locality score (from your existing dataLocalityPriority calculation)
-	// This assumes your scheduler already calculates this value
 	if s.dataLocalityPriority != nil {
 		score, err := s.dataLocalityPriority.Score(pod, nodeName)
 		if err == nil {
@@ -1083,7 +1077,6 @@ func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
 		}
 	}
 
-	// Calculate and record edge utilization ratio
 	s.updateEdgeUtilizationRatio(region, zone)
 
 	inputData, outputData, err := s.extractDataDependencies(pod)
@@ -1091,11 +1084,9 @@ func (s *Scheduler) recordDataLocalityMetrics(pod *v1.Pod, nodeName string) {
 		s.recordDataTransferMetrics(pod, nodeName, inputData, outputData)
 	}
 
-	// Record resource efficiency
 	s.recordResourceEfficiencyMetrics(pod, nodeName)
 }
 
-// Extract data dependencies from pod (reuse your existing logic if available)
 func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []DataDependency, error) {
 	var inputData []DataDependency
 	var outputData []DataDependency
@@ -1270,14 +1261,10 @@ func (s *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 	return inputData, outputData, nil
 }
 
-// Record data transfer metrics based on the pod's data dependencies
 func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inputData, outputData []DataDependency) {
-	// For each input dependency, calculate transfer time and size
 	for _, data := range inputData {
-		// Find storage nodes for this data
 		storageNodes := s.storageIndex.GetStorageNodesForData(data.URN)
 		if len(storageNodes) == 0 {
-			// Try to get bucket nodes
 			parts := strings.SplitN(data.URN, "/", 2)
 			if len(parts) > 0 {
 				bucket := parts[0]
@@ -1285,12 +1272,10 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 			}
 		}
 
-		// Skip if this data is already on target node
 		if containsString(storageNodes, nodeName) {
 			continue
 		}
 
-		// Find best source node
 		var bestSourceNode string
 		bestTransferTime := math.MaxFloat64
 
@@ -1304,7 +1289,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 		}
 
 		if bestSourceNode != "" {
-			// Record transfer metrics
 			dataType := "unknown"
 			if strings.Contains(data.URN, "eo-scenes") {
 				dataType = "eo-imagery"
@@ -1322,7 +1306,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 				bestSourceNode, nodeName, dataType,
 			).Add(float64(data.SizeBytes))
 
-			// Calculate and record bandwidth utilization
 			// bandwidth := s.bandwidthGraph.GetBandwidth(bestSourceNode, nodeName)
 			s.metrics.bandwidthUtilization.WithLabelValues(
 				bestSourceNode, nodeName,
@@ -1330,7 +1313,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 		}
 	}
 
-	// Similar logic for output data
 	for _, data := range outputData {
 		parts := strings.SplitN(data.URN, "/", 2)
 		if len(parts) == 0 {
@@ -1340,12 +1322,12 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 		bucket := parts[0]
 		storageNodes := s.storageIndex.GetBucketNodes(bucket)
 
-		// Skip if this node is a storage node for the bucket
+		// skip if this node is a storage node for the bucket
 		if containsString(storageNodes, nodeName) {
 			continue
 		}
 
-		// Find best destination node
+		// find best destination node
 		var bestDestNode string
 		bestTransferTime := math.MaxFloat64
 
@@ -1359,7 +1341,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 		}
 
 		if bestDestNode != "" {
-			// Record transfer metrics
 			dataType := "unknown"
 			if strings.Contains(data.URN, "eo-scenes") {
 				dataType = "eo-imagery"
@@ -1377,7 +1358,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 				nodeName, bestDestNode, dataType,
 			).Add(float64(data.SizeBytes))
 
-			// Calculate and record bandwidth utilization
 			// bandwidth := s.bandwidthGraph.GetBandwidth(nodeName, bestDestNode)
 			s.metrics.bandwidthUtilization.WithLabelValues(
 				nodeName, bestDestNode,
@@ -1386,21 +1366,17 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 	}
 }
 
-// Update the edge utilization ratio metric
 func (s *Scheduler) updateEdgeUtilizationRatio(region, zone string) {
-	// Get all nodes
 	nodes, err := s.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return
 	}
 
-	// Get all pods
 	pods, err := s.clientset.CoreV1().Pods(metav1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return
 	}
 
-	// Count pods on each node type
 	edgeCount := 0
 	totalCount := 0
 
@@ -1418,21 +1394,19 @@ func (s *Scheduler) updateEdgeUtilizationRatio(region, zone string) {
 		}
 	}
 
-	// Calculate and record ratio
 	if totalCount > 0 {
 		ratio := float64(edgeCount) / float64(totalCount)
 		s.metrics.edgeUtilizationRatio.WithLabelValues(region, zone).Set(ratio)
 	}
 }
 
-// Record resource efficiency metrics
 func (s *Scheduler) recordResourceEfficiencyMetrics(pod *v1.Pod, nodeName string) {
 	node, err := s.clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return
 	}
 
-	// Calculate CPU efficiency
+	// compute CPU efficiency
 	var requestedCPU int64
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests.Cpu() != nil {
@@ -1448,13 +1422,13 @@ func (s *Scheduler) recordResourceEfficiencyMetrics(pod *v1.Pod, nodeName string
 		s.metrics.resourceEfficiency.WithLabelValues(nodeName, "cpu").Set(cpuEfficiency)
 	}
 
-	// Calculate memory efficiency
+	// compute memory efficiency
 	var requestedMemory int64
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests.Memory() != nil {
 			requestedMemory += container.Resources.Requests.Memory().Value()
 		} else {
-			requestedMemory += 200 * 1024 * 1024 // Default 200Mi
+			requestedMemory += 200 * 1024 * 1024 // default 200Mi
 		}
 	}
 
@@ -1631,9 +1605,8 @@ func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]N
 
 	normalizedScores := make([][]float64, len(scoresList))
 	for i, scores := range scoresList {
-		// find min and max scores for this criterion
-		minScore := MaxScore
-		maxScore := MinScore
+		minScore := 1000000
+		maxScore := -1000000
 
 		for _, score := range scores {
 			if score.Score < minScore {
@@ -1644,23 +1617,40 @@ func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]N
 			}
 		}
 
-		// handle case where all scores are the same
 		scoreDiff := maxScore - minScore
-		if scoreDiff == 0 {
-			scoreDiff = 1
-		}
-
-		// normalize scores to 0-1 range
 		normalizedScores[i] = make([]float64, nodeCount)
-		for _, score := range scores {
-			index, exists := nodeIndices[score.Name]
-			if exists {
-				normalizedScores[i][index] = float64(score.Score-minScore) / float64(scoreDiff)
+
+		if scoreDiff == 0 {
+			for j := 0; j < nodeCount; j++ {
+				normalizedScores[i][j] = 0.5
+			}
+		} else {
+			for _, score := range scores {
+				index, exists := nodeIndices[score.Name]
+				if exists {
+					normalizedScores[i][index] = float64(score.Score-minScore) / float64(scoreDiff)
+				}
 			}
 		}
 	}
 
-	// compute weighted sum for each node
+	if klog.V(4).Enabled() {
+		for i, normalizedScore := range normalizedScores {
+			var priority string
+			if i < len(s.priorityFuncs) {
+				priority = fmt.Sprintf("%T", s.priorityFuncs[i])
+			} else {
+				priority = "DataLocalityPriority"
+			}
+			klog.V(4).Infof("Normalized scores for %s: %v", priority, normalizedScore)
+		}
+	}
+
+	dataLocalityIndex := -1
+	if len(scoresList) > 0 && s.dataLocalityPriority != nil {
+		dataLocalityIndex = len(scoresList) - 1
+	}
+
 	finalScores := make([]float64, nodeCount)
 	weightSum := 0.0
 
@@ -1672,22 +1662,33 @@ func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]N
 		weightSum += weight
 
 		for j := 0; j < nodeCount; j++ {
-			finalScores[j] += normalizedScore[j] * weight
+			if i == dataLocalityIndex {
+				// this amplifies the effect of data locality by using square root
+				// which increases differences between low and high scores
+				if normalizedScore[j] > 0.7 {
+					finalScores[j] += weight * 1.5
+				} else {
+					finalScores[j] += normalizedScore[j] * weight
+				}
+			} else {
+				finalScores[j] += normalizedScore[j] * weight
+			}
 		}
 	}
 
-	// we normalize to account for variable number of criteria
+	// normalize to account for variable number of criteria
 	if weightSum > 0 {
 		for j := 0; j < nodeCount; j++ {
 			finalScores[j] /= weightSum
 		}
 	}
 
+	// rescale to MaxScore
 	result := make([]NodeScore, nodeCount)
 	for j := 0; j < nodeCount; j++ {
 		result[j] = NodeScore{
 			Name:  nodes[j].Name,
-			Score: int(finalScores[j] * MaxScore),
+			Score: int(finalScores[j] * float64(MaxScore)),
 		}
 	}
 
@@ -1707,26 +1708,61 @@ func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 		return weights
 	}
 
-	if _, ok := pod.Annotations[AnnotationDataIntensive]; ok {
-		weights = []float64{
-			s.config.DataIntensiveResourceWeight,
-			s.config.DataIntensiveNodeAffinityWeight,
-			s.config.DataIntensiveNodeTypeWeight,
-			s.config.DataIntensiveCapabilitiesWeight,
-			s.config.DataIntensiveDataLocalityWeight,
-		}
-	} else if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
-		weights = []float64{
-			s.config.ComputeIntensiveResourceWeight,
-			s.config.ComputeIntensiveNodeAffinityWeight,
-			s.config.ComputeIntensiveNodeTypeWeight,
-			s.config.ComputeIntensiveCapabilitiesWeight,
-			s.config.ComputeIntensiveDataLocalityWeight,
+	// count data dependencies
+	dataInputCount := 0
+	dataOutputCount := 0
+	for k := range pod.Annotations {
+		if strings.HasPrefix(k, "data.scheduler.thesis/input-") {
+			dataInputCount++
+		} else if strings.HasPrefix(k, "data.scheduler.thesis/output-") {
+			dataOutputCount++
 		}
 	}
 
+	// data-intensive workload
+	if _, ok := pod.Annotations[AnnotationDataIntensive]; ok || dataInputCount > 0 {
+		klog.V(3).Infof("Pod %s/%s identified as data-intensive", pod.Namespace, pod.Name)
+		weights[0] = s.config.DataIntensiveResourceWeight
+		weights[1] = s.config.DataIntensiveNodeAffinityWeight
+		weights[2] = s.config.DataIntensiveNodeTypeWeight
+		weights[3] = s.config.DataIntensiveCapabilitiesWeight
+		weights[4] = s.config.DataIntensiveDataLocalityWeight
+	}
+
+	// compute-intensive workload
+	if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
+		klog.V(3).Infof("Pod %s/%s identified as compute-intensive", pod.Namespace, pod.Name)
+		// If also data-intensive, balance weights
+		if _, ok := pod.Annotations[AnnotationDataIntensive]; ok || dataInputCount > 0 {
+			weights[0] = (s.config.DataIntensiveResourceWeight + s.config.ComputeIntensiveResourceWeight) / 2
+			weights[1] = (s.config.DataIntensiveNodeAffinityWeight + s.config.ComputeIntensiveNodeAffinityWeight) / 2
+			weights[2] = (s.config.DataIntensiveNodeTypeWeight + s.config.ComputeIntensiveNodeTypeWeight) / 2
+			weights[3] = (s.config.DataIntensiveCapabilitiesWeight + s.config.ComputeIntensiveCapabilitiesWeight) / 2
+			weights[4] = (s.config.DataIntensiveDataLocalityWeight + s.config.ComputeIntensiveDataLocalityWeight) / 2
+		} else {
+			weights[0] = s.config.ComputeIntensiveResourceWeight
+			weights[1] = s.config.ComputeIntensiveNodeAffinityWeight
+			weights[2] = s.config.ComputeIntensiveNodeTypeWeight
+			weights[3] = s.config.ComputeIntensiveCapabilitiesWeight
+			weights[4] = s.config.ComputeIntensiveDataLocalityWeight
+		}
+	}
+
+	// region preference
+	if preferredRegion, ok := pod.Annotations[AnnotationPreferRegion]; ok && preferredRegion != "" {
+		klog.V(3).Infof("Pod %s/%s has region preference: %s", pod.Namespace, pod.Name, preferredRegion)
+		weights[1] *= 1.3
+	}
+
+	// edge preference
 	if _, ok := pod.Annotations[AnnotationPreferEdge]; ok {
-		weights[2] = 0.3
+		klog.V(3).Infof("Pod %s/%s prefers edge nodes", pod.Namespace, pod.Name)
+		weights[2] *= 1.5
+	}
+
+	if klog.V(3).Enabled() {
+		klog.V(3).Infof("Final weights for pod %s/%s: Resource=%.2f, NodeAffinity=%.2f, NodeType=%.2f, Capabilities=%.2f, DataLocality=%.2f",
+			pod.Namespace, pod.Name, weights[0], weights[1], weights[2], weights[3], weights[4])
 	}
 
 	return weights
@@ -2407,6 +2443,7 @@ func (s *Scheduler) bindPod(ctx context.Context, pod *v1.Pod, nodeName string) e
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pod.Name,
 			Namespace: pod.Namespace,
+			UID:       pod.UID, // Include the UID to ensure we're binding the same pod
 		},
 		Target: v1.ObjectReference{
 			Kind:       "Node",
@@ -2415,7 +2452,12 @@ func (s *Scheduler) bindPod(ctx context.Context, pod *v1.Pod, nodeName string) e
 		},
 	}
 
-	return s.clientset.CoreV1().Pods(pod.Namespace).Bind(ctx, binding, metav1.CreateOptions{})
+	err := s.clientset.CoreV1().Pods(pod.Namespace).Bind(ctx, binding, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("binding failed: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Scheduler) startHealthCheckServer(ctx context.Context) {
