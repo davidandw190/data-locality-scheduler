@@ -7,12 +7,11 @@ metadata:
     scheduler.knative.dev/scheduler-name: "data-locality-scheduler"
     scheduler.thesis/data-intensive: "true"
     data.scheduler.thesis/input-1: "region1-specific-data/test-file.txt,1024000000,30"
+    scheduler.thesis/prefer-region: "region-1"
 spec:
   template:
     metadata:
       annotations:
-        data.scheduler.thesis/process-events: "true"
-        scheduler.knative.dev/scheduler-name: "data-locality-scheduler"
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "1"
     spec:

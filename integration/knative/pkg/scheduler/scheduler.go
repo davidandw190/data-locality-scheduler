@@ -10,8 +10,6 @@ type DataDependency struct {
 	URN            string `json:"urn"`
 	Size           int64  `json:"size"`
 	ProcessingTime int    `json:"processingTime,omitempty"`
-	Priority       int    `json:"priority,omitempty"`
-	DataType       string `json:"dataType,omitempty"`
 }
 
 type EventData struct {
@@ -22,7 +20,7 @@ type EventData struct {
 }
 
 func FormatDataDependency(dep DataDependency) string {
-	// format: urn,size_bytes[,processing_time[,priority[,data_type]]]
+	// format: urn,size_bytes[,processing_time]
 	parts := []string{dep.URN, "0"}
 
 	// always set the size
@@ -30,17 +28,9 @@ func FormatDataDependency(dep DataDependency) string {
 		parts[1] = FormatInt64(dep.Size)
 	}
 
-	// add optional parameters in order
-	if dep.ProcessingTime > 0 || dep.Priority > 0 || dep.DataType != "" {
+	// add processing time only if specified
+	if dep.ProcessingTime > 0 {
 		parts = append(parts, FormatInt(dep.ProcessingTime))
-
-		if dep.Priority > 0 || dep.DataType != "" {
-			parts = append(parts, FormatInt(dep.Priority))
-
-			if dep.DataType != "" {
-				parts = append(parts, dep.DataType)
-			}
-		}
 	}
 
 	return strings.Join(parts, ",")
@@ -65,12 +55,12 @@ func InferAnnotations(pod *corev1.Pod) map[string]string {
 
 	if serviceName, ok := pod.Labels["serving.knative.dev/service"]; ok {
 		if strings.Contains(serviceName, "cog-transformer") {
-			annotations["data.scheduler.thesis/input-1"] = "eo-scenes/LC08_sample.tif,524288000,30,8,eo-imagery"
-			annotations["data.scheduler.thesis/output-1"] = "cog-data/LC08_B4.tif,83886080,0,5,cog"
+			annotations["data.scheduler.thesis/input-1"] = "eo-scenes/LC08_sample.tif,524288000,30"
+			annotations["data.scheduler.thesis/output-1"] = "cog-data/LC08_B4.tif,83886080"
 			annotations["scheduler.thesis/data-intensive"] = "true"
 		} else if strings.Contains(serviceName, "fmask") {
-			annotations["data.scheduler.thesis/input-1"] = "eo-scenes/LC08_sample.tif,524288000,30,8,eo-imagery"
-			annotations["data.scheduler.thesis/output-1"] = "fmask-results/LC08_fmask.tif,104857600,0,5,mask"
+			annotations["data.scheduler.thesis/input-1"] = "eo-scenes/LC08_sample.tif,524288000,30"
+			annotations["data.scheduler.thesis/output-1"] = "fmask-results/LC08_fmask.tif,104857600,"
 			annotations["scheduler.thesis/data-intensive"] = "true"
 		} else if strings.Contains(serviceName, "-extract") ||
 			strings.Contains(serviceName, "-extractor") {
