@@ -1636,10 +1636,8 @@ func (s *Scheduler) combineScores(pod *v1.Pod, nodes []v1.Node, scoresList [][]N
 
 		for j := 0; j < nodeCount; j++ {
 			if i == dataLocalityIndex {
-				// this amplifies the effect of data locality by using square root
-				// which increases differences between low and high scores
 				if normalizedScore[j] > 0.7 {
-					finalScores[j] += weight * 1.5
+					finalScores[j] += normalizedScore[j] * weight * 1.3
 				} else {
 					finalScores[j] += normalizedScore[j] * weight
 				}
@@ -1705,7 +1703,7 @@ func (s *Scheduler) getWeightsForPod(pod *v1.Pod) []float64 {
 	// compute-intensive workload
 	if _, ok := pod.Annotations[AnnotationComputeIntensive]; ok {
 		klog.V(3).Infof("Pod %s/%s identified as compute-intensive", pod.Namespace, pod.Name)
-		// If also data-intensive, balance weights
+		// if also data-intensive, balance weights
 		if _, ok := pod.Annotations[AnnotationDataIntensive]; ok || dataInputCount > 0 {
 			weights[0] = (s.config.DataIntensiveResourceWeight + s.config.ComputeIntensiveResourceWeight) / 2
 			weights[1] = (s.config.DataIntensiveNodeAffinityWeight + s.config.ComputeIntensiveNodeAffinityWeight) / 2

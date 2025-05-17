@@ -61,7 +61,7 @@ def deploy_test_storage():
     """Deploy test storage services from storage.yaml"""
     logger.info("Deploying test storage services")
     
-    storage_yaml = Path("benchmarks/kubernetes/storage.yaml")
+    storage_yaml = Path("benchmarks/simulated/kubernetes/storage.yaml")
     if not storage_yaml.exists():
         logger.error(f"Storage YAML file not found: {storage_yaml}")
         return False
@@ -135,7 +135,7 @@ spec:
   restartPolicy: Never
 """
     
-    test_pod_file = Path("benchmarks/storage-test-pod.yaml")
+    test_pod_file = Path("benchmarks/simulated/storage-test-pod.yaml")
     with open(test_pod_file, 'w') as f:
         f.write(test_pod)
     

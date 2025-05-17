@@ -7,9 +7,10 @@ metadata:
     workload: cross-region-data-processing
     stage: collection
   annotations:
-    data.scheduler.thesis/input-1: "edge-data/sensor-readings.json,104857600,10,8,json"
-    data.scheduler.thesis/output-1: "intermediate/preprocessed-readings.json,52428800,0,7,json"
+    data.scheduler.thesis/input-1: "edge-data/sensor-readings.json,419430400,10,9,json"
+    data.scheduler.thesis/output-1: "intermediate/preprocessed-readings.json,209715200,0,8,json"
     scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/prefer-region: "region-1"
     scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
