@@ -1,0 +1,258 @@
+# earth-observation-pipeline.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: satellite-data-collector
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: data-collection
+  annotations:
+    data.scheduler.thesis/input-1: "edge-data/satellite-raw-data.dat,2147483648,10,9,binary"
+    data.scheduler.thesis/output-1: "intermediate/calibrated-satellite-data.dat,1073741824,0,8,binary"
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: data-collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "satellite-data-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: eo-preprocessor
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: preprocessing
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/calibrated-satellite-data.dat,1073741824,15,8,binary"
+    data.scheduler.thesis/output-1: "intermediate/preprocessed-satellite-data.dat,805306368,0,7,binary"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: preprocessor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "eo-preprocessing"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: band-extractor
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: band-extraction
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/preprocessed-satellite-data.dat,805306368,10,7,binary"
+    data.scheduler.thesis/output-1: "intermediate/spectral-bands.dat,268435456,0,7,binary"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: band-extractor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "band-extraction"
+    - name: WORKLOAD_ACTION
+      value: "extract"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "800m"
+      limits:
+        memory: "2Gi"
+        cpu: "1.2"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imagery-generator
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: imagery-generation
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/spectral-bands.dat,268435456,30,8,binary"
+    data.scheduler.thesis/output-1: "intermediate/processed-imagery.tiff,536870912,0,8,tiff"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: imagery-generator
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "imagery-generation"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: change-detector
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: change-detection
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/processed-imagery.tiff,536870912,20,8,tiff"
+    data.scheduler.thesis/input-2: "datasets/historical-imagery.tiff,1073741824,10,7,tiff"
+    data.scheduler.thesis/output-1: "intermediate/change-detection-results.json,134217728,0,7,json"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: change-detector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "change-detection"
+    - name: WORKLOAD_ACTION
+      value: "analyze"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1.5"
+      limits:
+        memory: "4Gi"
+        cpu: "3"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-distributor
+  namespace: scheduler-benchmark
+  labels:
+    workload: earth-observation-pipeline
+    stage: distribution
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/change-detection-results.json,134217728,5,7,json"
+    data.scheduler.thesis/input-2: "intermediate/processed-imagery.tiff,536870912,5,8,tiff"
+    data.scheduler.thesis/output-1: "results/eo-analysis-results.zip,671088640,0,9,zip"
+    data.scheduler.thesis/output-2: "edge-data/eo-edge-results.json,67108864,0,9,json"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: data-distributor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-distribution"
+    - name: WORKLOAD_ACTION
+      value: "distribute"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+  restartPolicy: Never

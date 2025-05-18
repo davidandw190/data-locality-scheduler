@@ -1,0 +1,352 @@
+# benchmarks/simulated/workloads/multi-stage-transformation-pipeline.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region1-data-collector
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: collection
+    region: region-1
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/raw-data.json,209715200,10,8,json"
+    data.scheduler.thesis/output-1: "region1-bucket/collected-data.parquet,157286400,0,7,parquet"
+    scheduler.thesis/prefer-region: "region-1"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region2-data-collector
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: collection
+    region: region-2
+  annotations:
+    data.scheduler.thesis/input-1: "region2-bucket/raw-data.json,209715200,10,8,json"
+    data.scheduler.thesis/output-1: "region2-bucket/collected-data.parquet,157286400,0,7,parquet"
+    scheduler.thesis/prefer-region: "region-2"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region1-transformer
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: transformation
+    region: region-1
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/collected-data.parquet,157286400,20,7,parquet"
+    data.scheduler.thesis/output-1: "region1-bucket/transformed-data.parquet,104857600,0,8,parquet"
+    scheduler.thesis/prefer-region: "region-1"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: transformer
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-transformation"
+    - name: WORKLOAD_ACTION
+      value: "transform"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1000m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region2-transformer
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: transformation
+    region: region-2
+  annotations:
+    data.scheduler.thesis/input-1: "region2-bucket/collected-data.parquet,157286400,20,7,parquet"
+    data.scheduler.thesis/output-1: "region2-bucket/transformed-data.parquet,104857600,0,8,parquet"
+    scheduler.thesis/prefer-region: "region-2"
+    scheduler.thesis/compute-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: transformer
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-transformation"
+    - name: WORKLOAD_ACTION
+      value: "transform"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1000m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: enrichment-service
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: enrichment
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/transformed-data.parquet,104857600,10,8,parquet"
+    data.scheduler.thesis/input-2: "region2-bucket/transformed-data.parquet,104857600,10,8,parquet"
+    data.scheduler.thesis/input-3: "datasets/reference-data.json,52428800,5,6,json"
+    data.scheduler.thesis/output-1: "intermediate/enriched-data.parquet,209715200,0,9,parquet"
+    scheduler.thesis/memory-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: enrichment
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-enrichment"
+    - name: WORKLOAD_ACTION
+      value: "enrich"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "800m"
+      limits:
+        memory: "8Gi"
+        cpu: "1600m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aggregation-service
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: aggregation
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/enriched-data.parquet,209715200,15,9,parquet"
+    data.scheduler.thesis/output-1: "results/aggregated-data.parquet,52428800,0,8,parquet"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: aggregation
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-aggregation"
+    - name: WORKLOAD_ACTION
+      value: "aggregate"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1200m"
+      limits:
+        memory: "4Gi"
+        cpu: "2400m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region1-result-distributor
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: distribution
+    region: region-1
+  annotations:
+    data.scheduler.thesis/input-1: "results/aggregated-data.parquet,52428800,5,8,parquet"
+    data.scheduler.thesis/output-1: "region1-bucket/final-results.parquet,26214400,0,7,parquet"
+    scheduler.thesis/prefer-region: "region-1"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: distributor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "result-distribution"
+    - name: WORKLOAD_ACTION
+      value: "distribute"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "300m"
+      limits:
+        memory: "512Mi"
+        cpu: "600m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region2-result-distributor
+  namespace: scheduler-benchmark
+  labels:
+    workload: multi-stage-transformation-pipeline
+    component: distribution
+    region: region-2
+  annotations:
+    data.scheduler.thesis/input-1: "results/aggregated-data.parquet,52428800,5,8,parquet"
+    data.scheduler.thesis/output-1: "region2-bucket/final-results.parquet,26214400,0,7,parquet"
+    scheduler.thesis/prefer-region: "region-2"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: distributor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "result-distribution"
+    - name: WORKLOAD_ACTION
+      value: "distribute"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "300m"
+      limits:
+        memory: "512Mi"
+        cpu: "600m"
+  restartPolicy: Never

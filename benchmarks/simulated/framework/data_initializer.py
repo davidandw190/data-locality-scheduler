@@ -289,25 +289,24 @@ class DataInitializer:
         
         # Strategic data distribution to highlight locality benefits
         strategic_data = [
-            # Large input datasets on edge nodes (region-specific)
+            # Core datasets - previously existing
             {"urn": "edge-data/sensor-readings.json", "size": 419430400, "service": "region1", "content_type": "sensor_data"},
             {"urn": "edge-data/sensor-logs.json", "size": 209715200, "service": "region1", "content_type": "log_data"},
             {"urn": "edge-data/live-data.json", "size": 10485760, "service": "region1", "content_type": "streaming_data"},
-            
-            # Region 1 datasets
             {"urn": "region1-bucket/reference-models.h5", "size": 157286400, "service": "region1", "content_type": "model"},
             {"urn": "region1-bucket/reference-data.json", "size": 104857600, "service": "region1", "content_type": "reference_data"},
-            
-            # Region 2 datasets
             {"urn": "region2-bucket/iot-readings.json", "size": 209715200, "service": "region2", "content_type": "iot_data"},
             {"urn": "region2-bucket/reference-data.json", "size": 104857600, "service": "region2", "content_type": "reference_data"},
             {"urn": "region2-bucket/live-data.json", "size": 10485760, "service": "region2", "content_type": "streaming_data"},
-            
-            # Central cloud datasets (shared between regions)
             {"urn": "datasets/training-data.parquet", "size": 314572800, "service": "minio", "content_type": "combined_data"},
             {"urn": "intermediate/sample-features.npz", "size": 52428800, "service": "minio", "content_type": "feature_data"},
             
-            # Additional test datasets with varying sizes
+            # New datasets for multi-stage-transformation-pipeline workload
+            {"urn": "region1-bucket/raw-data.json", "size": 209715200, "service": "region1", "content_type": "raw_data"},
+            {"urn": "region2-bucket/raw-data.json", "size": 209715200, "service": "region2", "content_type": "raw_data"},
+            {"urn": "datasets/reference-data.json", "size": 52428800, "service": "minio", "content_type": "reference_data"},
+            
+            # Additional test datasets with varying sizes from previous version
             {"urn": "edge-data/small-dataset.json", "size": 1048576, "service": "region1", "content_type": "small_data"},
             {"urn": "edge-data/medium-dataset.json", "size": 10485760, "service": "region1", "content_type": "medium_data"}, 
             {"urn": "edge-data/large-dataset.json", "size": 104857600, "service": "region1", "content_type": "large_data"},

@@ -1,5 +1,3 @@
-# Updated benchmark_config.yaml
-
 name: "Data Locality Scheduler Benchmark"
 version: "1.0.0"
 
@@ -29,31 +27,62 @@ schedulers:
 - name: "default-scheduler"
   description: "Kubernetes default scheduler"
 
-workloads:
 - name: "ml-training-pipeline"
   description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
-  iterations: 2
+  iterations: 1
   data_intensity: "high"
   compute_intensity: "high"
   max_wait_time: 600
+
 - name: "cross-region-data-processing"
   description: "Cross-region data processing with region-specific handling"
-  iterations: 2
+  iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
   max_wait_time: 600
-- name: "edge-to-cloud-pipeline"
-  description: "IoT data processing pipeline from edge to cloud"
-  iterations: 2
-  data_intensity: "medium"
-  compute_intensity: "medium"
-  max_wait_time: 450
-- name: "data-intensive-analytics"
-  description: "Data analytics pipeline with multi-region data sources"
-  iterations: 2
-  data_intensity: "very-high"
+
+# - name: "edge-to-cloud-pipeline"
+#   description: "IoT data processing pipeline from edge to cloud"
+#   iterations: 2
+#   data_intensity: "medium"
+#   compute_intensity: "medium"
+#   max_wait_time: 450
+
+# - name: "data-intensive-analytics"
+#   description: "Data analytics pipeline with multi-region data sources"
+#   iterations: 2
+#   data_intensity: "very-high"
+#   compute_intensity: "high"
+#   max_wait_time: 600
+
+# # New workloads
+# - name: "earth-observation-pipeline"
+#   description: "Earth observation satellite data processing workflow with large datasets"
+#   iterations: 1
+#   data_intensity: "very-high"
+#   compute_intensity: "high"
+#   max_wait_time: 1200
+
+# - name: "mixed-compute-data"
+#   description: "Workload with alternating compute and data-intensive steps"
+#   iterations: 1
+#   data_intensity: "medium"
+#   compute_intensity: "medium"
+#   max_wait_time: 1200
+
+# - name: "edge-computing-stress-test"
+#   description: "Extreme case scenario with very large datasets"
+#   iterations: 1
+#   data_intensity: "very-high"
+#   compute_intensity: "very-high"
+#   max_wait_time: 2400
+
+- name: "complex-dependency-stages"
+  description: "Complex ETL pipeline with cross-region data movement and varied resource requirements"
+  iterations: 1
+  data_intensity: "high"
   compute_intensity: "high"
-  max_wait_time: 600
+  max_wait_time: 900
 
 metrics:
   collect_node_metrics: true
@@ -69,8 +98,8 @@ metrics:
   processing_overhead_tracking: true
 
 execution:
-  max_wait_time: 450
-  pod_timeout: 450
+  max_wait_time: 1250
+  pod_timeout: 1250
   poll_interval: 3
   parallel_runs: false
   cleanup_after_run: true

@@ -1,0 +1,260 @@
+# edge-computing-stress-test.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: extreme-data-collector
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: collection
+  annotations:
+    data.scheduler.thesis/input-1: "edge-data/extreme-data-stream.bin,4294967296,10,9,binary"
+    data.scheduler.thesis/output-1: "intermediate/preprocessed-extreme-data.bin,2147483648,0,8,binary"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-edge: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: extreme-collector
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "extreme-collection"
+    - name: WORKLOAD_ACTION
+      value: "collect"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: heavy-edge-processor
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: edge-processing
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/preprocessed-extreme-data.bin,2147483648,30,8,binary"
+    data.scheduler.thesis/output-1: "intermediate/edge-processed-data.bin,1073741824,0,8,binary"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-edge: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: edge-processor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "edge-processing"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-region-distributor
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: distribution
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/edge-processed-data.bin,1073741824,10,8,binary"
+    data.scheduler.thesis/output-1: "region1-bucket/region1-chunk.bin,536870912,0,8,binary"
+    data.scheduler.thesis/output-2: "region2-bucket/region2-chunk.bin,536870912,0,8,binary"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: data-distributor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "data-distribution"
+    - name: WORKLOAD_ACTION
+      value: "distribute"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region1-processor
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: regional-processing
+  annotations:
+    data.scheduler.thesis/input-1: "region1-bucket/region1-chunk.bin,536870912,15,8,binary"
+    data.scheduler.thesis/output-1: "results/region1-results.json,134217728,0,7,json"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/prefer-region: "region-1"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: regional-processor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "regional-processing"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: region2-processor
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: regional-processing
+  annotations:
+    data.scheduler.thesis/input-1: "region2-bucket/region2-chunk.bin,536870912,15,8,binary"
+    data.scheduler.thesis/output-1: "results/region2-results.json,134217728,0,7,json"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/prefer-region: "region-2"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: regional-processor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "regional-processing"
+    - name: WORKLOAD_ACTION
+      value: "process"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cloud-aggregator
+  namespace: scheduler-benchmark
+  labels:
+    workload: edge-computing-stress-test
+    stage: aggregation
+  annotations:
+    data.scheduler.thesis/input-1: "results/region1-results.json,134217728,5,7,json"
+    data.scheduler.thesis/input-2: "results/region2-results.json,134217728,5,7,json"
+    data.scheduler.thesis/output-1: "results/aggregated-extreme-results.json,268435456,0,9,json"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+  - name: cloud-aggregator
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "cloud-aggregation"
+    - name: WORKLOAD_ACTION
+      value: "aggregate"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+  restartPolicy: Never
