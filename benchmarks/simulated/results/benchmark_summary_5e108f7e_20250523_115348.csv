@@ -1,0 +1,3 @@
+workload,scheduler,iteration,data_locality_score,avg_placement_latency,edge_placements,cloud_placements,total_placements
+stream-processing-pipeline,data-locality-scheduler,1,,3.8,2,3,5
+stream-processing-pipeline,default-scheduler,1,,0.0,4,1,5

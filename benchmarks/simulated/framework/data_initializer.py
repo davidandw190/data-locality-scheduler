@@ -57,10 +57,7 @@ class DataInitializer:
                                 if len(parts) >= 2:
                                     data_refs['input'].append({
                                         'urn': parts[0],
-                                        'size_bytes': int(parts[1]),
-                                        'processing_time': int(parts[2]) if len(parts) > 2 else 0,
-                                        'priority': int(parts[3]) if len(parts) > 3 else 5,
-                                        'data_type': parts[4] if len(parts) > 4 else 'generic'
+                                        'size_bytes': int(parts[1])
                                     })
                             
                             elif k.startswith('data.scheduler.thesis/output-'):
@@ -68,10 +65,7 @@ class DataInitializer:
                                 if len(parts) >= 2:
                                     data_refs['output'].append({
                                         'urn': parts[0],
-                                        'size_bytes': int(parts[1]),
-                                        'processing_time': int(parts[2]) if len(parts) > 2 else 0,
-                                        'priority': int(parts[3]) if len(parts) > 3 else 5,
-                                        'data_type': parts[4] if len(parts) > 4 else 'generic'
+                                        'size_bytes': int(parts[1])
                                     })
             
             return data_refs
@@ -79,7 +73,6 @@ class DataInitializer:
         except Exception as e:
             logger.error(f"Failed to extract data references from {workload_file}: {e}")
             return data_refs
-    
     
     def _configure_minio_client(self):
         try:
@@ -146,7 +139,6 @@ class DataInitializer:
             logger.error(f"Failed to configure MinIO client: {e}")
             return False
     
-    
     def _wait_for_minio_services(self):
         """Wait for MinIO services to be ready before proceeding"""
         logger.info("Waiting for MinIO services to be ready...")
@@ -203,7 +195,6 @@ class DataInitializer:
                 else:
                     logger.warning(f"Service {host} does not exist: {result.stderr}")
     
-    
     def _create_buckets(self):
         """Create required buckets in MinIO"""
         # Base buckets
@@ -247,26 +238,47 @@ class DataInitializer:
         
         return True
     
-    def _create_test_data(self, file_size, file_name):
-        """Create test data file of specified size"""
+    def _create_test_data(self, file_size, file_name, content_type="generic"):
+        """Create test data file of specified size with characteristics based on content type"""
         file_path = self.temp_dir / file_name
         
-        logger.info(f"Creating test file: {file_path} ({file_size} bytes)")
+        logger.info(f"Creating test file: {file_path} ({file_size} bytes) of type {content_type}")
         
         with open(file_path, 'wb') as f:
-            chunk_size = min(10 * 1024 * 1024, file_size)  # 10MB or file size
-            remaining_bytes = file_size
-            
-            while remaining_bytes > 0:
-                write_size = min(chunk_size, remaining_bytes)
-                f.write(os.urandom(write_size))
-                remaining_bytes -= write_size
+            # For certain content types, create more realistic data patterns
+            if content_type in ["sensor_data", "iot_data", "streaming_data"]:
+                # Create data with repeated patterns to simulate time series data
+                chunk_size = min(1 * 1024 * 1024, file_size)  # 1MB chunks
+                remaining_bytes = file_size
+                
+                while remaining_bytes > 0:
+                    write_size = min(chunk_size, remaining_bytes)
+                    # Add some structured data patterns
+                    pattern = os.urandom(min(4096, write_size))
+                    repeats = (write_size + len(pattern) - 1) // len(pattern)
+                    f.write((pattern * repeats)[:write_size])
+                    remaining_bytes -= write_size
+            elif content_type in ["model", "feature_data", "image_data"]:
+                # Create data with long sequential patterns (like model weights or image data)
+                chunk_size = min(10 * 1024 * 1024, file_size)  # 10MB chunks
+                remaining_bytes = file_size
+                
+                while remaining_bytes > 0:
+                    write_size = min(chunk_size, remaining_bytes)
+                    f.write(os.urandom(write_size))
+                    remaining_bytes -= write_size
+            else:
+                # Generic random data
+                chunk_size = min(10 * 1024 * 1024, file_size)  # 10MB or file size
+                remaining_bytes = file_size
+                
+                while remaining_bytes > 0:
+                    write_size = min(chunk_size, remaining_bytes)
+                    f.write(os.urandom(write_size))
+                    remaining_bytes -= write_size
         
         return file_path
     
-    
-    # Modified method in benchmarks/simulated/framework/data_initializer.py
-
     def _initialize_data(self):
         all_data_refs = {}
         
@@ -287,36 +299,60 @@ class DataInitializer:
         
         created_items = []
         
-        # Strategic data distribution to highlight locality benefits
+        # Strategic data distribution to highlight locality benefits and test different scenarios
         strategic_data = [
-            # Core datasets - previously existing
+            # Large input datasets on edge nodes (region-specific)
             {"urn": "edge-data/sensor-readings.json", "size": 419430400, "service": "region1", "content_type": "sensor_data"},
             {"urn": "edge-data/sensor-logs.json", "size": 209715200, "service": "region1", "content_type": "log_data"},
             {"urn": "edge-data/live-data.json", "size": 10485760, "service": "region1", "content_type": "streaming_data"},
+            
+            # Stream processing data
+            {"urn": "edge-data/stream-buffer-1.dat", "size": 52428800, "service": "region1", "content_type": "streaming_data"},
+            {"urn": "edge-data/stream-buffer-2.dat", "size": 52428800, "service": "region1", "content_type": "streaming_data"},
+            
+            # Image processing datasets
+            {"urn": "edge-data/raw-images-batch1.tar", "size": 209715200, "service": "region1", "content_type": "image_data"},
+            {"urn": "region2-bucket/raw-images-batch2.tar", "size": 209715200, "service": "region2", "content_type": "image_data"},
+            {"urn": "datasets/ml-model-weights.h5", "size": 314572800, "service": "minio", "content_type": "model"},
+            
+            # ETL raw data
+            {"urn": "region1-bucket/raw-data-batch.csv", "size": 104857600, "service": "region1", "content_type": "structured_data"},
+            {"urn": "region2-bucket/raw-data-batch.csv", "size": 104857600, "service": "region2", "content_type": "structured_data"},
+            {"urn": "datasets/reference-data.json", "size": 20971520, "service": "minio", "content_type": "reference_data"},
+            
+            # Region 1 datasets
             {"urn": "region1-bucket/reference-models.h5", "size": 157286400, "service": "region1", "content_type": "model"},
             {"urn": "region1-bucket/reference-data.json", "size": 104857600, "service": "region1", "content_type": "reference_data"},
+            {"urn": "edge-data/sensor-data-training.json", "size": 52428800, "service": "region1", "content_type": "training_data"},
+            {"urn": "edge-data/inference-data.json", "size": 10485760, "service": "region1", "content_type": "inference_data"},
+            
+            # Region 2 datasets
             {"urn": "region2-bucket/iot-readings.json", "size": 209715200, "service": "region2", "content_type": "iot_data"},
             {"urn": "region2-bucket/reference-data.json", "size": 104857600, "service": "region2", "content_type": "reference_data"},
             {"urn": "region2-bucket/live-data.json", "size": 10485760, "service": "region2", "content_type": "streaming_data"},
+            
+            # Central cloud datasets (shared between regions)
             {"urn": "datasets/training-data.parquet", "size": 314572800, "service": "minio", "content_type": "combined_data"},
             {"urn": "intermediate/sample-features.npz", "size": 52428800, "service": "minio", "content_type": "feature_data"},
             
-            # New datasets for multi-stage-transformation-pipeline workload
-            {"urn": "region1-bucket/raw-data.json", "size": 209715200, "service": "region1", "content_type": "raw_data"},
-            {"urn": "region2-bucket/raw-data.json", "size": 209715200, "service": "region2", "content_type": "raw_data"},
-            {"urn": "datasets/reference-data.json", "size": 52428800, "service": "minio", "content_type": "reference_data"},
-            
-            # Additional test datasets with varying sizes from previous version
+            # Additional test datasets with varying sizes
             {"urn": "edge-data/small-dataset.json", "size": 1048576, "service": "region1", "content_type": "small_data"},
             {"urn": "edge-data/medium-dataset.json", "size": 10485760, "service": "region1", "content_type": "medium_data"}, 
             {"urn": "edge-data/large-dataset.json", "size": 104857600, "service": "region1", "content_type": "large_data"},
             
             # Duplicate data across regions to test data locality decisions
             {"urn": "region1-bucket/shared-dataset.parquet", "size": 52428800, "service": "region1", "content_type": "duplicate_data"},
-            {"urn": "region2-bucket/shared-dataset.parquet", "size": 52428800, "service": "region2", "content_type": "duplicate_data"}
+            {"urn": "region2-bucket/shared-dataset.parquet", "size": 52428800, "service": "region2", "content_type": "duplicate_data"},
+            {"urn": "datasets/shared-dataset.parquet", "size": 52428800, "service": "minio", "content_type": "duplicate_data"},
+            
+            # Sensor data for edge processing
+            {"urn": "edge-data/sensor-data.json", "size": 20971520, "service": "region1", "content_type": "sensor_data"},
+            
+            # Test data for validating scheduler choices
+            {"urn": "test-bucket/test-data.bin", "size": 10485760, "service": "minio", "content_type": "test_data"}
         ]
         
-        logger.info("Creating strategic data distribution for better locality testing...")
+        logger.info("Creating strategic data distribution for comprehensive locality testing...")
         for data_item in strategic_data:
             urn = data_item["urn"]
             size_bytes = data_item["size"]
@@ -397,42 +433,6 @@ class DataInitializer:
         
         return True
 
-    def _create_test_data(self, file_size, file_name, content_type="generic"):
-        """Create test data file of specified size with characteristics based on content type"""
-        file_path = self.temp_dir / file_name
-        
-        logger.info(f"Creating test file: {file_path} ({file_size} bytes)")
-        
-        with open(file_path, 'wb') as f:
-            # For certain content types, create more realistic data patterns
-            if content_type in ["sensor_data", "iot_data", "streaming_data"]:
-                # Create data with repeated patterns to simulate time series data
-                chunk_size = min(1 * 1024 * 1024, file_size)  # 1MB chunks
-                remaining_bytes = file_size
-                
-                while remaining_bytes > 0:
-                    write_size = min(chunk_size, remaining_bytes)
-                    # Add some structured data patterns
-                    pattern = os.urandom(min(4096, write_size))
-                    repeats = (write_size + len(pattern) - 1) // len(pattern)
-                    f.write(pattern * repeats)
-                    remaining_bytes -= write_size
-            elif content_type in ["model", "feature_data"]:
-                # Create data with long sequential patterns (like model weights)
-                from numpy.random import bytes as np_random_bytes
-                f.write(np_random_bytes(file_size))
-            else:
-                # Generic random data
-                chunk_size = min(10 * 1024 * 1024, file_size)  # 10MB or file size
-                remaining_bytes = file_size
-                
-                while remaining_bytes > 0:
-                    write_size = min(chunk_size, remaining_bytes)
-                    f.write(os.urandom(write_size))
-                    remaining_bytes -= write_size
-        
-        return file_path
-
     def _upload_file(self, file_path, target_service, bucket, path, created_items):
         """Helper to upload a file to MinIO with retry logic"""
         success = False
@@ -475,7 +475,6 @@ class DataInitializer:
             logger.warning(f"{verification_failures} data items failed verification")
         else:
             logger.info("All data items successfully verified")
-    
     
     def run(self):
         logger.info("Starting data initialization for benchmarks")

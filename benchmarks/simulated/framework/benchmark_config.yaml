@@ -27,19 +27,39 @@ schedulers:
 - name: "default-scheduler"
   description: "Kubernetes default scheduler"
 
-- name: "ml-training-pipeline"
-  description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
+workloads:
+- name: "stream-processing-pipeline"
+  description: "Real-time stream processing with fan-out/fan-in pattern and mixed compute/data intensity"
+  iterations: 1
+  data_intensity: "varies"
+  compute_intensity: "varies"
+  max_wait_time: 600
+- name: "etl-pipeline"
+  description: "Serverless ETL workflow with varying data/compute requirements per stage"
   iterations: 1
   data_intensity: "high"
-  compute_intensity: "high"
-  max_wait_time: 600
+  compute_intensity: "varies"
+  max_wait_time: 700
+- name: "image-processing-pipeline"
+  description: "Multi-stage image processing with edge preprocessing and cloud ML inference"
+  iterations: 1
+  data_intensity: "high"
+  compute_intensity: "very-high"
+  max_wait_time: 700
 
-- name: "cross-region-data-processing"
-  description: "Cross-region data processing with region-specific handling"
-  iterations: 1
-  data_intensity: "high"
-  compute_intensity: "medium"
-  max_wait_time: 600
+# - name: "ml-training-pipeline"
+#   description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
+#   iterations: 1
+#   data_intensity: "high"
+#   compute_intensity: "high"
+#   max_wait_time: 600
+
+# - name: "cross-region-data-processing"
+#   description: "Cross-region data processing with region-specific handling"
+#   iterations: 1
+#   data_intensity: "high"
+#   compute_intensity: "medium"
+#   max_wait_time: 600
 
 # - name: "edge-to-cloud-pipeline"
 #   description: "IoT data processing pipeline from edge to cloud"
@@ -55,6 +75,7 @@ schedulers:
 #   compute_intensity: "high"
 #   max_wait_time: 600
 
+#=+++++++++++++++++++++++++++++++++++++++++
 # # New workloads
 # - name: "earth-observation-pipeline"
 #   description: "Earth observation satellite data processing workflow with large datasets"
@@ -77,12 +98,12 @@ schedulers:
 #   compute_intensity: "very-high"
 #   max_wait_time: 2400
 
-- name: "complex-dependency-stages"
-  description: "Complex ETL pipeline with cross-region data movement and varied resource requirements"
-  iterations: 1
-  data_intensity: "high"
-  compute_intensity: "high"
-  max_wait_time: 900
+# - name: "complex-dependency-stages"
+#   description: "Complex ETL pipeline with cross-region data movement and varied resource requirements"
+#   iterations: 1
+#   data_intensity: "high"
+#   compute_intensity: "high"
+#   max_wait_time: 900
 
 metrics:
   collect_node_metrics: true
