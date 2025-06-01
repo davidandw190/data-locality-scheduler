@@ -1,7 +1,6 @@
 schedulerName: "data-locality-scheduler"
 podQueueSize: 100
 healthServerPort: 8080
-# schedulerInterval: "1s"
 refreshInterval: "5m"
 enableMockData: false
 
@@ -10,27 +9,31 @@ percentageOfNodesToScore: 100
 minFeasibleNodesToFind: 100
 maxFailedAttempts: 5
 
+# caching options
 resourceCacheEnabled: true
 resourceCacheExpiration: "30s"
 storageCacheExpiration: "5m"
 
-resourceWeight: 0.1
-nodeAffinityWeight: 0.1
-nodeTypeWeight: 0.2
-capabilitiesWeight: 0.1
-dataLocalityWeight: 0.5
+# default weights
+resourceWeight: 0.15
+nodeAffinityWeight: 0.10
+nodeTypeWeight: 0.15
+capabilitiesWeight: 0.10
+dataLocalityWeight: 0.50
 
-dataIntensiveResourceWeight: 0.05
-dataIntensiveNodeAffinityWeight: 0.1
-dataIntensiveNodeTypeWeight: 0.1
-dataIntensiveCapabilitiesWeight: 0.1
-dataIntensiveDataLocalityWeight: 0.65
+# data-intensive weights
+dataIntensiveResourceWeight: 0.10
+dataIntensiveNodeAffinityWeight: 0.05
+dataIntensiveNodeTypeWeight: 0.10
+dataIntensiveCapabilitiesWeight: 0.05
+dataIntensiveDataLocalityWeight: 0.70
 
-computeIntensiveResourceWeight: 0.5
-computeIntensiveNodeAffinityWeight: 0.2
-computeIntensiveNodeTypeWeight: 0.1
-computeIntensiveCapabilitiesWeight: 0.1
-computeIntensiveDataLocalityWeight: 0.1
+# compute-intensive weights
+computeIntensiveResourceWeight: 0.40
+computeIntensiveNodeAffinityWeight: 0.15
+computeIntensiveNodeTypeWeight: 0.10
+computeIntensiveCapabilitiesWeight: 0.15
+computeIntensiveDataLocalityWeight: 0.20
 
 localBandwidth: 1000000000 # 1 GB/s
 sameZoneBandwidth: 600000000 # 600 MB/s
@@ -38,14 +41,12 @@ sameRegionBandwidth: 200000000 # 200 MB/s
 crossRegionBandwidth: 50000000 # 50 MB/s
 edgeCloudBandwidth: 25000000 # 25 MB/s
 
+# latency settings in milliseconds
 localLatency: 0.1
 sameZoneLatency: 1.0
 sameRegionLatency: 5.0
 crossRegionLatency: 30.0
 edgeCloudLatency: 40.0
-
-defaultCPURequest: 100 # 100m
-defaultMemoryRequest: 209715200 # 200Mi
 
 # node scoring options
 minResourceScore: 0
@@ -55,10 +56,3 @@ defaultScore: 50
 # debug options
 verboseLogging: true
 detailedMetrics: true
-enableProfiling: false
-enableAPIEndpoint: true
-
-metricsEndpoint: "/metrics"
-metricsPort: 8080
-
-metricsHistorySize: 100

@@ -3,9 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"net"
 	"strconv"
-	"time"
 
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	v1 "k8s.io/api/core/v1"
@@ -33,7 +31,7 @@ func NewMinioDetector(clientset kubernetes.Interface, nodeName string, indexer *
 func (d *MinioDetector) DetectLocalMinioService(ctx context.Context) (bool, []string, error) {
 	// we find Minio pods running on this node
 	fieldSelector := fmt.Sprintf("spec.nodeName=%s", d.nodeName)
-	labelSelector := "app=minio"
+	labelSelector := "app in (minio, minio-edge)"
 
 	pods, err := d.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fieldSelector,
@@ -78,8 +76,22 @@ func (d *MinioDetector) DetectLocalMinioService(ctx context.Context) (bool, []st
 	}
 
 	endpoint := fmt.Sprintf("%s:%d", podIP, port)
+
+	//register this specific node's MinIO endpoint
 	d.indexer.RegisterMinioNode(d.nodeName, endpoint, false)
 
+	// also register service associations
+	serviceName := minioPod.Labels["app"]
+	if region, hasRegion := minioPod.Labels["region"]; hasRegion {
+		serviceName = fmt.Sprintf("%s-%s", serviceName, region)
+	}
+
+	// associate service with this node
+	d.indexer.AssociateServiceWithNode(serviceName, d.nodeName)
+	d.indexer.AssociateServiceWithNode(minioPod.Name, d.nodeName)
+	d.indexer.RegisterMinioService(serviceName, endpoint, false)
+
+	// connect to the MinIO instance
 	client := minio.NewClient(endpoint, false)
 	if err := client.Connect(); err != nil {
 		klog.Warningf("Failed to connect to Minio at %s on node %s: %v", endpoint, d.nodeName, err)
@@ -126,6 +138,10 @@ func (d *MinioDetector) AddMinioLabelsToNode(labels map[string]string, buckets [
 	klog.Infof("Node %s hosts the following buckets:", d.nodeName)
 	for _, bucket := range buckets {
 		labels[BucketLabelPrefix+bucket] = "true"
+
+		// also register this bucket with the node in the storage index
+		d.indexer.RegisterBucketForNode(bucket, d.nodeName)
+
 		klog.Infof("  - %s", bucket)
 	}
 
@@ -140,7 +156,7 @@ func (d *MinioDetector) AddMinioLabelsToNode(labels map[string]string, buckets [
 
 func (d *MinioDetector) getStorageCapacity() int64 {
 	fieldSelector := fmt.Sprintf("spec.nodeName=%s", d.nodeName)
-	labelSelector := "app=minio"
+	labelSelector := "app in (minio, minio-edge)"
 	pods, err := d.clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
 		FieldSelector: fieldSelector,
 		LabelSelector: labelSelector,
@@ -169,7 +185,7 @@ func (d *MinioDetector) getStorageCapacity() int64 {
 	}
 
 	pvcs, err := d.clientset.CoreV1().PersistentVolumeClaims("").List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app=minio",
+		LabelSelector: "app in (minio, minio-edge)",
 	})
 
 	if err != nil {
@@ -188,7 +204,7 @@ func (d *MinioDetector) getStorageCapacity() int64 {
 		}
 	}
 
-	// Last resort: use a reasonable portion of node storage capacity
+	// as a last resort: use a reasonable portion of node storage capacity
 	// but only if we're confident this is a storage node
 	node, err := d.clientset.CoreV1().Nodes().Get(context.Background(), d.nodeName, metav1.GetOptions{})
 	if err != nil {
@@ -206,14 +222,4 @@ func (d *MinioDetector) getStorageCapacity() int64 {
 
 	klog.Warningf("Could not determine MinIO storage capacity for node %s", d.nodeName)
 	return 0
-}
-
-func (d *MinioDetector) isPortOpen(host string, port int) bool {
-	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
 }

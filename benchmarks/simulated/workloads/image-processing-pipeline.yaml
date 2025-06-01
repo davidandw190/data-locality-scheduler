@@ -1,0 +1,236 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: image-preprocessor-edge1
+  namespace: scheduler-benchmark
+  labels:
+    workload: image-processing-pipeline
+    stage: preprocessing
+  annotations:
+    data.scheduler.thesis/input-1: "edge-data/raw-images-batch1.tar,209715200,5,9,tar"
+    data.scheduler.thesis/output-1: "edge-data/preprocessed-batch1.tar,104857600,0,8,tar"
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/prefer-region: "region-1"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+    - name: image-preprocessor
+      image: davidandw190/workload-sim:latest
+      command: [ "python", "/app/simulator.py" ]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKLOAD_TYPE
+          value: "image-preprocessing"
+        - name: WORKLOAD_ACTION
+          value: "process"
+        - name: WORKLOAD_INTENSITY
+          value: "high"
+        - name: WORKLOAD_DURATION
+          value: "70"
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "800m"
+        limits:
+          memory: "2Gi"
+          cpu: "1600m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: image-preprocessor-edge2
+  namespace: scheduler-benchmark
+  labels:
+    workload: image-processing-pipeline
+    stage: preprocessing
+  annotations:
+    data.scheduler.thesis/input-1: "region2-bucket/raw-images-batch2.tar,209715200,5,9,tar"
+    data.scheduler.thesis/output-1: "region2-bucket/preprocessed-batch2.tar,104857600,0,8,tar"
+    scheduler.thesis/prefer-edge: "true"
+    scheduler.thesis/prefer-region: "region-2"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+    - name: image-preprocessor
+      image: davidandw190/workload-sim:latest
+      command: [ "python", "/app/simulator.py" ]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKLOAD_TYPE
+          value: "image-preprocessing"
+        - name: WORKLOAD_ACTION
+          value: "process"
+        - name: WORKLOAD_INTENSITY
+          value: "high"
+        - name: WORKLOAD_DURATION
+          value: "70"
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "800m"
+        limits:
+          memory: "2Gi"
+          cpu: "1600m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: feature-extractor
+  namespace: scheduler-benchmark
+  labels:
+    workload: image-processing-pipeline
+    stage: feature-extraction
+  annotations:
+    data.scheduler.thesis/input-1: "edge-data/preprocessed-batch1.tar,104857600,20,8,tar"
+    data.scheduler.thesis/input-2: "region2-bucket/preprocessed-batch2.tar,104857600,25,8,tar"
+    data.scheduler.thesis/output-1: "intermediate/image-features.npz,52428800,0,7,npz"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/memory-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+    - name: feature-extractor
+      image: davidandw190/workload-sim:latest
+      command: [ "python", "/app/simulator.py" ]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKLOAD_TYPE
+          value: "feature-extraction"
+        - name: WORKLOAD_ACTION
+          value: "transform"
+        - name: WORKLOAD_INTENSITY
+          value: "very-high"
+        - name: WORKLOAD_DURATION
+          value: "90"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1500m"
+        limits:
+          memory: "4Gi"
+          cpu: "3000m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ml-inference-cloud
+  namespace: scheduler-benchmark
+  labels:
+    workload: image-processing-pipeline
+    stage: inference
+  annotations:
+    data.scheduler.thesis/input-1: "intermediate/image-features.npz,52428800,15,7,npz"
+    data.scheduler.thesis/input-2: "datasets/ml-model-weights.h5,314572800,5,9,h5"
+    data.scheduler.thesis/output-1: "results/inference-results.json,10485760,0,6,json"
+    scheduler.thesis/compute-intensive: "true"
+    scheduler.thesis/memory-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+    scheduler.thesis/data-intensive: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+    - name: ml-inference
+      image: davidandw190/workload-sim:latest
+      command: [ "python", "/app/simulator.py" ]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKLOAD_TYPE
+          value: "ml-inference"
+        - name: WORKLOAD_ACTION
+          value: "predict"
+        - name: WORKLOAD_INTENSITY
+          value: "very-high"
+        - name: WORKLOAD_DURATION
+          value: "80"
+      resources:
+        requests:
+          memory: "3Gi"
+          cpu: "2000m"
+        limits:
+          memory: "6Gi"
+          cpu: "4000m"
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: result-distributor
+  namespace: scheduler-benchmark
+  labels:
+    workload: image-processing-pipeline
+    stage: distribution
+  annotations:
+    data.scheduler.thesis/input-1: "results/inference-results.json,10485760,5,6,json"
+    data.scheduler.thesis/output-1: "edge-data/edge-results.json,5242880,0,7,json"
+    data.scheduler.thesis/output-2: "region2-bucket/edge-results.json,5242880,0,8,json"
+    data.scheduler.thesis/output-3: "datasets/aggregated-results.json,10485760,0,6,json"
+    scheduler.thesis/data-intensive: "true"
+    scheduler.thesis/prefer-cloud: "true"
+spec:
+  schedulerName: data-locality-scheduler
+  containers:
+    - name: result-distributor
+      image: davidandw190/workload-sim:latest
+      command: [ "python", "/app/simulator.py" ]
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKLOAD_TYPE
+          value: "result-distribution"
+        - name: WORKLOAD_ACTION
+          value: "distribute"
+        - name: WORKLOAD_INTENSITY
+          value: "medium"
+        - name: WORKLOAD_DURATION
+          value: "40"
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "400m"
+        limits:
+          memory: "1Gi"
+          cpu: "800m"
+  restartPolicy: Never

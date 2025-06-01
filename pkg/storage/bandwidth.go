@@ -93,7 +93,7 @@ func (bg *BandwidthGraph) SetBandwidth(source, dest string, bandwidthBytesPerSec
 		source, dest, bandwidthBytesPerSec/1e6, latencyMs)
 }
 
-// GetNetworkPath retrieves network path information between nodes
+// retrieves network path information between nodes
 func (bg *BandwidthGraph) GetNetworkPath(source, dest string) *NetworkPath {
 	if source == "" || dest == "" {
 		klog.Warningf("Cannot get network path for empty node name: [%s] -> [%s]", source, dest)
@@ -229,6 +229,10 @@ func (bg *BandwidthGraph) EstimateTransferTimeBetweenNodes(source, dest string, 
 		return 0
 	}
 
+	if source == dest {
+		return 0.001
+	}
+
 	path := bg.GetNetworkPath(source, dest)
 
 	bandwidth := path.Bandwidth
@@ -238,23 +242,35 @@ func (bg *BandwidthGraph) EstimateTransferTimeBetweenNodes(source, dest string, 
 		bg.mu.RUnlock()
 	}
 
+	// base transfer time calculation
 	transferTime := float64(sizeBytes) / bandwidth
-	transferTime += path.Latency / 1000.0
+	transferTime += path.Latency / 1000.0 // Convert ms to seconds
 
 	if sizeBytes > 10*1024*1024 { // over 10MB
 		transferTime *= 1.1 // 10% overhead
+	} else if sizeBytes > 100*1024*1024 { // over 100MB
+		transferTime *= 1.2 // 20% overhead
+	} else if sizeBytes > 1024*1024*1024 { // over 1GB
+		transferTime *= 1.3 // 30% overhead
 	}
 
-	// reliability factor - less reliable paths take longer
-	reliabilityFactor := 1.0 + (1.0-path.Reliability)*0.5
-	transferTime *= reliabilityFactor
-
 	bg.mu.RLock()
-	nodeType := bg.nodeTypes[source]
+	sourceRegion := bg.nodeRegions[source]
+	destRegion := bg.nodeRegions[dest]
+	sourceType := bg.nodeTypes[source]
+	destType := bg.nodeTypes[dest]
 	bg.mu.RUnlock()
 
-	if nodeType == StorageTypeEdge && source != dest {
-		transferTime *= 1.2 // +20% to account for limited uplink
+	// region-based adjustments
+	if sourceRegion != "" && destRegion != "" && sourceRegion != destRegion {
+		transferTime *= 1.5 // 50% penalty for cross-region transfers
+	}
+
+	// node-type adjustments
+	if sourceType == StorageTypeEdge && destType == StorageTypeCloud {
+		transferTime *= 1.2 // 20% penalty for edge-to-cloud transfers
+	} else if sourceType == StorageTypeCloud && destType == StorageTypeEdge {
+		transferTime *= 1.3 // 30% penalty for cloud-to-edge transfers
 	}
 
 	return transferTime

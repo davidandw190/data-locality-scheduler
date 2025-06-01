@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "run_id": "ce710d1b",
+    "timestamp": "2025-05-27T12:07:58.391859",
+    "cluster_info": {},
+    "config": {
+      "name": "Data Locality Scheduler Benchmark",
+      "version": "1.0.0",
+      "kubernetes": {
+        "namespace": "scheduler-benchmark",
+        "setup_storage": true,
+        "storage_providers": [
+          {
+            "name": "minio-central",
+            "type": "object",
+            "region": "central"
+          },
+          {
+            "name": "minio-edge-region1",
+            "type": "object",
+            "region": "region-1"
+          },
+          {
+            "name": "minio-edge-region2",
+            "type": "object",
+            "region": "region-2"
+          }
+        ]
+      },
+      "schedulers": [
+        {
+          "name": "data-locality-scheduler",
+          "description": "Data locality aware scheduler",
+          "config": {
+            "dataLocalityWeight": 0.6,
+            "nodeTypeWeight": 0.12,
+            "resourceWeight": 0.12,
+            "nodeAffinityWeight": 0.08,
+            "capabilitiesWeight": 0.08
+          }
+        },
+        {
+          "name": "default-scheduler",
+          "description": "Kubernetes default scheduler"
+        }
+      ],
+      "workloads": [
+        {
+          "name": "stream-processing-pipeline",
+          "description": "Real-time stream processing with fan-out/fan-in pattern and mixed compute/data intensity",
+          "iterations": 1,
+          "data_intensity": "varies",
+          "compute_intensity": "varies",
+          "max_wait_time": 600
+        },
+        {
+          "name": "etl-pipeline",
+          "description": "Serverless ETL workflow with varying data/compute requirements per stage",
+          "iterations": 1,
+          "data_intensity": "high",
+          "compute_intensity": "varies",
+          "max_wait_time": 700
+        },
+        {
+          "name": "image-processing-pipeline",
+          "description": "Multi-stage image processing with edge preprocessing and cloud ML inference",
+          "iterations": 1,
+          "data_intensity": "high",
+          "compute_intensity": "very-high",
+          "max_wait_time": 700
+        },
+        {
+          "name": "ml-training-pipeline",
+          "description": "Machine learning training pipeline with data collection, feature extraction, model training, and inference",
+          "iterations": 1,
+          "data_intensity": "high",
+          "compute_intensity": "high",
+          "max_wait_time": 600
+        },
+        {
+          "name": "cross-region-data-processing",
+          "description": "Cross-region data processing with region-specific handling",
+          "iterations": 1,
+          "data_intensity": "high",
+          "compute_intensity": "medium",
+          "max_wait_time": 600
+        },
+        {
+          "name": "edge-to-cloud-pipeline",
+          "description": "IoT data processing pipeline from edge to cloud",
+          "iterations": 1,
+          "data_intensity": "medium",
+          "compute_intensity": "medium",
+          "max_wait_time": 450
+        }
+      ],
+      "metrics": {
+        "collect_node_metrics": true,
+        "collect_pod_metrics": true,
+        "collect_network_metrics": true,
+        "data_transfer_metrics": true,
+        "bandwidth_utilization": true,
+        "collection_interval": 5,
+        "latency_tracking": true,
+        "detailed_data_locality": true,
+        "cross_region_transfer_tracking": true,
+        "preference_satisfaction_tracking": true,
+        "processing_overhead_tracking": true
+      },
+      "execution": {
+        "max_wait_time": 1250,
+        "pod_timeout": 1250,
+        "poll_interval": 3,
+        "parallel_runs": false,
+        "cleanup_after_run": true,
+        "validation_level": "thorough",
+        "detailed_logs": true,
+        "simulation_duration": 60
+      }
+    },
+    "benchmark_duration": 10.180397510528564,
+    "completed": false,
+    "error": "Failed to deploy storage: Error from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\nError from server (NotFound): error when creating \"benchmarks/simulated/kubernetes/storage.yaml\": namespaces \"scheduler-benchmark\" not found\n"
+  },
+  "workloads": {},
+  "metrics": {},
+  "comparison": {}
+}

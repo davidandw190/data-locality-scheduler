@@ -5,25 +5,25 @@ import "time"
 // Priority weights
 const (
 	// Default weights
-	DefaultResourceWeight     = 0.3
-	DefaultNodeAffinityWeight = 0.2
-	DefaultNodeTypeWeight     = 0.1
-	DefaultCapabilitiesWeight = 0.1
-	DefaultDataLocalityWeight = 0.3
+	DefaultResourceWeight     = 0.15
+	DefaultNodeAffinityWeight = 0.10
+	DefaultNodeTypeWeight     = 0.15
+	DefaultCapabilitiesWeight = 0.10
+	DefaultDataLocalityWeight = 0.50
 
 	// Data-intensive weights
-	DataIntensiveResourceWeight     = 0.2
-	DataIntensiveNodeAffinityWeight = 0.1
-	DataIntensiveNodeTypeWeight     = 0.1
-	DataIntensiveCapabilitiesWeight = 0.1
-	DataIntensiveDataLocalityWeight = 0.5
+	DataIntensiveResourceWeight     = 0.10
+	DataIntensiveNodeAffinityWeight = 0.05
+	DataIntensiveNodeTypeWeight     = 0.05
+	DataIntensiveCapabilitiesWeight = 0.05
+	DataIntensiveDataLocalityWeight = 0.75
 
 	// Compute-intensive weights
-	ComputeIntensiveResourceWeight     = 0.5
-	ComputeIntensiveNodeAffinityWeight = 0.2
-	ComputeIntensiveNodeTypeWeight     = 0.1
-	ComputeIntensiveCapabilitiesWeight = 0.1
-	ComputeIntensiveDataLocalityWeight = 0.1
+	ComputeIntensiveResourceWeight     = 0.40
+	ComputeIntensiveNodeAffinityWeight = 0.15
+	ComputeIntensiveNodeTypeWeight     = 0.10
+	ComputeIntensiveCapabilitiesWeight = 0.15
+	ComputeIntensiveDataLocalityWeight = 0.20
 )
 
 const (

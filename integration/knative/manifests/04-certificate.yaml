@@ -1,0 +1,36 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: data-locality-webhook-cert
+  namespace: data-locality-scheduler
+spec:
+  secretName: data-locality-webhook-certs
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+    - data-locality-webhook
+  commonName: data-locality-webhook.data-locality-scheduler.svc
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+  - server auth
+  dnsNames:
+  - data-locality-webhook
+  - data-locality-webhook.data-locality-scheduler
+  - data-locality-webhook.data-locality-scheduler.svc
+  - data-locality-webhook.data-locality-scheduler.svc.cluster.local
+  issuerRef:
+    name: data-locality-webhook-issuer
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: data-locality-webhook-issuer
+  namespace: data-locality-scheduler
+spec:
+  selfSigned: {}

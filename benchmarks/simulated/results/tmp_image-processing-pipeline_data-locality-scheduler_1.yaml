@@ -1,0 +1,394 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '1'
+    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/scheduler: data-locality-scheduler
+    benchmark.thesis/workload: image-processing-pipeline
+    data.scheduler.thesis/input-1: edge-data/raw-images-batch1.tar,209715200,5,9,tar
+    data.scheduler.thesis/output-1: edge-data/preprocessed-batch1.tar,104857600,0,8,tar
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-1
+  labels:
+    benchmark-run-id: abab1ff2
+    iteration: '1'
+    scheduler: datalocalityscheduler
+    stage: preprocessing
+    workload: image-processing-pipeline
+  name: image-preprocessor-edge1-abab1ff2-1
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: image-preprocessing
+    - name: WORKLOAD_ACTION
+      value: process
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: WORKLOAD_DURATION
+      value: '70'
+    - name: BENCHMARK_RUN_ID
+      value: abab1ff2
+    - name: WORKLOAD_NAME
+      value: image-processing-pipeline
+    - name: SCHEDULER_NAME
+      value: data-locality-scheduler
+    - name: ITERATION
+      value: '1'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: edge-data/raw-images-batch1.tar,209715200,5,9,tar
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: edge-data/preprocessed-batch1.tar,104857600,0,8,tar
+    image: davidandw190/workload-sim:latest
+    name: image-preprocessor
+    resources:
+      limits:
+        cpu: 1600m
+        memory: 2Gi
+      requests:
+        cpu: 800m
+        memory: 1Gi
+  restartPolicy: Never
+  schedulerName: data-locality-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '1'
+    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/scheduler: data-locality-scheduler
+    benchmark.thesis/workload: image-processing-pipeline
+    data.scheduler.thesis/input-1: region2-bucket/raw-images-batch2.tar,209715200,5,9,tar
+    data.scheduler.thesis/output-1: region2-bucket/preprocessed-batch2.tar,104857600,0,8,tar
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-2
+  labels:
+    benchmark-run-id: abab1ff2
+    iteration: '1'
+    scheduler: datalocalityscheduler
+    stage: preprocessing
+    workload: image-processing-pipeline
+  name: image-preprocessor-edge2-abab1ff2-1
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: image-preprocessing
+    - name: WORKLOAD_ACTION
+      value: process
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: WORKLOAD_DURATION
+      value: '70'
+    - name: BENCHMARK_RUN_ID
+      value: abab1ff2
+    - name: WORKLOAD_NAME
+      value: image-processing-pipeline
+    - name: SCHEDULER_NAME
+      value: data-locality-scheduler
+    - name: ITERATION
+      value: '1'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: region2-bucket/raw-images-batch2.tar,209715200,5,9,tar
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: region2-bucket/preprocessed-batch2.tar,104857600,0,8,tar
+    image: davidandw190/workload-sim:latest
+    name: image-preprocessor
+    resources:
+      limits:
+        cpu: 1600m
+        memory: 2Gi
+      requests:
+        cpu: 800m
+        memory: 1Gi
+  restartPolicy: Never
+  schedulerName: data-locality-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '1'
+    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/scheduler: data-locality-scheduler
+    benchmark.thesis/workload: image-processing-pipeline
+    data.scheduler.thesis/input-1: edge-data/preprocessed-batch1.tar,104857600,20,8,tar
+    data.scheduler.thesis/input-2: region2-bucket/preprocessed-batch2.tar,104857600,25,8,tar
+    data.scheduler.thesis/output-1: intermediate/image-features.npz,52428800,0,7,npz
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/memory-intensive: 'true'
+    scheduler.thesis/prefer-cloud: 'true'
+  labels:
+    benchmark-run-id: abab1ff2
+    iteration: '1'
+    scheduler: datalocalityscheduler
+    stage: feature-extraction
+    workload: image-processing-pipeline
+  name: feature-extractor-abab1ff2-1
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: feature-extraction
+    - name: WORKLOAD_ACTION
+      value: transform
+    - name: WORKLOAD_INTENSITY
+      value: very-high
+    - name: WORKLOAD_DURATION
+      value: '90'
+    - name: BENCHMARK_RUN_ID
+      value: abab1ff2
+    - name: WORKLOAD_NAME
+      value: image-processing-pipeline
+    - name: SCHEDULER_NAME
+      value: data-locality-scheduler
+    - name: ITERATION
+      value: '1'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: edge-data/preprocessed-batch1.tar,104857600,20,8,tar
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: region2-bucket/preprocessed-batch2.tar,104857600,25,8,tar
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: intermediate/image-features.npz,52428800,0,7,npz
+    image: davidandw190/workload-sim:latest
+    name: feature-extractor
+    resources:
+      limits:
+        cpu: 3000m
+        memory: 4Gi
+      requests:
+        cpu: 1500m
+        memory: 2Gi
+  restartPolicy: Never
+  schedulerName: data-locality-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '1'
+    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/scheduler: data-locality-scheduler
+    benchmark.thesis/workload: image-processing-pipeline
+    data.scheduler.thesis/input-1: intermediate/image-features.npz,52428800,15,7,npz
+    data.scheduler.thesis/input-2: datasets/ml-model-weights.h5,314572800,5,9,h5
+    data.scheduler.thesis/output-1: results/inference-results.json,10485760,0,6,json
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/memory-intensive: 'true'
+    scheduler.thesis/prefer-cloud: 'true'
+  labels:
+    benchmark-run-id: abab1ff2
+    iteration: '1'
+    scheduler: datalocalityscheduler
+    stage: inference
+    workload: image-processing-pipeline
+  name: ml-inference-cloud-abab1ff2-1
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: ml-inference
+    - name: WORKLOAD_ACTION
+      value: predict
+    - name: WORKLOAD_INTENSITY
+      value: very-high
+    - name: WORKLOAD_DURATION
+      value: '80'
+    - name: BENCHMARK_RUN_ID
+      value: abab1ff2
+    - name: WORKLOAD_NAME
+      value: image-processing-pipeline
+    - name: SCHEDULER_NAME
+      value: data-locality-scheduler
+    - name: ITERATION
+      value: '1'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: intermediate/image-features.npz,52428800,15,7,npz
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: datasets/ml-model-weights.h5,314572800,5,9,h5
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: results/inference-results.json,10485760,0,6,json
+    image: davidandw190/workload-sim:latest
+    name: ml-inference
+    resources:
+      limits:
+        cpu: 4000m
+        memory: 6Gi
+      requests:
+        cpu: 2000m
+        memory: 3Gi
+  restartPolicy: Never
+  schedulerName: data-locality-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '1'
+    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/scheduler: data-locality-scheduler
+    benchmark.thesis/workload: image-processing-pipeline
+    data.scheduler.thesis/input-1: results/inference-results.json,10485760,5,6,json
+    data.scheduler.thesis/output-1: edge-data/edge-results.json,5242880,0,7,json
+    data.scheduler.thesis/output-2: region2-bucket/edge-results.json,5242880,0,8,json
+    data.scheduler.thesis/output-3: datasets/aggregated-results.json,10485760,0,6,json
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-cloud: 'true'
+  labels:
+    benchmark-run-id: abab1ff2
+    iteration: '1'
+    scheduler: datalocalityscheduler
+    stage: distribution
+    workload: image-processing-pipeline
+  name: result-distributor-abab1ff2-1
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: result-distribution
+    - name: WORKLOAD_ACTION
+      value: distribute
+    - name: WORKLOAD_INTENSITY
+      value: medium
+    - name: WORKLOAD_DURATION
+      value: '40'
+    - name: BENCHMARK_RUN_ID
+      value: abab1ff2
+    - name: WORKLOAD_NAME
+      value: image-processing-pipeline
+    - name: SCHEDULER_NAME
+      value: data-locality-scheduler
+    - name: ITERATION
+      value: '1'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: results/inference-results.json,10485760,5,6,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: edge-data/edge-results.json,5242880,0,7,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_2
+      value: region2-bucket/edge-results.json,5242880,0,8,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_3
+      value: datasets/aggregated-results.json,10485760,0,6,json
+    image: davidandw190/workload-sim:latest
+    name: result-distributor
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  restartPolicy: Never
+  schedulerName: data-locality-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
