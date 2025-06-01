@@ -1,7 +1,0 @@
-workload,scheduler,iteration,data_locality_score,avg_placement_latency,edge_placements,cloud_placements,total_placements
-stream-processing-pipeline,data-locality-scheduler,1,,3.4,2,3,5
-stream-processing-pipeline,default-scheduler,1,,0.0,4,1,5
-etl-pipeline,data-locality-scheduler,1,,4.333333333333333,3,3,6
-etl-pipeline,default-scheduler,1,,0.0,5,1,6
-image-processing-pipeline,data-locality-scheduler,1,,4.2,3,2,5
-image-processing-pipeline,default-scheduler,1,,0.0,4,1,5
