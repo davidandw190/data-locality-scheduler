@@ -7,8 +7,10 @@ from matplotlib.colors import LinearSegmentedColormap
 import csv
 from matplotlib.gridspec import GridSpec
 from matplotlib import cm
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, FancyBboxPatch
 import matplotlib as mpl
+from matplotlib.lines import Line2D
+import textwrap
 
 class BenchmarkVisualizer:
     
@@ -19,10 +21,8 @@ class BenchmarkVisualizer:
         self.summary_data = None
         self.report_data = None
         
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
-        # Set up color scheme with requested colors
         self.colors = {
             'data-locality-scheduler': '#009499',  # Teal 
             'default-scheduler': '#5E8AC7',        # Blue 
@@ -34,63 +34,54 @@ class BenchmarkVisualizer:
             'cross-region': '#e377c2',             # Pink
             'edge-to-cloud': '#7f7f7f',            # Gray
             'cloud-to-edge': '#bcbd22',            # Olive
+            'edge': '#ff7f0e',                     # Orange
+            'cloud': '#1f77b4',                    # Blue
             'background': '#f5f5f5',               # Light gray
             'grid': '#e0e0e0',                     # Slightly darker gray
         }
         
-        # Set up scientific styling
-        plt.style.use('seaborn-v0_8-whitegrid')
-        
         plt.rcParams.update({
-            # Font selection for scientific publications
+            # Font settings
             'font.family': 'sans-serif',
             'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-            'font.size': 10,
-            'axes.labelsize': 11,
-            'axes.titlesize': 12,
+            'font.size': 11,
+            'axes.labelsize': 12,
+            'axes.titlesize': 13,
             'xtick.labelsize': 10,
             'ytick.labelsize': 10,
             'legend.fontsize': 10,
             'figure.titlesize': 14,
             
             # Figure properties
-            'figure.figsize': (10, 6),
+            'figure.figsize': (12, 5),
             'figure.dpi': 100,
             'figure.facecolor': 'white',
-            'figure.constrained_layout.use': True,
+            'figure.constrained_layout.use': False,  
             
-            # Grid and axes properties
+            # Grid and axes
             'axes.grid': True,
-            'grid.linestyle': '--',
+            'grid.linestyle': '-',
             'grid.linewidth': 0.5,
-            'grid.alpha': 0.7,
-            'axes.linewidth': 1,
-            'axes.edgecolor': 'black',
+            'grid.alpha': 0.3,
+            'axes.linewidth': 1.2,
+            'axes.edgecolor': '#333333',
             'axes.facecolor': 'white',
+            'axes.spines.top': False,
+            'axes.spines.right': False,
             
-            # Legend properties
+            # Legend
             'legend.frameon': True,
             'legend.framealpha': 0.9,
-            'legend.edgecolor': 'black',
+            'legend.edgecolor': '#333333',
+            'legend.fancybox': False,
             
             # Saving properties
             'savefig.dpi': 300,
             'savefig.bbox': 'tight',
             'savefig.pad_inches': 0.1,
         })
-        
-        # Set up seaborn-like style but with our specific colors
-        plt.rcParams['axes.prop_cycle'] = plt.cycler(color=[
-            self.colors['data-locality-scheduler'],
-            self.colors['default-scheduler'],
-            self.colors['improvement'],
-            self.colors['reduction'],
-            self.colors['same-region'],
-            self.colors['cross-region']
-        ])
     
     def load_data(self, results_file=None, summary_file=None, report_file=None):
-        # Find most recent files if not specified
         if results_file is None:
             json_files = [f for f in os.listdir(self.results_dir) if f.startswith('benchmark_results_') and f.endswith('.json')]
             if json_files:
@@ -101,12 +92,7 @@ class BenchmarkVisualizer:
             if csv_files:
                 summary_file = os.path.join(self.results_dir, sorted(csv_files)[-1])
         
-        if report_file is None:
-            md_files = [f for f in os.listdir(self.results_dir) if f.startswith('benchmark_report_') and f.endswith('.md')]
-            if md_files:
-                report_file = os.path.join(self.results_dir, sorted(md_files)[-1])
-        
-        # Load JSON results if available
+        # Load JSON results - this is the primary data source
         if results_file and os.path.exists(results_file):
             try:
                 with open(results_file, 'r') as f:
@@ -114,6 +100,7 @@ class BenchmarkVisualizer:
                 print(f"Loaded benchmark results from {results_file}")
             except Exception as e:
                 print(f"Error loading benchmark results: {e}")
+                raise
         
         # Load CSV summary if available
         if summary_file and os.path.exists(summary_file):
@@ -127,1409 +114,1261 @@ class BenchmarkVisualizer:
             except Exception as e:
                 print(f"Error loading benchmark summary: {e}")
         
-        # Extract data from markdown report if available
-        if report_file and os.path.exists(report_file):
-            try:
-                with open(report_file, 'r') as f:
-                    self.report_data = f.read()
-                print(f"Loaded benchmark report from {report_file}")
-            except Exception as e:
-                print(f"Error loading benchmark report: {e}")
-        
-        # If no data was loaded, raise an error
-        if not any([self.data, self.summary_data, self.report_data]):
+        if not self.data:
             raise ValueError("No benchmark data found. Please run benchmarks first.")
-        
-        # Extract key metrics from report data if available and JSON data is not
-        if self.report_data and not self.data:
-            self._extract_metrics_from_report()
-    
-    def _extract_metrics_from_report(self):
-        self.extracted_data = {
-            'workloads': {},
-            'comparison': {}
-        }
-        
-        # Extract workload-specific data
-        lines = self.report_data.splitlines()
-        current_workload = None
-        
-        for i, line in enumerate(lines):
-            # Identify workload sections
-            if line.startswith('### ') and not line.startswith('### Network') and not line.startswith('### Placement') and not line.startswith('### Data'):
-                current_workload = line.replace('### ', '').strip()
-                self.extracted_data['workloads'][current_workload] = {}
-            
-            # Extract data locality comparison metrics
-            if current_workload and line.startswith('| data-locality-scheduler '):
-                parts = line.split('|')
-                if len(parts) >= 6:
-                    try:
-                        self.extracted_data['workloads'][current_workload]['data_locality'] = {
-                            'score': float(parts[2].strip()),
-                            'weighted_score': float(parts[3].strip()),
-                            'size_weighted_score': float(parts[4].strip()),
-                            'local_data_percentage': float(parts[5].strip().replace('%', '')),
-                            'cross_region_percentage': float(parts[6].strip().replace('%', ''))
-                        }
-                    except (ValueError, IndexError):
-                        # If conversion fails, try to handle it gracefully
-                        pass
-            
-            # Extract default scheduler metrics
-            if current_workload and line.startswith('| default-scheduler '):
-                parts = line.split('|')
-                if len(parts) >= 6:
-                    try:
-                        self.extracted_data['workloads'][current_workload]['default'] = {
-                            'score': float(parts[2].strip()),
-                            'weighted_score': float(parts[3].strip()),
-                            'size_weighted_score': float(parts[4].strip()),
-                            'local_data_percentage': float(parts[5].strip().replace('%', '')),
-                            'cross_region_percentage': float(parts[6].strip().replace('%', ''))
-                        }
-                    except (ValueError, IndexError):
-                        # If conversion fails, try to handle it gracefully
-                        pass
-            
-            # Extract improvement percentages
-            if current_workload and line.startswith('**Data Locality Improvement:'):
-                try:
-                    value = float(line.split(':')[1].strip().replace('%**', ''))
-                    if 'improvements' not in self.extracted_data['workloads'][current_workload]:
-                        self.extracted_data['workloads'][current_workload]['improvements'] = {}
-                    self.extracted_data['workloads'][current_workload]['improvements']['data_locality'] = value
-                except (ValueError, IndexError):
-                    pass
-            
-            if current_workload and line.startswith('**Size-Weighted Data Locality Improvement:'):
-                try:
-                    value = float(line.split(':')[1].strip().replace('%**', ''))
-                    if 'improvements' not in self.extracted_data['workloads'][current_workload]:
-                        self.extracted_data['workloads'][current_workload]['improvements'] = {}
-                    self.extracted_data['workloads'][current_workload]['improvements']['size_weighted'] = value
-                except (ValueError, IndexError):
-                    pass
-            
-            if current_workload and line.startswith('**Local Data Access Improvement:'):
-                try:
-                    value = float(line.split(':')[1].strip().replace('%**', ''))
-                    if 'improvements' not in self.extracted_data['workloads'][current_workload]:
-                        self.extracted_data['workloads'][current_workload]['improvements'] = {}
-                    self.extracted_data['workloads'][current_workload]['improvements']['local_data'] = value
-                except (ValueError, IndexError):
-                    pass
-        
-        # Extract transfer cost data
-        in_transfer_section = False
-        transfer_data = {}
-        
-        for i, line in enumerate(lines):
-            if line.startswith('### Transfer Cost Analysis'):
-                in_transfer_section = True
-                continue
-            
-            if in_transfer_section and line.startswith('|') and len(line.split('|')) > 5:
-                parts = line.split('|')
-                if len(parts) >= 6 and parts[1].strip() not in ['Workload', '']:
-                    workload = parts[1].strip()
-                    scheduler = parts[2].strip()
-                    
-                    try:
-                        total_data = float(parts[3].strip())
-                        network_transfer = float(parts[4].strip())
-                        
-                        if workload not in transfer_data:
-                            transfer_data[workload] = {}
-                        
-                        transfer_data[workload][scheduler] = {
-                            'total_data': total_data,
-                            'network_transfer': network_transfer
-                        }
-                        
-                        if len(parts) >= 6 and parts[5].strip() != '-':
-                            transfer_data[workload][scheduler]['reduction'] = float(parts[5].strip().replace('%', ''))
-                    except (ValueError, IndexError):
-                        # Handle conversion errors gracefully
-                        pass
-            
-            if in_transfer_section and line.startswith('##'):
-                in_transfer_section = False
-        
-        self.extracted_data['transfer_data'] = transfer_data
-        
-        # Extract overall improvement metrics
-        for i, line in enumerate(lines):
-            if line.startswith('- **') and '%** improvement in' in line:
-                try:
-                    metric = line.split('%** improvement in')[1].strip()
-                    value = float(line.split('**')[1].strip())
-                    
-                    if 'overall_improvements' not in self.extracted_data:
-                        self.extracted_data['overall_improvements'] = {}
-                    
-                    self.extracted_data['overall_improvements'][metric] = value
-                except (ValueError, IndexError):
-                    pass
-            
-            if line.startswith('- **') and '%** reduction in' in line:
-                try:
-                    metric = line.split('%** reduction in')[1].strip()
-                    value = float(line.split('**')[1].strip())
-                    
-                    if 'overall_improvements' not in self.extracted_data:
-                        self.extracted_data['overall_improvements'] = {}
-                    
-                    self.extracted_data['overall_improvements'][metric] = value
-                except (ValueError, IndexError):
-                    pass
     
     def _format_workload_name(self, workload):
-        formatted = workload.replace('-', '\n')
+        workload = workload.replace('-pipeline', '')
         
-        # Capitalize each word for a more professional appearance
-        words = formatted.split('\n')
-        formatted = '\n'.join([word.capitalize() for word in words])
+        parts = workload.split('-')
         
-        return formatted
+        if workload == 'ml-training':
+            return 'ML Training'
+        elif workload == 'image-processing':
+            return 'Image\nProcessing'
+        elif workload == 'etl':
+            return 'ETL'
+        elif workload == 'cross-region-data-processing':
+            return 'Cross-Region\nData Processing'
+        elif workload == 'stream-processing':
+            return 'Stream\nProcessing'
+        elif workload == 'edge-to-cloud':
+            return 'Edge to Cloud'
+        else:
+            formatted = ' '.join([p.capitalize() for p in parts])
+            if len(formatted) > 12:
+                words = formatted.split()
+                mid = len(words) // 2
+                formatted = ' '.join(words[:mid]) + '\n' + ' '.join(words[mid:])
+            return formatted
     
-    def _add_value_labels(self, ax, bars, values, fontsize=9, format_str='{:.2f}', offset=(0,3), 
-                        ha='center', va='bottom', rotation=0, color='black', fontweight='normal'):
-        for rect, value in zip(bars, values):
-            height = rect.get_height()
-            # Skip very small values to reduce clutter
-            if height < 0.01:
+    def _add_value_labels(self, ax, bars, values, format_str='{:.1f}', offset=3, 
+                         fontsize=9, ha='center', va='bottom', rotation=0, 
+                         color='black', fontweight='normal'):
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            
+            if abs(height) < 0.01:
                 continue
-                
-            x = rect.get_x() + rect.get_width() / 2
-            y = height + offset[1] * 0.01 * ax.get_ylim()[1]
             
-            ax.annotate(
-                format_str.format(value),
-                xy=(x, y),
-                xytext=offset,
-                textcoords="offset points",
-                ha=ha, va=va,
-                fontsize=fontsize,
-                fontweight=fontweight,
-                color=color,
-                rotation=rotation
-            )
-    
-    def visualize_overall_data_locality(self, filename='overall_data_locality.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use extracted data if available
-            workloads = list(self.extracted_data['workloads'].keys())
-            data_locality_scores = []
-            default_scores = []
+            x = bar.get_x() + bar.get_width() / 2
+            y = height
             
-            for workload in workloads:
-                if 'data_locality' in self.extracted_data['workloads'][workload]:
-                    data_locality_scores.append(self.extracted_data['workloads'][workload]['data_locality']['score'])
-                else:
-                    data_locality_scores.append(0)
-                
-                if 'default' in self.extracted_data['workloads'][workload]:
-                    default_scores.append(self.extracted_data['workloads'][workload]['default']['score'])
-                else:
-                    default_scores.append(0)
-            
-            improvements = []
-            for i in range(len(workloads)):
-                if default_scores[i] > 0:
-                    improvements.append((data_locality_scores[i] - default_scores[i]) / default_scores[i] * 100)
-                else:
-                    improvements.append(data_locality_scores[i] * 100 if data_locality_scores[i] > 0 else 0)
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            data_locality_scores = [0.5455, 0.7333, 0.6923, 0.7500]
-            default_scores = [0.0909, 0.1333, 0.1538, 0.0000]
-            improvements = [500.00, 450.00, 350.00, 75.00]
-        
-        fig, ax = plt.subplots(figsize=(12, 7))
-        
-        x = np.arange(len(workloads))
-        width = 0.35
-        
-        # Place the bars
-        rects1 = ax.bar(x - width/2, data_locality_scores, width, label='Data Locality Scheduler', 
-                        color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        rects2 = ax.bar(x + width/2, default_scores, width, label='Default Scheduler', 
-                        color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Set axis labels and title
-        ax.set_ylabel('Data Locality Score (0-1)')
-        ax.set_title('Data Locality Score Comparison Across Workloads')
-        ax.set_xticks(x)
-        
-        # Format x-axis labels for improved readability
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        ax.set_xticklabels(formatted_workloads, fontsize=10)
-        
-        # Position the legend outside the plot area to avoid overlaps
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), frameon=True, ncol=2)
-        
-        # Add value labels on top of bars
-        self._add_value_labels(ax, rects1, data_locality_scores, format_str='{:.2f}', fontsize=9)
-        self._add_value_labels(ax, rects2, default_scores, format_str='{:.2f}', fontsize=9)
-        
-        # Add improvement percentages with better positioning
-        for i, imp in enumerate(improvements):
-            y_pos = max(data_locality_scores[i], default_scores[i]) + 0.1
-            # Ensure the annotation doesn't go beyond the top of the plot
-            if y_pos > 0.85 * ax.get_ylim()[1]:
-                y_pos = max(data_locality_scores[i], default_scores[i]) - 0.15
+            if height < 0:
                 va = 'top'
+                y = height - offset * 0.01 * ax.get_ylim()[1]
             else:
-                va = 'bottom'
-                
-            ax.annotate(f'+{imp:.0f}%',
-                        xy=(x[i], y_pos),
-                        ha='center', va=va,
-                        fontsize=10,
-                        fontweight='bold',
-                        color=self.colors['improvement'],
-                        bbox=dict(boxstyle="round,pad=0.3", 
-                                 facecolor='white', alpha=0.7,
-                                 edgecolor=self.colors['improvement'], linewidth=1))
-        
-        # Improve y-axis
-        ax.yaxis.grid(True, linestyle='--', alpha=0.7)
-        ax.set_ylim(0, max(max(data_locality_scores), max(default_scores)) * 1.2)
-        
-        # Remove top and right spines for a cleaner look
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        
-        # Title styling
-        title = ax.get_title()
-        ax.set_title(title, pad=20, fontweight='bold')
-        
-        # Add text annotations to explain the metric
-        ax.text(0.5, 1.05, 'Higher scores indicate better data locality',
-                ha='center', va='center', transform=ax.transAxes,
-                fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15)  # Adjust for legend at bottom
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved overall data locality visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_local_data_access(self, filename='local_data_access.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use extracted data if available
-            workloads = list(self.extracted_data['workloads'].keys())
-            local_data_percentages = []
-            default_local_percentages = []
+                y = height + offset * 0.01 * ax.get_ylim()[1]
             
-            for workload in workloads:
-                if 'data_locality' in self.extracted_data['workloads'][workload]:
-                    local_data_percentages.append(self.extracted_data['workloads'][workload]['data_locality']['local_data_percentage'])
-                else:
-                    local_data_percentages.append(0)
-                
-                if 'default' in self.extracted_data['workloads'][workload]:
-                    default_local_percentages.append(self.extracted_data['workloads'][workload]['default']['local_data_percentage'])
-                else:
-                    default_local_percentages.append(0)
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            local_data_percentages = [60.7, 52.4, 41.7, 77.8]
-            default_local_percentages = [2.9, 26.8, 30.7, 0.0]
+            label = format_str.format(value)
+            
+            ax.text(x, y, label, ha=ha, va=va, fontsize=fontsize,
+                   fontweight=fontweight, color=color, rotation=rotation)
+    
+    def visualize_data_locality_comparison(self, filename='data_locality_comparison.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
         
-        fig, ax = plt.subplots(figsize=(12, 7))
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Data Locality Scores
+        data_locality_scores = []
+        default_scores = []
+        improvements = []
+        
+        for workload in workloads:
+            comp_data = self.data['comparison'][workload]['data_locality_comparison']
+            data_locality_scores.append(comp_data['data-locality-scheduler']['mean'])
+            default_scores.append(comp_data['default-scheduler']['mean'])
+            improvements.append(comp_data['improvement_percentage'])
         
         x = np.arange(len(workloads))
         width = 0.35
         
-        # Place the bars
-        rects1 = ax.bar(x - width/2, local_data_percentages, width, label='Data Locality Scheduler', 
-                        color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        rects2 = ax.bar(x + width/2, default_local_percentages, width, label='Default Scheduler', 
-                        color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Set axis labels and title
-        ax.set_ylabel('Local Data Access (%)')
-        ax.set_title('Local Data Access Percentage Comparison Across Workloads')
-        ax.set_xticks(x)
-        
-        # Format x-axis labels for improved readability
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        ax.set_xticklabels(formatted_workloads, fontsize=10)
-        
-        # Position the legend outside the plot area
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), frameon=True, ncol=2)
-        
-        # Add value labels on top of bars
-        self._add_value_labels(ax, rects1, local_data_percentages, format_str='{:.1f}%', fontsize=9)
-        self._add_value_labels(ax, rects2, default_local_percentages, format_str='{:.1f}%', fontsize=9)
-        
-        # Add improvement percentages with better positioning
-        for i in range(len(workloads)):
-            if default_local_percentages[i] > 0:
-                improvement = ((local_data_percentages[i] - default_local_percentages[i]) / default_local_percentages[i]) * 100
-            else:
-                improvement = local_data_percentages[i] * 100 if local_data_percentages[i] > 0 else 0
-            
-            if improvement > 0:
-                y_pos = max(local_data_percentages[i], default_local_percentages[i]) + 5
-                
-                # Ensure the annotation doesn't go beyond the top of the plot
-                if y_pos > 0.85 * ax.get_ylim()[1]:
-                    y_pos = max(local_data_percentages[i], default_local_percentages[i]) - 10
-                    va = 'top'
-                else:
-                    va = 'bottom'
-                    
-                ax.annotate(f'+{improvement:.0f}%',
-                            xy=(x[i], y_pos),
-                            ha='center', va=va,
-                            fontsize=10,
-                            fontweight='bold',
-                            color=self.colors['improvement'],
-                            bbox=dict(boxstyle="round,pad=0.3", 
-                                     facecolor='white', alpha=0.7,
-                                     edgecolor=self.colors['improvement'], linewidth=1))
-        
-        # Improve y-axis
-        ax.yaxis.grid(True, linestyle='--', alpha=0.7)
-        ax.set_ylim(0, max(max(local_data_percentages), max(default_local_percentages)) * 1.2)
-        
-        # Make y-axis display percentages
-        ax.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=0))
-        
-        # Remove top and right spines for a cleaner look
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        
-        # Title styling
-        title = ax.get_title()
-        ax.set_title(title, pad=20, fontweight='bold')
-        
-        # Add text annotations to explain the metric
-        ax.text(0.5, 1.05, 'Higher percentages indicate better data locality',
-                ha='center', va='center', transform=ax.transAxes,
-                fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15)  # Adjust for legend at bottom
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved local data access visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_data_distribution(self, filename='data_distribution.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use extracted data if available
-            workloads = list(self.extracted_data['workloads'].keys())
-            
-            # For simplicity, assuming only local and cross-region data available in the extracted data
-            data_locality_local = []
-            data_locality_cross = []
-            default_local = []
-            default_cross = []
-            
-            for workload in workloads:
-                if 'data_locality' in self.extracted_data['workloads'][workload]:
-                    data_locality_local.append(self.extracted_data['workloads'][workload]['data_locality']['local_data_percentage'])
-                    data_locality_cross.append(self.extracted_data['workloads'][workload]['data_locality']['cross_region_percentage'])
-                else:
-                    data_locality_local.append(0)
-                    data_locality_cross.append(0)
-                
-                if 'default' in self.extracted_data['workloads'][workload]:
-                    default_local.append(self.extracted_data['workloads'][workload]['default']['local_data_percentage'])
-                    default_cross.append(self.extracted_data['workloads'][workload]['default']['cross_region_percentage'])
-                else:
-                    default_local.append(0)
-                    default_cross.append(0)
-            
-            # Calculate same-zone/same-region (the remainder)
-            data_locality_other = [100 - local - cross for local, cross in zip(data_locality_local, data_locality_cross)]
-            default_other = [100 - local - cross for local, cross in zip(default_local, default_cross)]
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            data_locality_local = [60.7, 52.4, 41.7, 77.8]
-            data_locality_cross = [8.7, 20.8, 0.0, 0.0]
-            data_locality_other = [30.6, 26.8, 58.3, 22.2]  # Calculated as remainder
-            
-            default_local = [2.9, 26.8, 30.7, 0.0]
-            default_cross = [91.3, 42.6, 41.1, 100.0]
-            default_other = [5.8, 30.6, 28.2, 0.0]  # Calculated as remainder
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 8))
-        
-        x = np.arange(len(workloads))
-        width = 0.7
-        
-        # Format workload names for better display
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        
-        # Stacked bar chart for data-locality-scheduler
-        bottom_data_locality = np.zeros(len(workloads))
-        
-        # Local data
-        p1 = ax1.bar(x, data_locality_local, width, label='Local Data', color=self.colors['local'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_data_locality)
-        bottom_data_locality += data_locality_local
-        
-        # Other data (same-zone, same-region)
-        p2 = ax1.bar(x, data_locality_other, width, label='Same Zone/Region', color=self.colors['same-region'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_data_locality)
-        bottom_data_locality += data_locality_other
-        
-        # Cross-region data
-        p3 = ax1.bar(x, data_locality_cross, width, label='Cross-Region', color=self.colors['cross-region'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_data_locality)
-        
-        ax1.set_ylabel('Data Distribution (%)')
-        ax1.set_title('Data-Locality Scheduler')
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(formatted_workloads, fontsize=10)
-        
-        # Format y-axis as percentage
-        ax1.yaxis.set_major_formatter(mtick.PercentFormatter())
-        
-        # Stacked bar chart for default-scheduler
-        bottom_default = np.zeros(len(workloads))
-        
-        # Local data
-        p4 = ax2.bar(x, default_local, width, label='Local Data', color=self.colors['local'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_default)
-        bottom_default += default_local
-        
-        # Other data (same-zone, same-region)
-        p5 = ax2.bar(x, default_other, width, label='Same Zone/Region', color=self.colors['same-region'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_default)
-        bottom_default += default_other
-        
-        # Cross-region data
-        p6 = ax2.bar(x, default_cross, width, label='Cross-Region', color=self.colors['cross-region'], 
-                    edgecolor='black', linewidth=0.6, bottom=bottom_default)
-        
-        ax2.set_ylabel('Data Distribution (%)')
-        ax2.set_title('Default Scheduler')
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(formatted_workloads, fontsize=10)
-        
-        # Format y-axis as percentage
-        ax2.yaxis.set_major_formatter(mtick.PercentFormatter())
-        
-        # Add a shared legend
-        handles, labels = ax1.get_legend_handles_labels()
-        fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.02), 
-                  ncol=3, frameon=True, fontsize=10)
-        
-        # Add value labels for significant portions (only for segments > 10%)
-        def add_label_to_segment(ax, rects, values, bottoms, color='black'):
-            for i, (rect, value, bottom) in enumerate(zip(rects, values, bottoms)):
-                if value > 10:  # Only label if value is significant
-                    height = rect.get_height()
-                    ax.annotate(f'{value:.1f}%',
-                                xy=(rect.get_x() + rect.get_width() / 2, bottom + height / 2),
-                                ha='center', va='center',
-                                fontsize=9, color=color,
-                                fontweight='bold')
-        
-        # Add labels to the segments
-        add_label_to_segment(ax1, p1, data_locality_local, np.zeros(len(workloads)))
-        add_label_to_segment(ax1, p2, data_locality_other, data_locality_local)
-        add_label_to_segment(ax1, p3, data_locality_cross, bottom_data_locality - data_locality_cross)
-        
-        add_label_to_segment(ax2, p4, default_local, np.zeros(len(workloads)))
-        add_label_to_segment(ax2, p5, default_other, default_local)
-        add_label_to_segment(ax2, p6, default_cross, bottom_default - default_cross)
-        
-        # Set y-axis limits
-        ax1.set_ylim(0, 105)  # Give some space at the top for labels
-        ax2.set_ylim(0, 105)
-        
-        # Remove top and right spines
-        ax1.spines['top'].set_visible(False)
-        ax1.spines['right'].set_visible(False)
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        
-        # Add grid lines
-        ax1.yaxis.grid(True, linestyle='--', alpha=0.7)
-        ax2.yaxis.grid(True, linestyle='--', alpha=0.7)
-        
-        # Add a figure title
-        fig.suptitle('Data Distribution Patterns by Scheduler', fontsize=14, fontweight='bold', y=0.95)
-        
-        # Add a description
-        fig.text(0.5, 0.01, 'Higher local data access indicates better data locality efficiency',
-                ha='center', fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15, top=0.9)  # Adjust for legend at bottom and suptitle
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved data distribution visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_network_transfer_reduction(self, filename='network_transfer_reduction.png'):
-        """Create visualization showing network transfer volume reduction"""
-        if hasattr(self, 'extracted_data') and 'transfer_data' in self.extracted_data:
-            transfer_data = self.extracted_data['transfer_data']
-            workloads = list(transfer_data.keys())
-            
-            total_data = []
-            dl_transfer = []
-            default_transfer = []
-            reduction_percentages = []
-            
-            for workload in workloads:
-                if 'data-locality-scheduler' in transfer_data[workload] and 'default-scheduler' in transfer_data[workload]:
-                    total_data.append(transfer_data[workload]['data-locality-scheduler']['total_data'])
-                    dl_transfer.append(transfer_data[workload]['data-locality-scheduler']['network_transfer'])
-                    default_transfer.append(transfer_data[workload]['default-scheduler']['network_transfer'])
-                    
-                    if 'reduction' in transfer_data[workload]['data-locality-scheduler']:
-                        reduction_percentages.append(transfer_data[workload]['data-locality-scheduler']['reduction'])
-                    else:
-                        # Calculate reduction if not available
-                        default_val = transfer_data[workload]['default-scheduler']['network_transfer']
-                        dl_val = transfer_data[workload]['data-locality-scheduler']['network_transfer']
-                        reduction = ((default_val - dl_val) / default_val * 100) if default_val > 0 else 0
-                        reduction_percentages.append(reduction)
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            total_data = [1730.00, 3360.00, 1630.00, 90.00]
-            dl_transfer = [680.00, 1600.00, 950.00, 20.00]
-            default_transfer = [1680.00, 2460.00, 1130.00, 90.00]
-            reduction_percentages = [59.52, 34.96, 15.93, 77.78]
-        
-        # Sort by reduction percentage for better visualization
-        if len(workloads) > 1:
-            combined = list(zip(workloads, total_data, dl_transfer, default_transfer, reduction_percentages))
-            combined.sort(key=lambda x: x[4], reverse=True)  # Sort by reduction percentage (desc)
-            workloads, total_data, dl_transfer, default_transfer, reduction_percentages = zip(*combined)
-        
-        fig, ax = plt.subplots(figsize=(12, 7))
-        
-        # Create x positions for groups of bars
-        x = np.arange(len(workloads))
-        width = 0.35
-        
-        # Create bars for default scheduler
-        bars1 = ax.bar(x - width/2, default_transfer, width, label='Default Scheduler', 
-                      color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Create bars for data-locality scheduler
-        bars2 = ax.bar(x + width/2, dl_transfer, width, label='Data Locality Scheduler', 
-                      color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Format workload names
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        
-        # Add value labels on top of bars
-        self._add_value_labels(ax, bars1, default_transfer, format_str='{:.0f} MB', fontsize=9)
-        self._add_value_labels(ax, bars2, dl_transfer, format_str='{:.0f} MB', fontsize=9)
-        
-        # Add reduction percentage with improved positioning
-        for i, (b1, b2, pct) in enumerate(zip(bars1, bars2, reduction_percentages)):
-            x_pos = (b1.get_x() + b1.get_width() + b2.get_x()) / 2
-            y_pos = max(b1.get_height(), b2.get_height()) * 1.1
-            
-            # Adjust positioning for better readability
-            if i > 0 and y_pos > 0.85 * ax.get_ylim()[1]:
-                y_pos = max(b1.get_height(), b2.get_height()) * 0.5
-                va = 'center'
-            else:
-                va = 'bottom'
-                
-            ax.annotate(f'-{pct:.1f}%', 
-                        xy=(x_pos, y_pos),
-                        ha='center', va=va,
-                        fontsize=10,
-                        fontweight='bold',
-                        color=self.colors['reduction'],
-                        bbox=dict(boxstyle="round,pad=0.3", 
-                                 facecolor='white', alpha=0.8,
-                                 edgecolor=self.colors['reduction'], linewidth=1))
-        
-        # Set labels and title
-        ax.set_ylabel('Network Data Transfer (MB)')
-        ax.set_title('Network Data Transfer Reduction by Workload')
-        ax.set_xticks(x)
-        ax.set_xticklabels(formatted_workloads, fontsize=10)
-        
-        # Add a separate plot for total data handled
-        ax2 = ax.twinx()
-        ax2.plot(x, total_data, 'o-', label='Total Data', color='black', linewidth=2, markersize=6)
-        ax2.set_ylabel('Total Data Size (MB)')
-        
-        # Add value labels for total data points
-        for i, v in enumerate(total_data):
-            ax2.annotate(f'{v:.0f} MB',
-                         xy=(x[i], v),
-                         xytext=(0, 5),
-                         textcoords="offset points",
-                         ha='center', va='bottom',
-                         fontsize=9,
-                         color='black')
-        
-        # Create a combined legend
-        lines1, labels1 = ax.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        
-        # Position the legend outside the plot area
-        fig.legend(lines1 + lines2, labels1 + labels2, 
-                  loc='upper center', bbox_to_anchor=(0.5, 0.03), 
-                  ncol=3, frameon=True, fontsize=10)
-        
-        # Add grid for better readability
-        ax.grid(axis='y', linestyle='--', alpha=0.7)
-        
-        # Calculate appropriate y-axis limits
-        max_transfer = max(max(default_transfer), max(dl_transfer))
-        ax.set_ylim(0, max_transfer * 1.3)
-        ax2.set_ylim(0, max(total_data) * 1.3)
-        
-        # Remove top and right spines
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(True)  # Keep right spine for second y-axis
-        ax2.spines['top'].set_visible(False)
-        
-        # Add a figure title and description
-        plt.suptitle('Network Data Transfer Efficiency', fontsize=14, fontweight='bold', y=0.95)
-        plt.figtext(0.5, 0.01, 'Lower network transfer indicates better data locality efficiency',
-                   ha='center', fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15, top=0.9)  # Adjust for legend and title
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved network transfer reduction visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_network_efficiency(self, filename='network_efficiency.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use data from extracted metrics
-            workloads = list(self.extracted_data['workloads'].keys())
-            
-            # Collect metrics for each workload
-            data_local_pcts = []
-            data_cross_region_pcts = []
-            default_local_pcts = []
-            default_cross_region_pcts = []
-            
-            for workload in workloads:
-                if 'data_locality' in self.extracted_data['workloads'][workload] and 'default' in self.extracted_data['workloads'][workload]:
-                    data_local_pcts.append(self.extracted_data['workloads'][workload]['data_locality']['local_data_percentage'] / 100)
-                    data_cross_region_pcts.append(self.extracted_data['workloads'][workload]['data_locality']['cross_region_percentage'] / 100)
-                    default_local_pcts.append(self.extracted_data['workloads'][workload]['default']['local_data_percentage'] / 100)
-                    default_cross_region_pcts.append(self.extracted_data['workloads'][workload]['default']['cross_region_percentage'] / 100)
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region', 'data-intensive', 'ml-training', 'edge-to-cloud']
-            data_local_pcts = [0.607, 0.524, 0.417, 0.778]
-            data_cross_region_pcts = [0.087, 0.208, 0.0, 0.0]
-            default_local_pcts = [0.029, 0.268, 0.307, 0.0]
-            default_cross_region_pcts = [0.913, 0.426, 0.411, 1.0]
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), subplot_kw=dict(polar=True))
-        
-        # Format workload names
-        formatted_workloads = [w.split('-')[0].capitalize() for w in workloads]
-        
-        # For radar charts, we need to close the circle
-        angles = np.linspace(0, 2*np.pi, len(workloads), endpoint=False).tolist()
-        
-        # Also close the data lists for plotting
-        data_local_pcts_closed = data_local_pcts + [data_local_pcts[0]]
-        data_cross_region_pcts_closed = data_cross_region_pcts + [data_cross_region_pcts[0]]
-        default_local_pcts_closed = default_local_pcts + [default_local_pcts[0]]
-        default_cross_region_pcts_closed = default_cross_region_pcts + [default_cross_region_pcts[0]]
-        
-        angles_closed = angles + [angles[0]]  # Close the circle
-        formatted_workloads_closed = formatted_workloads + [formatted_workloads[0]]
-        
-        # Plot local data percentage (higher is better)
-        ax1.plot(angles_closed, data_local_pcts_closed, 'o-', linewidth=2, label='Data Locality Scheduler', 
-                color=self.colors['data-locality-scheduler'], markersize=6)
-        ax1.plot(angles_closed, default_local_pcts_closed, 'o-', linewidth=2, label='Default Scheduler', 
-                color=self.colors['default-scheduler'], markersize=6)
-        ax1.fill(angles_closed, data_local_pcts_closed, alpha=0.25, color=self.colors['data-locality-scheduler'])
-        ax1.fill(angles_closed, default_local_pcts_closed, alpha=0.25, color=self.colors['default-scheduler'])
-        
-        # Set labels for the radar chart
-        ax1.set_xticks(angles)
-        ax1.set_xticklabels(formatted_workloads, fontsize=10)
-        ax1.set_title('Local Data Usage (Higher is Better)', fontsize=12, pad=15)
-        
-        # Set y-axis limits and labels
-        ax1.set_ylim(0, 1)
-        ax1.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-        ax1.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
-        
-        # Set grid properties
-        ax1.grid(True, linestyle='--', alpha=0.7)
-        
-        # Plot cross-region data percentage (lower is better)
-        ax2.plot(angles_closed, data_cross_region_pcts_closed, 'o-', linewidth=2, label='Data Locality Scheduler', 
-                color=self.colors['data-locality-scheduler'], markersize=6)
-        ax2.plot(angles_closed, default_cross_region_pcts_closed, 'o-', linewidth=2, label='Default Scheduler', 
-                color=self.colors['default-scheduler'], markersize=6)
-        ax2.fill(angles_closed, data_cross_region_pcts_closed, alpha=0.25, color=self.colors['data-locality-scheduler'])
-        ax2.fill(angles_closed, default_cross_region_pcts_closed, alpha=0.25, color=self.colors['default-scheduler'])
-        
-        # Set labels for the radar chart
-        ax2.set_xticks(angles)
-        ax2.set_xticklabels(formatted_workloads, fontsize=10)
-        ax2.set_title('Cross-Region Data Usage (Lower is Better)', fontsize=12, pad=15)
-        
-        # Set y-axis limits and labels
-        ax2.set_ylim(0, 1)
-        ax2.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-        ax2.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
-        
-        # Set grid properties
-        ax2.grid(True, linestyle='--', alpha=0.7)
-        
-        # Add a shared legend
-        handles, labels = ax1.get_legend_handles_labels()
-        fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.02), 
-                  ncol=2, frameon=True, fontsize=10)
-        
-        # Add a figure title
-        fig.suptitle('Network Efficiency Metrics by Workload Type', fontsize=14, fontweight='bold', y=0.98)
-        
-        # Add explanatory text
-        fig.text(0.5, 0.01, 'Radar charts show data locality patterns across different workload types',
-                ha='center', fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15, top=0.85)  # Adjust for legend at bottom
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved network efficiency visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_improvement_heatmap(self, filename='improvement_heatmap.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use data from extracted metrics
-            workloads = list(self.extracted_data['workloads'].keys())
-            
-            # Define the metrics we want to display
-            metrics = ['Data Locality Score', 'Size-Weighted Score', 'Local Data Access']
-            
-            # Create matrix to hold improvement values
-            improvements = np.zeros((len(workloads), len(metrics)))
-            
-            for i, workload in enumerate(workloads):
-                if 'improvements' in self.extracted_data['workloads'][workload]:
-                    imp = self.extracted_data['workloads'][workload]['improvements']
-                    improvements[i, 0] = imp.get('data_locality', 0)
-                    improvements[i, 1] = imp.get('size_weighted', 0)
-                    improvements[i, 2] = imp.get('local_data', 0)
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                       'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            metrics = ['Data Locality Score', 'Size-Weighted Score', 'Local Data Access']
-            
-            # Sample improvement percentages
-            improvements = np.array([
-                [500.00, 1215.00, 2000.00],
-                [450.00, 56.18, 95.56],
-                [350.00, 58.22, 36.00],
-                [75.00, 88.89, 7777.78]
-            ])
-        
-        # Format workload names for better display
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        
-        # Define a custom colormap from blue to green to yellow
-        colors = [(0.0, 0.4, 0.6), (0.0, 0.6, 0.6), (0.7, 0.7, 0.0)]  # blue to teal to yellow
-        cmap = LinearSegmentedColormap.from_list('improvement_cmap', colors, N=100)
-        
-        # Create a figure with increased margins for labels
-        fig, ax = plt.subplots(figsize=(10, 8))
-        
-        # Create the heatmap with adjusted colormap range
-        max_value = np.max(improvements)
-        min_value = np.min(improvements)
-        
-        # Set vmax to 95th percentile to handle outliers
-        vmax = np.percentile(improvements, 95) if max_value > 1000 else max_value
-        
-        im = ax.imshow(improvements, cmap=cmap, aspect='auto', vmin=0, vmax=vmax)
-        
-        # Add colorbar with scientific formatting for large values
-        cbar = ax.figure.colorbar(im, ax=ax)
-        cbar.ax.set_ylabel('Improvement (%)', rotation=-90, va="bottom", fontsize=10)
-        
-        # Set formatter for colorbar ticks
-        if vmax > 1000:
-            cbar.ax.yaxis.set_major_formatter(mtick.FuncFormatter(
-                lambda x, pos: f'{x/1000:.1f}k' if x >= 1000 else f'{x:.0f}'))
-        
-        # Set ticks and labels
-        ax.set_xticks(np.arange(len(metrics)))
-        ax.set_yticks(np.arange(len(workloads)))
-        ax.set_xticklabels([m.replace(' ', '\n') for m in metrics], fontsize=10)
-        ax.set_yticklabels(formatted_workloads, fontsize=10)
-        
-        # Rotate the x-axis labels for better readability
-        plt.setp(ax.get_xticklabels(), rotation=0, ha="center", rotation_mode="anchor")
-        
-        # Add text annotations with values
-        for i in range(len(workloads)):
-            for j in range(len(metrics)):
-                value = improvements[i, j]
-                
-                # Format the text based on the value range
-                if value > 1000:
-                    text = f"{value/1000:.1f}k%"
-                elif value > 100:
-                    text = f"{value:.0f}%"
-                else:
-                    text = f"{value:.1f}%"
-                
-                # Determine text color based on background
-                text_brightness = im.norm(value)
-                text_color = "white" if text_brightness > 0.5 else "black"
-                
-                ax.text(j, i, text, ha="center", va="center", 
-                       color=text_color, fontweight="bold", fontsize=10)
-        
-        # Add a title and adjust layout
-        ax.set_title("Improvement Percentages by Workload and Metric", 
-                    fontsize=14, fontweight='bold', pad=20)
-        
-        # Add a text explanation
-        plt.figtext(0.5, 0.01, 
-                   "Higher percentages indicate greater improvement of the Data Locality Scheduler over the Default Scheduler",
-                   ha="center", fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.1)
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved improvement heatmap to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_overall_improvements(self, filename='overall_improvements.png'):
-        if hasattr(self, 'extracted_data') and 'overall_improvements' in self.extracted_data:
-            # Use data from extracted metrics
-            improvements = self.extracted_data['overall_improvements']
-            metrics = []
-            values = []
-            
-            for metric, value in improvements.items():
-                metrics.append(metric)
-                values.append(value)
-        else:
-            # Mock data if real data not available
-            metrics = ['overall data locality', 'size-weighted data locality', 
-                      'local data access', 'cross-region data transfers']
-            values = [343.75, 354.57, 2477.33, -85.39]
-        
-        # Sort metrics by absolute value for better visualization
-        sorted_indices = np.argsort(np.abs(values))[::-1]
-        metrics = [metrics[i] for i in sorted_indices]
-        values = [values[i] for i in sorted_indices]
-        
-        # Separate improvement and reduction metrics
-        improvement_metrics = []
-        improvement_values = []
-        reduction_metrics = []
-        reduction_values = []
-        
-        for i, (metric, value) in enumerate(zip(metrics, values)):
-            if value >= 0:
-                improvement_metrics.append(metric)
-                improvement_values.append(value)
-            else:
-                reduction_metrics.append(metric)
-                reduction_values.append(-value)  # Make positive for visualization
-        
-        # Capitalize and format metric names
-        improvement_metrics = [m.replace('-', ' ').title() for m in improvement_metrics]
-        reduction_metrics = [m.replace('-', ' ').title() for m in reduction_metrics]
-        
-        fig, ax = plt.subplots(figsize=(12, 7))
-        
-        # Create bar positions
-        x1 = np.arange(len(improvement_metrics))
-        x2 = np.arange(len(reduction_metrics))
-        
-        # Create bars with different colors for improvements and reductions
-        bars1 = ax.bar(x1, improvement_values, width=0.7, color=self.colors['improvement'], 
-                      edgecolor='black', linewidth=0.6, label='Improvement')
-        
-        bar_offset = len(improvement_metrics) + 1 if improvement_metrics else 0
-        
-        if reduction_metrics:
-            bars2 = ax.bar(x2 + bar_offset, reduction_values, width=0.7, color=self.colors['reduction'], 
-                          edgecolor='black', linewidth=0.6, label='Reduction')
-            
-            # Add a gap annotation
-            if improvement_metrics:
-                ax.annotate('', xy=(len(improvement_metrics)-0.5, 0), xytext=(len(improvement_metrics)+0.5, 0),
-                            arrowprops=dict(arrowstyle='-', linestyle='--', color='gray', lw=1))
-        
-        # Add value labels on top of bars
-        self._add_value_labels(ax, bars1, improvement_values, format_str='{:.1f}%', fontsize=10, 
-                           fontweight='bold', color=self.colors['improvement'])
-        
-        if reduction_metrics:
-            self._add_value_labels(ax, bars2, reduction_values, format_str='{:.1f}%', fontsize=10, 
-                               fontweight='bold', color=self.colors['reduction'])
-        
-        # Set labels and title
-        ax.set_ylabel('Percentage (%)', fontsize=12)
-        ax.set_title('Overall Performance Improvements', fontsize=14, fontweight='bold', pad=20)
-        
-        # Set x ticks and labels
-        all_x = list(x1)
-        all_metrics = improvement_metrics[:]
-        
-        if reduction_metrics:
-            all_x.extend(list(x2 + bar_offset))
-            all_metrics.extend(reduction_metrics)
-        
-        ax.set_xticks(all_x)
-        ax.set_xticklabels(all_metrics, rotation=30, ha='right', fontsize=10)
-        
-        # Add legend if necessary
-        if reduction_metrics:
-            ax.legend(loc='upper right', frameon=True, fontsize=10)
-        
-        # Add grid for better readability
-        ax.grid(axis='y', linestyle='--', alpha=0.7)
-        
-        # Remove top and right spines
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        
-        # Add a text explanation
-        plt.figtext(0.5, 0.01, 
-                   "Summary of key performance metrics showing the advantage of the Data Locality Scheduler",
-                   ha="center", fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15)
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved overall improvements visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_edge_cloud_distribution(self, filename='edge_cloud_distribution.png'):
-        if self.summary_data:
-            # Extract node placement data from summary
-            workloads = []
-            edge_dl = []
-            cloud_dl = []
-            edge_default = []
-            cloud_default = []
-            
-            # Group by workload and scheduler, averaging across iterations
-            workload_data = {}
-            
-            for row in self.summary_data:
-                workload = row['workload']
-                scheduler = row['scheduler']
-                
-                if workload not in workload_data:
-                    workload_data[workload] = {
-                        'data-locality-scheduler': {'edge': [], 'cloud': []},
-                        'default-scheduler': {'edge': [], 'cloud': []}
-                    }
-                
-                try:
-                    edge = int(row['edge_placements'])
-                    cloud = int(row['cloud_placements'])
-                    workload_data[workload][scheduler]['edge'].append(edge)
-                    workload_data[workload][scheduler]['cloud'].append(cloud)
-                except (ValueError, KeyError):
-                    pass
-            
-            # Calculate averages
-            for workload, data in workload_data.items():
-                if data['data-locality-scheduler']['edge'] and data['default-scheduler']['edge']:
-                    workloads.append(workload)
-                    edge_dl.append(sum(data['data-locality-scheduler']['edge']) / len(data['data-locality-scheduler']['edge']))
-                    cloud_dl.append(sum(data['data-locality-scheduler']['cloud']) / len(data['data-locality-scheduler']['cloud']))
-                    edge_default.append(sum(data['default-scheduler']['edge']) / len(data['default-scheduler']['edge']))
-                    cloud_default.append(sum(data['default-scheduler']['cloud']) / len(data['default-scheduler']['cloud']))
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            edge_dl = [4, 3, 2, 1]
-            cloud_dl = [0, 3, 3, 1]
-            edge_default = [4, 5, 4, 2]
-            cloud_default = [0, 1, 1, 0]
-        
-        # Create figure with two subplots for the two schedulers
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
-        
-        # Format workload names for better display
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        
-        # Set up x positions
-        x = np.arange(len(workloads))
-        width = 0.7
-        
-        # Define a function to create stacked bars with percentages
-        def plot_stacked_bars(ax, title, edge_values, cloud_values):
-            total_values = [e + c for e, c in zip(edge_values, cloud_values)]
-            
-            # Create bottom segments (edge nodes)
-            bars1 = ax.bar(x, edge_values, width, label='Edge Nodes', 
-                          color=self.colors['local'], edgecolor='black', linewidth=0.6)
-            
-            # Create top segments (cloud nodes)
-            bars2 = ax.bar(x, cloud_values, width, bottom=edge_values, label='Cloud Nodes', 
-                          color=self.colors['cross-region'], edgecolor='black', linewidth=0.6)
-            
-            # Add total count on top of each bar
-            for i, total in enumerate(total_values):
-                ax.text(x[i], total + 0.2, f'{total:.0f}',
-                       ha='center', va='bottom', fontsize=10, fontweight='bold')
-            
-            # Add percentage labels inside each segment
-            for i, (edge, cloud) in enumerate(zip(edge_values, cloud_values)):
-                total = edge + cloud
-                if total == 0:
-                    continue
-                    
-                # Edge node percentage
-                if edge > 0 and edge / total > 0.1:  # Only label if segment is large enough
-                    edge_pct = (edge / total) * 100
-                    ax.text(x[i], edge / 2, f'{edge_pct:.0f}%',
-                           ha='center', va='center', fontsize=9, fontweight='bold',
-                           color='white' if edge_pct > 50 else 'black')
-                
-                # Cloud node percentage
-                if cloud > 0 and cloud / total > 0.1:  # Only label if segment is large enough
-                    cloud_pct = (cloud / total) * 100
-                    ax.text(x[i], edge + cloud / 2, f'{cloud_pct:.0f}%',
-                           ha='center', va='center', fontsize=9, fontweight='bold',
-                           color='white' if cloud_pct > 50 else 'black')
-            
-            # Set title and labels
-            ax.set_title(title, fontsize=12, pad=10)
-            ax.set_xticks(x)
-            ax.set_xticklabels(formatted_workloads, fontsize=10)
-            ax.set_ylabel('Node Count', fontsize=11)
-            
-            # Configure y-axis
-            max_total = max(total_values) if total_values else 0
-            ax.set_ylim(0, max_total * 1.15)  # Add some space at the top
-            
-            # Add grid for better readability
-            ax.grid(axis='y', linestyle='--', alpha=0.7)
-            
-            # Remove top and right spines
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            
-            return bars1, bars2
-        
-        # Plot both distributions
-        bars1_dl, bars2_dl = plot_stacked_bars(ax1, 'Data-Locality Scheduler', edge_dl, cloud_dl)
-        bars1_def, bars2_def = plot_stacked_bars(ax2, 'Default Scheduler', edge_default, cloud_default)
-        
-        # Add a shared legend
-        handles, labels = ax1.get_legend_handles_labels()
-        fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.02), 
-                  ncol=2, frameon=True, fontsize=10)
-        
-        # Add a descriptive title for the whole figure
-        fig.suptitle('Workload Distribution Between Edge and Cloud Nodes', 
-                    fontsize=14, fontweight='bold', y=0.95)
-        
-        # Add explanatory text
-        fig.text(0.5, 0.01, 
-                'Shows how the schedulers distribute workloads across different node types',
-                ha='center', fontsize=10, fontstyle='italic')
-        
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.15, top=0.9)  # Adjust for legend and title
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
-        plt.close()
-        
-        print(f"Saved edge-cloud distribution visualization to {os.path.join(self.output_dir, filename)}")
-    
-    def visualize_combined_metrics(self, filename='combined_metrics.png'):
-        if hasattr(self, 'extracted_data'):
-            # Use data from extracted metrics
-            workloads = list(self.extracted_data['workloads'].keys())
-            
-            # Collect metrics for each workload
-            data_locality_scores = []
-            default_scores = []
-            local_data_pcts = []
-            default_local_pcts = []
-            cross_region_pcts = []
-            default_cross_pcts = []
-            
-            for workload in workloads:
-                if 'data_locality' in self.extracted_data['workloads'][workload] and 'default' in self.extracted_data['workloads'][workload]:
-                    data_locality_scores.append(self.extracted_data['workloads'][workload]['data_locality']['score'])
-                    default_scores.append(self.extracted_data['workloads'][workload]['default']['score'])
-                    local_data_pcts.append(self.extracted_data['workloads'][workload]['data_locality']['local_data_percentage'])
-                    default_local_pcts.append(self.extracted_data['workloads'][workload]['default']['local_data_percentage'])
-                    cross_region_pcts.append(self.extracted_data['workloads'][workload]['data_locality']['cross_region_percentage'])
-                    default_cross_pcts.append(self.extracted_data['workloads'][workload]['default']['cross_region_percentage'])
-        else:
-            # Mock data if real data not available
-            workloads = ['cross-region-data-processing', 'data-intensive-analytics', 
-                        'ml-training-pipeline', 'edge-to-cloud-pipeline']
-            data_locality_scores = [0.5455, 0.7333, 0.6923, 0.7500]
-            default_scores = [0.0909, 0.1333, 0.1538, 0.0000]
-            local_data_pcts = [60.7, 52.4, 41.7, 77.8]
-            default_local_pcts = [2.9, 26.8, 30.7, 0.0]
-            cross_region_pcts = [8.7, 20.8, 0.0, 0.0]
-            default_cross_pcts = [91.3, 42.6, 41.1, 100.0]
-        
-        # Calculate improvements for each metric
-        score_improvements = [(d - k) / k * 100 if k > 0 else d * 100 for d, k in zip(data_locality_scores, default_scores)]
-        local_improvements = [(d - k) / k * 100 if k > 0 else d * 100 for d, k in zip(local_data_pcts, default_local_pcts)]
-        cross_reductions = [(k - d) / k * 100 if k > 0 else 0 for d, k in zip(cross_region_pcts, default_cross_pcts)]
-        
-        # Format workload names for better display
-        formatted_workloads = [self._format_workload_name(w) for w in workloads]
-        
-        # Create a figure with GridSpec for better control over subplots
-        fig = plt.figure(figsize=(15, 10))
-        gs = GridSpec(2, 2, figure=fig, height_ratios=[1, 1], width_ratios=[1, 1], 
-                     hspace=0.35, wspace=0.25)
-        
-        # First subplot: Data Locality Score
-        ax1 = fig.add_subplot(gs[0, 0])
-        x = np.arange(len(workloads))
-        width = 0.35
-        
-        rects1 = ax1.bar(x - width/2, data_locality_scores, width, label='Data Locality Scheduler', 
-                        color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        rects2 = ax1.bar(x + width/2, default_scores, width, label='Default Scheduler', 
-                        color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Add value labels to the bars
-        self._add_value_labels(ax1, rects1, data_locality_scores, format_str='{:.2f}', fontsize=9)
-        self._add_value_labels(ax1, rects2, default_scores, format_str='{:.2f}', fontsize=9)
-        
-        # Add improvement percentages
-        for i, imp in enumerate(score_improvements):
+        bars1 = ax1.bar(x - width/2, data_locality_scores, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars2 = ax1.bar(x + width/2, default_scores, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax1, bars1, data_locality_scores, format_str='{:.3f}')
+        self._add_value_labels(ax1, bars2, default_scores, format_str='{:.3f}')
+        
+        for i, imp in enumerate(improvements):
+            y_pos = max(data_locality_scores[i], default_scores[i]) + 0.05
             ax1.annotate(f'+{imp:.0f}%',
-                        xy=(x[i], max(data_locality_scores[i], default_scores[i]) + 0.05),
+                        xy=(x[i], y_pos),
                         ha='center', va='bottom',
-                        fontsize=9, fontweight='bold',
-                        color=self.colors['improvement'],
-                        bbox=dict(boxstyle="round,pad=0.2", 
-                                 facecolor='white', alpha=0.7,
-                                 edgecolor=self.colors['improvement'], linewidth=1))
-        
-        ax1.set_ylabel('Data Locality Score (0-1)')
-        ax1.set_title('Data Locality Score')
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(formatted_workloads, fontsize=9)
-        ax1.legend(loc='upper right', fontsize=9)
-        ax1.grid(axis='y', linestyle='--', alpha=0.7)
-        ax1.set_ylim(0, max(max(data_locality_scores), max(default_scores)) * 1.2)
-        
-        # Remove top and right spines
-        ax1.spines['top'].set_visible(False)
-        ax1.spines['right'].set_visible(False)
-        
-        # Second subplot: Local Data Percentage
-        ax2 = fig.add_subplot(gs[0, 1])
-        
-        rects1 = ax2.bar(x - width/2, local_data_pcts, width, label='Data Locality Scheduler', 
-                        color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        rects2 = ax2.bar(x + width/2, default_local_pcts, width, label='Default Scheduler', 
-                        color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Add value labels
-        self._add_value_labels(ax2, rects1, local_data_pcts, format_str='{:.1f}%', fontsize=9)
-        self._add_value_labels(ax2, rects2, default_local_pcts, format_str='{:.1f}%', fontsize=9)
-        
-        # Add improvement percentages
-        for i, imp in enumerate(local_improvements):
-            if imp > 0:
-                ax2.annotate(f'+{imp:.0f}%',
-                            xy=(x[i], max(local_data_pcts[i], default_local_pcts[i]) + 5),
-                            ha='center', va='bottom',
-                            fontsize=9, fontweight='bold',
-                            color=self.colors['improvement'],
-                            bbox=dict(boxstyle="round,pad=0.2", 
-                                     facecolor='white', alpha=0.7,
-                                     edgecolor=self.colors['improvement'], linewidth=1))
-        
-        ax2.set_ylabel('Local Data (%)')
-        ax2.set_title('Local Data Access')
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(formatted_workloads, fontsize=9)
-        ax2.legend(loc='upper right', fontsize=9)
-        ax2.grid(axis='y', linestyle='--', alpha=0.7)
-        ax2.set_ylim(0, max(max(local_data_pcts), max(default_local_pcts)) * 1.2)
-        
-        # Format y-axis as percentage
-        ax2.yaxis.set_major_formatter(mtick.PercentFormatter())
-        
-        # Remove top and right spines
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        
-        # Third subplot: Cross-Region Percentage
-        ax3 = fig.add_subplot(gs[1, 0])
-        
-        rects1 = ax3.bar(x - width/2, cross_region_pcts, width, label='Data Locality Scheduler', 
-                        color=self.colors['data-locality-scheduler'], edgecolor='black', linewidth=0.6)
-        rects2 = ax3.bar(x + width/2, default_cross_pcts, width, label='Default Scheduler', 
-                        color=self.colors['default-scheduler'], edgecolor='black', linewidth=0.6)
-        
-        # Add value labels
-        self._add_value_labels(ax3, rects1, cross_region_pcts, format_str='{:.1f}%', fontsize=9)
-        self._add_value_labels(ax3, rects2, default_cross_pcts, format_str='{:.1f}%', fontsize=9)
-        
-        # Add reduction percentages
-        for i, red in enumerate(cross_reductions):
-            if red > 0:
-                ax3.annotate(f'-{red:.0f}%',
-                            xy=(x[i], max(cross_region_pcts[i], default_cross_pcts[i]) + 5),
-                            ha='center', va='bottom',
-                            fontsize=9, fontweight='bold',
-                            color=self.colors['reduction'],
-                            bbox=dict(boxstyle="round,pad=0.2", 
-                                     facecolor='white', alpha=0.7,
-                                     edgecolor=self.colors['reduction'], linewidth=1))
-        
-        ax3.set_ylabel('Cross-Region Data (%)')
-        ax3.set_title('Cross-Region Data Access')
-        ax3.set_xticks(x)
-        ax3.set_xticklabels(formatted_workloads, fontsize=9)
-        ax3.legend(loc='upper right', fontsize=9)
-        ax3.grid(axis='y', linestyle='--', alpha=0.7)
-        ax3.set_ylim(0, max(max(cross_region_pcts), max(default_cross_pcts)) * 1.2)
-        
-        # Format y-axis as percentage
-        ax3.yaxis.set_major_formatter(mtick.PercentFormatter())
-        
-        # Remove top and right spines
-        ax3.spines['top'].set_visible(False)
-        ax3.spines['right'].set_visible(False)
-        
-        # Fourth subplot: Performance comparison radar chart
-        ax4 = fig.add_subplot(gs[1, 1], polar=True)
-        
-        # Calculate improvement percentages (use a simplified scale if values are very large)
-        avg_score_imp = np.mean(score_improvements)
-        avg_local_imp = np.mean(local_improvements)
-        avg_cross_red = np.mean(cross_reductions)
-        
-        # Get size-weighted improvement if available
-        avg_size_weighted_imp = 0
-        if hasattr(self, 'extracted_data') and 'overall_improvements' in self.extracted_data:
-            size_weighted_key = next((k for k in self.extracted_data['overall_improvements'].keys() 
-                                     if 'size-weighted' in k.lower()), None)
-            if size_weighted_key:
-                avg_size_weighted_imp = self.extracted_data['overall_improvements'][size_weighted_key]
-            else:
-                avg_size_weighted_imp = 50.0  # Default value
-        else:
-            avg_size_weighted_imp = 50.0
-        
-        # Define metrics for radar chart
-        metrics = ['Data\nLocality', 'Local\nData\nAccess', 'Cross-Region\nReduction', 'Size-Weighted\nScore']
-        
-        # radar chart, use normalized values on a 0-1 scale
-        max_improvement = max(avg_score_imp, avg_local_imp, avg_cross_red, avg_size_weighted_imp)
-        values = [
-            min(avg_score_imp / max_improvement, 1.0),
-            min(avg_local_imp / max_improvement, 1.0),
-            min(avg_cross_red / max_improvement, 1.0),
-            min(avg_size_weighted_imp / max_improvement, 1.0)
-        ]
-        
-        # angles for radar chart
-        num_metrics = len(metrics)
-        angles = np.linspace(0, 2*np.pi, num_metrics, endpoint=False).tolist()
-        values += values[:1]  # close the polygon
-        angles += angles[:1]  # close the angles
-        
-        ax4.plot(angles, values, 'o-', linewidth=2, color=self.colors['improvement'], 
-                markersize=6, label='Normalized Improvement')
-        ax4.fill(angles, values, alpha=0.25, color=self.colors['improvement'])
-        
-        ax4.set_xticks(angles[:-1])
-        ax4.set_xticklabels(metrics, fontsize=9)
-        
-        ax4.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-        ax4.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=8)
-        
-        for i, (angle, value, imp) in enumerate(zip(angles[:-1], values[:-1], 
-                                                  [avg_score_imp, avg_local_imp, avg_cross_red, avg_size_weighted_imp])):
-            ax4.annotate(f'{imp:.0f}%',
-                        xy=(angle, value + 0.1),
-                        ha='center', va='center',
                         fontsize=9, fontweight='bold',
                         color=self.colors['improvement'])
         
-        ax4.set_title('Average Improvements', fontsize=12)
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Data Locality Score')
+        ax1.set_title('Data Locality Score Comparison')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax1.legend(loc='upper left')
+        ax1.set_ylim(0, 1.1)
+        ax1.grid(True, alpha=0.3)
         
-        ax4.grid(True, linestyle='--', alpha=0.7)
+        # Plot 2: Size-Weighted Scores
+        size_weighted_dl = []
+        size_weighted_default = []
+        size_improvements = []
         
-        fig.suptitle('Performance Metrics Comparison', fontsize=16, fontweight='bold', y=0.98)
+        for workload in workloads:
+            comp_data = self.data['comparison'][workload]['data_locality_comparison']
+            size_weighted_dl.append(comp_data['data-locality-scheduler']['size_weighted_mean'])
+            size_weighted_default.append(comp_data['default-scheduler']['size_weighted_mean'])
+            size_improvements.append(comp_data['size_weighted_improvement_percentage'])
         
-        fig.text(0.5, 0.01, 
-                'Comprehensive comparison of key performance metrics across all tested workloads',
-                ha='center', fontsize=10, fontstyle='italic')
+        bars3 = ax2.bar(x - width/2, size_weighted_dl, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars4 = ax2.bar(x + width/2, size_weighted_default, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax2, bars3, size_weighted_dl, format_str='{:.3f}')
+        self._add_value_labels(ax2, bars4, size_weighted_default, format_str='{:.3f}')
+        
+        for i, imp in enumerate(size_improvements):
+            y_pos = max(size_weighted_dl[i], size_weighted_default[i]) + 0.05
+            ax2.annotate(f'+{imp:.0f}%',
+                        xy=(x[i], y_pos),
+                        ha='center', va='bottom',
+                        fontsize=9, fontweight='bold',
+                        color=self.colors['improvement'])
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Size-Weighted Data Locality Score')
+        ax2.set_title('Size-Weighted Data Locality Score Comparison')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.legend(loc='upper left')
+        ax2.set_ylim(0, 1.1)
+        ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.subplots_adjust(top=0.92, bottom=0.08)  # Adjust for title and caption
-        
-        plt.savefig(os.path.join(self.output_dir, filename), dpi=300)
-        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), format='pdf')
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
         plt.close()
         
-        print(f"Saved combined metrics visualization to {os.path.join(self.output_dir, filename)}")
+        print(f"Saved data locality comparison to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_local_data_access_patterns(self, filename='local_data_access_patterns.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
+        
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Local Data Access Percentage
+        local_dl = []
+        local_default = []
+        local_improvements = []
+        
+        for workload in workloads:
+            comp_data = self.data['comparison'][workload]['data_locality_comparison']
+            local_dl.append(comp_data['data-locality-scheduler']['local_data_percentage'])
+            local_default.append(comp_data['default-scheduler']['local_data_percentage'])
+            local_improvements.append(comp_data['local_data_improvement_percentage'])
+        
+        x = np.arange(len(workloads))
+        width = 0.35
+        
+        bars1 = ax1.bar(x - width/2, local_dl, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars2 = ax1.bar(x + width/2, local_default, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax1, bars1, local_dl, format_str='{:.1f}%')
+        self._add_value_labels(ax1, bars2, local_default, format_str='{:.1f}%')
+        
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Local Data Access (%)')
+        ax1.set_title('Local Data Access Percentage by Scheduler')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax1.legend(loc='upper left')
+        ax1.set_ylim(0, 100)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Cross-Region Data Access
+        cross_dl = []
+        cross_default = []
+        
+        for workload in workloads:
+            comp_data = self.data['comparison'][workload]['data_locality_comparison']
+            cross_dl.append(comp_data['data-locality-scheduler']['cross_region_percentage'])
+            cross_default.append(comp_data['default-scheduler']['cross_region_percentage'])
+        
+        bars3 = ax2.bar(x - width/2, cross_dl, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars4 = ax2.bar(x + width/2, cross_default, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax2, bars3, cross_dl, format_str='{:.1f}%')
+        self._add_value_labels(ax2, bars4, cross_default, format_str='{:.1f}%')
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Cross-Region Data Access (%)')
+        ax2.set_title('Cross-Region Data Access Percentage by Scheduler')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.legend(loc='upper right')
+        ax2.set_ylim(0, 105)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved local data access patterns to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_network_transfer_analysis(self, filename='network_transfer_analysis.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
+        
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Total Network Transfer Volume
+        network_dl = []
+        network_default = []
+        total_data = []
+        
+        for workload in workloads:
+            net_comp = self.data['comparison'][workload]['network_comparison']
+            total_mb = net_comp['data-locality-scheduler']['total_data_mb']
+            local_mb = net_comp['data-locality-scheduler']['local_data_mb']
+            network_dl.append(total_mb - local_mb)
+            
+            default_total = net_comp['default-scheduler']['total_data_mb']
+            default_local = net_comp['default-scheduler']['local_data_mb']
+            network_default.append(default_total - default_local)
+            
+            total_data.append(total_mb)
+        
+        x = np.arange(len(workloads))
+        width = 0.35
+        
+        bars1 = ax1.bar(x - width/2, network_default, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars2 = ax1.bar(x + width/2, network_dl, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        for i in range(len(workloads)):
+            if network_default[i] > 0:
+                reduction = (network_default[i] - network_dl[i]) / network_default[i] * 100
+                y_pos = max(network_default[i], network_dl[i]) + 20
+                ax1.annotate(f'-{reduction:.0f}%',
+                            xy=(x[i], y_pos),
+                            ha='center', va='bottom',
+                            fontsize=9, fontweight='bold',
+                            color=self.colors['reduction'])
+        
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Network Transfer Volume (MB)')
+        ax1.set_title('Network Data Transfer Comparison')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax1.legend(loc='upper right')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Transfer Type Distribution
+        edge_to_cloud_dl = []
+        edge_to_cloud_default = []
+        cloud_to_edge_dl = []
+        cloud_to_edge_default = []
+        
+        for workload in workloads:
+            net_comp = self.data['comparison'][workload]['network_comparison']
+            edge_to_cloud_dl.append(net_comp['data-locality-scheduler']['edge_to_cloud_data_mb'])
+            edge_to_cloud_default.append(net_comp['default-scheduler']['edge_to_cloud_data_mb'])
+            
+            metrics_key = f"{workload}_data-locality-scheduler_1"
+            if metrics_key in self.data['metrics']:
+                c2e = self.data['metrics'][metrics_key]['data_locality_metrics']['network_metrics'].get('cloud_to_edge_data_size_bytes', 0) / 1048576
+                cloud_to_edge_dl.append(c2e)
+            else:
+                cloud_to_edge_dl.append(0)
+            
+            metrics_key = f"{workload}_default-scheduler_1"
+            if metrics_key in self.data['metrics']:
+                c2e = self.data['metrics'][metrics_key]['data_locality_metrics']['network_metrics'].get('cloud_to_edge_data_size_bytes', 0) / 1048576
+                cloud_to_edge_default.append(c2e)
+            else:
+                cloud_to_edge_default.append(0)
+        
+        bar_width = 0.2
+        r1 = np.arange(len(workloads))
+        r2 = [x + bar_width for x in r1]
+        r3 = [x + bar_width for x in r2]
+        r4 = [x + bar_width for x in r3]
+        
+        ax2.bar(r1, edge_to_cloud_dl, bar_width, label='E→C (DL)', 
+                color=self.colors['edge-to-cloud'], edgecolor='black', linewidth=0.8)
+        ax2.bar(r2, edge_to_cloud_default, bar_width, label='E→C (Default)', 
+                color=self.colors['edge-to-cloud'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        ax2.bar(r3, cloud_to_edge_dl, bar_width, label='C→E (DL)', 
+                color=self.colors['cloud-to-edge'], edgecolor='black', linewidth=0.8)
+        ax2.bar(r4, cloud_to_edge_default, bar_width, label='C→E (Default)', 
+                color=self.colors['cloud-to-edge'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Transfer Volume (MB)')
+        ax2.set_title('Edge-Cloud Transfer Patterns')
+        ax2.set_xticks([r + 1.5 * bar_width for r in range(len(workloads))])
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.legend(loc='upper right', ncol=2)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved network transfer analysis to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_scheduling_latency_analysis(self, filename='scheduling_latency_analysis.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
+        
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Average Scheduling Latency with clear value labels
+        latency_dl = []
+        latency_default = []
+        latency_min_dl = []
+        latency_max_dl = []
+        latency_min_default = []
+        latency_max_default = []
+        
+        for workload in workloads:
+            lat_comp = self.data['comparison'][workload]['scheduling_latency_comparison']
+            latency_dl.append(lat_comp['data-locality-scheduler']['mean'])
+            latency_default.append(lat_comp['default-scheduler']['mean'])
+            latency_min_dl.append(lat_comp['data-locality-scheduler']['min'])
+            latency_max_dl.append(lat_comp['data-locality-scheduler']['max'])
+            latency_min_default.append(lat_comp['default-scheduler']['min'])
+            latency_max_default.append(lat_comp['default-scheduler']['max'])
+        
+        x = np.arange(len(workloads))
+        width = 0.35
+        
+        errors_dl = [(np.array(latency_dl) - np.array(latency_min_dl)).tolist(),
+                     (np.array(latency_max_dl) - np.array(latency_dl)).tolist()]
+        
+        bars1 = ax1.bar(x - width/2, latency_dl, width, yerr=errors_dl,
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8, capsize=5)
+        
+        default_display = [0.1 if v == 0 else v for v in latency_default]
+        bars2 = ax1.bar(x + width/2, default_display, width,
+                        label='Default Scheduler (baseline)',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8, alpha=0.3)
+        
+        for i, (bar, value) in enumerate(zip(bars1, latency_dl)):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.2,
+                    f'{value:.1f}s', ha='center', va='bottom', 
+                    fontsize=10, fontweight='bold')
+            
+            if latency_min_dl[i] != latency_max_dl[i]:
+                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.8,
+                        f'({latency_min_dl[i]:.0f}-{latency_max_dl[i]:.0f})',
+                        ha='center', va='bottom', fontsize=8, color='gray')
+        
+        for bar in bars2:
+            ax1.text(bar.get_x() + bar.get_width()/2., 0.15,
+                    '~0s', ha='center', va='bottom', 
+                    fontsize=9, color='gray')
+        
+        ax1.text(0.02, 0.98, 
+                'Data locality scheduler performs\nadditional analysis for optimal placement',
+                transform=ax1.transAxes, ha='left', va='top',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.3),
+                fontsize=10)
+        
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Scheduling Latency (seconds)')
+        ax1.set_title('Average Scheduling Latency Comparison')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax1.legend(loc='upper left')
+        ax1.set_ylim(0, max(latency_max_dl) + 2)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Latency overhead analysis
+        overhead_percentages = []
+        overhead_seconds = []
+        
+        for i, workload in enumerate(workloads):
+            # Calculate the overhead in seconds
+            overhead = latency_dl[i] - latency_default[i]
+            overhead_seconds.append(overhead)
+            
+            # Calculate as percentage of total workload duration
+            workload_key = f"{workload}_data-locality-scheduler_1"
+            if workload_key in self.data['workloads']:
+                total_duration = self.data['workloads'][workload_key].get('duration', 1)
+                overhead_pct = (overhead / total_duration) * 100
+                overhead_percentages.append(overhead_pct)
+            else:
+                overhead_percentages.append(0)
+        
+        bars3 = ax2.bar(x, overhead_seconds, width,
+                        color=self.colors['improvement'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        for i, (bar, value, pct) in enumerate(zip(bars3, overhead_seconds, overhead_percentages)):
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                    f'{value:.1f}s', ha='center', va='bottom',
+                    fontsize=10, fontweight='bold')
+            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                    f'({pct:.1f}%)', ha='center', va='bottom',
+                    fontsize=8, color='gray')
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Scheduling Overhead (seconds)')
+        ax2.set_title('Scheduling Overhead Analysis')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.grid(True, alpha=0.3)
+        
+        avg_overhead = np.mean(overhead_seconds)
+        avg_overhead_pct = np.mean(overhead_percentages)
+        ax2.text(0.98, 0.98, 
+                f'Average overhead: {avg_overhead:.1f}s ({avg_overhead_pct:.1f}%)',
+                transform=ax2.transAxes, ha='right', va='top',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.5),
+                fontsize=10)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved scheduling latency analysis to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_node_placement_distribution(self, filename='node_placement_distribution.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
+        
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Edge vs Cloud Placement Count
+        edge_dl = []
+        cloud_dl = []
+        edge_default = []
+        cloud_default = []
+        
+        for workload in workloads:
+            node_comp = self.data['comparison'][workload]['node_distribution_comparison']
+            edge_dl.append(node_comp['data-locality-scheduler']['edge_placements'])
+            cloud_dl.append(node_comp['data-locality-scheduler']['cloud_placements'])
+            edge_default.append(node_comp['default-scheduler']['edge_placements'])
+            cloud_default.append(node_comp['default-scheduler']['cloud_placements'])
+        
+        x = np.arange(len(workloads))
+        width = 0.35
+        
+        bars1 = ax1.bar(x - width/2, edge_dl, width, label='Edge (DL)', 
+                        color=self.colors['edge'], edgecolor='black', linewidth=0.8)
+        bars2 = ax1.bar(x - width/2, cloud_dl, width, bottom=edge_dl, label='Cloud (DL)', 
+                        color=self.colors['cloud'], edgecolor='black', linewidth=0.8)
+        
+        bars3 = ax1.bar(x + width/2, edge_default, width, label='Edge (Default)', 
+                        color=self.colors['edge'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        bars4 = ax1.bar(x + width/2, cloud_default, width, bottom=edge_default, label='Cloud (Default)', 
+                        color=self.colors['cloud'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Number of Pod Placements')
+        ax1.set_title('Pod Placement Distribution by Node Type')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax1.legend(loc='upper left', ncol=2)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Placement Percentage Distribution
+        edge_pct_dl = []
+        cloud_pct_dl = []
+        edge_pct_default = []
+        cloud_pct_default = []
+        
+        for workload in workloads:
+            node_comp = self.data['comparison'][workload]['node_distribution_comparison']
+            edge_pct_dl.append(node_comp['data-locality-scheduler']['edge_percentage'])
+            cloud_pct_dl.append(node_comp['data-locality-scheduler']['cloud_percentage'])
+            edge_pct_default.append(node_comp['default-scheduler']['edge_percentage'])
+            cloud_pct_default.append(node_comp['default-scheduler']['cloud_percentage'])
+        
+        bar_width = 0.2
+        r1 = np.arange(len(workloads))
+        r2 = [x + bar_width for x in r1]
+        r3 = [x + bar_width for x in r2]
+        r4 = [x + bar_width for x in r3]
+        
+        ax2.bar(r1, edge_pct_dl, bar_width, label='Edge % (DL)', 
+                color=self.colors['edge'], edgecolor='black', linewidth=0.8)
+        ax2.bar(r2, edge_pct_default, bar_width, label='Edge % (Default)', 
+                color=self.colors['edge'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        ax2.bar(r3, cloud_pct_dl, bar_width, label='Cloud % (DL)', 
+                color=self.colors['cloud'], edgecolor='black', linewidth=0.8)
+        ax2.bar(r4, cloud_pct_default, bar_width, label='Cloud % (Default)', 
+                color=self.colors['cloud'], alpha=0.6, edgecolor='black', linewidth=0.8)
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Placement Percentage (%)')
+        ax2.set_title('Node Type Utilization Percentage')
+        ax2.set_xticks([r + 1.5 * bar_width for r in range(len(workloads))])
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.legend(loc='upper right', ncol=2)
+        ax2.set_ylim(0, 105)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved node placement distribution to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_data_access_heatmap(self, filename='data_access_heatmap.png'):
+        if not self.data or 'metrics' not in self.data:
+            print("No metrics data available")
+            return
+        
+        workloads = []
+        schedulers = ['data-locality-scheduler', 'default-scheduler']
+        access_types = ['Local', 'Same Zone', 'Same Region', 'Cross Region']
+        
+        data_matrix_dl = []
+        data_matrix_default = []
+        
+        for key in self.data['metrics'].keys():
+            workload = key.split('_')[0]
+            if workload not in workloads:
+                workloads.append(workload)
+        
+        for workload in workloads:
+            key = f"{workload}_data-locality-scheduler_1"
+            if key in self.data['metrics']:
+                metrics = self.data['metrics'][key]['data_locality_metrics']
+                total_refs = metrics['total_refs']
+                if total_refs > 0:
+                    row = [
+                        metrics['local_refs'] / total_refs * 100,
+                        metrics['same_zone_refs'] / total_refs * 100,
+                        metrics['same_region_refs'] / total_refs * 100,
+                        metrics['cross_region_refs'] / total_refs * 100
+                    ]
+                else:
+                    row = [0, 0, 0, 0]
+                data_matrix_dl.append(row)
+            
+            key = f"{workload}_default-scheduler_1"
+            if key in self.data['metrics']:
+                metrics = self.data['metrics'][key]['data_locality_metrics']
+                total_refs = metrics['total_refs']
+                if total_refs > 0:
+                    row = [
+                        metrics['local_refs'] / total_refs * 100,
+                        metrics['same_zone_refs'] / total_refs * 100,
+                        metrics['same_region_refs'] / total_refs * 100,
+                        metrics['cross_region_refs'] / total_refs * 100
+                    ]
+                else:
+                    row = [0, 0, 0, 0]
+                data_matrix_default.append(row)
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 8), constrained_layout=True)
+        
+        # Plot 1: Data Locality Scheduler Heatmap
+        data_matrix_dl = np.array(data_matrix_dl).T
+        im1 = ax1.imshow(data_matrix_dl, cmap='YlOrRd', aspect='auto', vmin=0, vmax=100)
+        
+        ax1.set_xticks(np.arange(len(workloads)))
+        ax1.set_yticks(np.arange(len(access_types)))
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], rotation=45, ha='right')
+        ax1.set_yticklabels(access_types)
+        
+        for i in range(len(access_types)):
+            for j in range(len(workloads)):
+                value = data_matrix_dl[i, j]
+                if value > 0:
+                    text = ax1.text(j, i, f'{value:.1f}%',
+                                   ha="center", va="center", color="black" if value < 50 else "white",
+                                   fontsize=9)
+        
+        ax1.set_title('Data Access Patterns - Data Locality Scheduler')
+        
+        # Plot 2: Default Scheduler Heatmap
+        data_matrix_default = np.array(data_matrix_default).T
+        im2 = ax2.imshow(data_matrix_default, cmap='YlOrRd', aspect='auto', vmin=0, vmax=100)
+        
+        ax2.set_xticks(np.arange(len(workloads)))
+        ax2.set_yticks(np.arange(len(access_types)))
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], rotation=45, ha='right')
+        ax2.set_yticklabels(access_types)
+        
+        for i in range(len(access_types)):
+            for j in range(len(workloads)):
+                value = data_matrix_default[i, j]
+                if value > 0:
+                    text = ax2.text(j, i, f'{value:.1f}%',
+                                   ha="center", va="center", color="black" if value < 50 else "white",
+                                   fontsize=9)
+        
+        ax2.set_title('Data Access Patterns - Default Scheduler')
+        
+        cbar1 = plt.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+        cbar1.set_label('Percentage (%)', rotation=270, labelpad=20)
+        
+        cbar2 = plt.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+        cbar2.set_label('Percentage (%)', rotation=270, labelpad=20)
+        
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved data access heatmap to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_improvement_summary(self, filename='improvement_summary.png'):
+        if not self.data or 'comparison' not in self.data:
+            print("No comparison data available")
+            return
+        
+        overall = self.data['comparison']['overall_averages']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Overall Improvement Metrics
+        metrics = ['Data Locality', 'Size-Weighted', 'Local Data Access', 'Cross-Region\nReduction']
+        values = [
+            overall['data_locality_improvement'],
+            overall['size_weighted_improvement'],
+            overall['local_data_improvement'],
+            overall['cross_region_reduction']
+        ]
+        
+        colors = [self.colors['improvement'] if v >= 0 else self.colors['reduction'] for v in values]
+        
+        bars = ax1.bar(range(len(metrics)), values, color=colors, edgecolor='black', linewidth=0.8)
+        
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 20,
+                    f'{value:.0f}%', ha='center', va='bottom', fontweight='bold')
+        
+        ax1.set_xlabel('Metric')
+        ax1.set_ylabel('Improvement Percentage (%)')
+        ax1.set_title('Overall Performance Improvements')
+        ax1.set_xticks(range(len(metrics)))
+        ax1.set_xticklabels(metrics)
+        ax1.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+        ax1.grid(True, alpha=0.3)
+        ax1.set_ylim(min(0, min(values) - 100), max(values) + 200)
+        
+        # Plot 2: Enhanced Multi-Metric Radar Chart
+        workloads = list(self.data['comparison'].keys())
+        workloads = [w for w in workloads if w != 'overall_averages']
+        
+        categories = [self._format_workload_name(w).replace('\n', ' ') for w in workloads]
+        
+        metrics_data = {
+            'Data Locality': [],
+            'Network Reduction': [],
+            'Local Access': [],
+            'Cloud Utilization': []
+        }
+        
+        for workload in workloads:
+            comp = self.data['comparison'][workload]
+            
+            # Data locality improvement (normalized to 0-100 scale)
+            dl_imp = min(comp['data_locality_comparison']['improvement_percentage'], 500) / 5
+            metrics_data['Data Locality'].append(dl_imp)
+            
+            # Network reduction (normalized to 0-100 scale)
+            net_red = comp['network_comparison']['transfer_reduction_percentage']
+            metrics_data['Network Reduction'].append(net_red)
+            
+            # Local data access improvement (normalized to 0-100 scale)
+            local_imp = min(comp['data_locality_comparison']['local_data_improvement_percentage'], 500) / 5
+            metrics_data['Local Access'].append(local_imp)
+            
+            # Cloud utilization improvement (can be negative, normalize differently)
+            cloud_util = comp['node_distribution_comparison']['cloud_utilization_improvement_percentage']
+            cloud_util_norm = 50 + (cloud_util / 4)  # Center at 50, scale down
+            metrics_data['Cloud Utilization'].append(max(0, min(100, cloud_util_norm)))
+        
+        angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+        
+        ax2 = plt.subplot(122, projection='polar')
+        
+        colors_radar = ['#009499', '#2ca02c', '#ff7f0e', '#1f77b4']
+        for i, (metric, values) in enumerate(metrics_data.items()):
+            values_plot = values + values[:1] 
+            angles_plot = angles + angles[:1]
+            
+            ax2.plot(angles_plot, values_plot, 'o-', linewidth=2, 
+                    label=metric, color=colors_radar[i])
+            ax2.fill(angles_plot, values_plot, alpha=0.15, color=colors_radar[i])
+        
+        ax2.set_xticks(angles)
+        ax2.set_xticklabels(categories, size=10)
+        ax2.set_ylim(0, 100)
+        ax2.set_yticks([20, 40, 60, 80, 100])
+        ax2.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], size=8)
+        ax2.set_title('Multi-Metric Performance Improvements by Workload', 
+                     pad=20, size=13)
+        
+        ax2.grid(True, linestyle='--', alpha=0.7)
+        
+        ax2.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), 
+                  frameon=True, fancybox=True, shadow=True)
+        
+        for angle in angles:
+            ax2.plot([angle, angle], [0, 100], 'k-', linewidth=0.5, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved improvement summary to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_workload_characteristics(self, filename='workload_characteristics.png'):
+        if not self.data or 'metrics' not in self.data:
+            print("No metrics data available")
+            return
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        workloads = []
+        total_data_sizes = []
+        pod_counts = []
+        avg_transfer_sizes = []
+        
+        for key in self.data['metrics'].keys():
+            if 'data-locality-scheduler' in key:
+                workload = key.split('_')[0]
+                if workload not in workloads:
+                    workloads.append(workload)
+                    
+                    total_size = self.data['metrics'][key]['data_locality_metrics']['total_data_size'] / 1048576  # MB
+                    total_data_sizes.append(total_size)
+                    
+                    pod_count = len(self.data['metrics'][key]['pod_metrics'])
+                    pod_counts.append(pod_count)
+                    
+                    network_metrics = self.data['metrics'][key]['data_locality_metrics']['network_metrics']
+                    total_transfers = (network_metrics.get('edge_to_cloud_transfers', 0) + 
+                                     network_metrics.get('cloud_to_edge_transfers', 0))
+                    if total_transfers > 0:
+                        avg_transfer = total_size / total_transfers
+                    else:
+                        avg_transfer = 0
+                    avg_transfer_sizes.append(avg_transfer)
+        
+        # Plot 1: Workload Scale Characteristics
+        x = np.arange(len(workloads))
+        width = 0.35
+        
+        # Normalize pod counts for dual axis
+        ax1_twin = ax1.twinx()
+        
+        bars1 = ax1.bar(x - width/2, total_data_sizes, width, 
+                        label='Total Data (MB)', color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        bars2 = ax1_twin.bar(x + width/2, pod_counts, width, 
+                            label='Pod Count', color=self.colors['edge'], 
+                            edgecolor='black', linewidth=0.8)
+        
+        ax1.set_xlabel('Workload Type')
+        ax1.set_ylabel('Total Data Size (MB)', color=self.colors['data-locality-scheduler'])
+        ax1_twin.set_ylabel('Number of Pods', color=self.colors['edge'])
+        ax1.set_title('Workload Scale Characteristics')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        
+        ax1.tick_params(axis='y', labelcolor=self.colors['data-locality-scheduler'])
+        ax1_twin.tick_params(axis='y', labelcolor=self.colors['edge'])
+        
+        ax1.legend(loc='upper left')
+        ax1_twin.legend(loc='upper right')
+        
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Data Movement Efficiency
+        # Calculate data movement efficiency for each workload
+        movement_efficiency_dl = []
+        movement_efficiency_default = []
+        
+        for workload in workloads:
+            # Data locality scheduler
+            key_dl = f"{workload}_data-locality-scheduler_1"
+            if key_dl in self.data['metrics']:
+                net_metrics = self.data['metrics'][key_dl]['data_locality_metrics']['network_metrics']
+                total_data = net_metrics['total_data_size_bytes'] / 1048576
+                local_data = net_metrics['local_data_size_bytes'] / 1048576
+                efficiency = (local_data / total_data * 100) if total_data > 0 else 0
+                movement_efficiency_dl.append(efficiency)
+            else:
+                movement_efficiency_dl.append(0)
+            
+            # Default scheduler
+            key_default = f"{workload}_default-scheduler_1"
+            if key_default in self.data['metrics']:
+                net_metrics = self.data['metrics'][key_default]['data_locality_metrics']['network_metrics']
+                total_data = net_metrics['total_data_size_bytes'] / 1048576
+                local_data = net_metrics['local_data_size_bytes'] / 1048576
+                efficiency = (local_data / total_data * 100) if total_data > 0 else 0
+                movement_efficiency_default.append(efficiency)
+            else:
+                movement_efficiency_default.append(0)
+        
+        bars3 = ax2.bar(x - width/2, movement_efficiency_dl, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars4 = ax2.bar(x + width/2, movement_efficiency_default, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax2, bars3, movement_efficiency_dl, format_str='{:.1f}%', offset=2)
+        self._add_value_labels(ax2, bars4, movement_efficiency_default, format_str='{:.1f}%', offset=2)
+        
+        ax2.set_xlabel('Workload Type')
+        ax2.set_ylabel('Data Movement Efficiency (%)')
+        ax2.set_title('Data Movement Efficiency Comparison')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels([self._format_workload_name(w) for w in workloads], 
+                           rotation=0, ha='center')
+        ax2.legend(loc='upper left')
+        ax2.set_ylim(0, 105)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved workload characteristics to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_pod_placement_timeline(self, filename='pod_placement_timeline.png'):
+        if not self.data or 'workloads' not in self.data:
+            print("No workload timeline data available")
+            return
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+        
+        dl_timelines = []
+        default_timelines = []
+        workload_names = []
+        
+        for workload_key, workload_data in self.data['workloads'].items():
+            workload = workload_key.split('_')[0]
+            scheduler = workload_key.split('_')[1]
+            
+            if 'start_time' in workload_data and 'completion_time' in workload_data:
+                start = workload_data['start_time']
+                end = workload_data['completion_time']
+                duration = workload_data['duration']
+                
+                if scheduler == 'data-locality-scheduler':
+                    dl_timelines.append({
+                        'workload': workload,
+                        'start': start,
+                        'end': end,
+                        'duration': duration
+                    })
+                else:
+                    default_timelines.append({
+                        'workload': workload,
+                        'start': start,
+                        'end': end,
+                        'duration': duration
+                    })
+                
+                if workload not in workload_names:
+                    workload_names.append(workload)
+        
+        # Sort by start time
+        dl_timelines.sort(key=lambda x: x['start'])
+        default_timelines.sort(key=lambda x: x['start'])
+        
+        # Calculate relative times
+        if dl_timelines:
+            min_time = min([t['start'] for t in dl_timelines + default_timelines])
+            
+            for i, timeline in enumerate(dl_timelines):
+                start_rel = timeline['start'] - min_time
+                duration = timeline['duration']
+                workload = timeline['workload']
+                
+                color_idx = workload_names.index(workload) % len(plt.cm.tab10.colors)
+                color = plt.cm.tab10.colors[color_idx]
+                
+                rect = plt.Rectangle((start_rel, i), duration, 0.8,
+                                   facecolor=color, edgecolor='black', linewidth=1)
+                ax1.add_patch(rect)
+                
+                ax1.text(start_rel + duration/2, i + 0.4, 
+                        self._format_workload_name(workload).replace('\n', ' '),
+                        ha='center', va='center', fontsize=9)
+            
+            ax1.set_ylim(-0.5, len(dl_timelines))
+            ax1.set_ylabel('Workload Instance')
+            ax1.set_title('Scheduling Timeline - Data Locality Scheduler')
+            ax1.grid(True, alpha=0.3, axis='x')
+            
+            for i, timeline in enumerate(default_timelines):
+                start_rel = timeline['start'] - min_time
+                duration = timeline['duration']
+                workload = timeline['workload']
+                
+                color_idx = workload_names.index(workload) % len(plt.cm.tab10.colors)
+                color = plt.cm.tab10.colors[color_idx]
+                
+                rect = plt.Rectangle((start_rel, i), duration, 0.8,
+                                   facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
+                ax2.add_patch(rect)
+                
+                ax2.text(start_rel + duration/2, i + 0.4, 
+                        self._format_workload_name(workload).replace('\n', ' '),
+                        ha='center', va='center', fontsize=9)
+            
+            ax2.set_ylim(-0.5, len(default_timelines))
+            ax2.set_xlabel('Time (seconds)')
+            ax2.set_ylabel('Workload Instance')
+            ax2.set_title('Scheduling Timeline - Default Scheduler')
+            ax2.grid(True, alpha=0.3, axis='x')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved pod placement timeline to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_network_topology_impact(self, filename='network_topology_impact.png'):
+        if not self.data or 'metrics' not in self.data:
+            print("No metrics data available")
+            return
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        transfer_types = ['Local', 'Same Region', 'Cross Region']
+        dl_transfers = {'Local': 0, 'Same Region': 0, 'Cross Region': 0}
+        default_transfers = {'Local': 0, 'Same Region': 0, 'Cross Region': 0}
+        
+        for key, metrics in self.data['metrics'].items():
+            if 'data_locality_metrics' in metrics:
+                net_metrics = metrics['data_locality_metrics']['network_metrics']
+                
+                if 'data-locality-scheduler' in key:
+                    dl_transfers['Local'] += net_metrics['local_data_size_bytes'] / 1048576
+                    dl_transfers['Same Region'] += net_metrics['same_region_data_size_bytes'] / 1048576
+                    dl_transfers['Cross Region'] += net_metrics['cross_region_data_size_bytes'] / 1048576
+                else:
+                    default_transfers['Local'] += net_metrics['local_data_size_bytes'] / 1048576
+                    default_transfers['Same Region'] += net_metrics['same_region_data_size_bytes'] / 1048576
+                    default_transfers['Cross Region'] += net_metrics['cross_region_data_size_bytes'] / 1048576
+        
+        # Plot 1: Transfer Volume by Distance
+        x = np.arange(len(transfer_types))
+        width = 0.35
+        
+        dl_values = [dl_transfers[t] for t in transfer_types]
+        default_values = [default_transfers[t] for t in transfer_types]
+        
+        bars1 = ax1.bar(x - width/2, dl_values, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars2 = ax1.bar(x + width/2, default_values, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        self._add_value_labels(ax1, bars1, dl_values, format_str='{:.0f} MB')
+        self._add_value_labels(ax1, bars2, default_values, format_str='{:.0f} MB')
+        
+        ax1.set_xlabel('Transfer Distance')
+        ax1.set_ylabel('Total Data Volume (MB)')
+        ax1.set_title('Data Transfer Volume by Network Distance')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(transfer_types)
+        ax1.legend(loc='upper right')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Network Cost Model (simplified)
+        # Assume costs: Local=1, Same Region=5, Cross Region=10
+        costs = {'Local': 1, 'Same Region': 5, 'Cross Region': 10}
+        
+        dl_cost = sum(dl_transfers[t] * costs[t] for t in transfer_types)
+        default_cost = sum(default_transfers[t] * costs[t] for t in transfer_types)
+        
+        dl_cost_breakdown = [dl_transfers[t] * costs[t] for t in transfer_types]
+        default_cost_breakdown = [default_transfers[t] * costs[t] for t in transfer_types]
+        
+        colors_cost = [self.colors['local'], self.colors['same-region'], self.colors['cross-region']]
+        
+        bottom_dl = 0
+        bottom_default = 0
+        
+        for i, (t, color) in enumerate(zip(transfer_types, colors_cost)):
+            ax2.bar(0, dl_cost_breakdown[i], width, bottom=bottom_dl, 
+                   color=color, edgecolor='black', linewidth=0.8, label=t if i == 0 else "")
+            ax2.bar(1, default_cost_breakdown[i], width, bottom=bottom_default, 
+                   color=color, edgecolor='black', linewidth=0.8, alpha=0.7)
+            
+            # Add cost labels
+            if dl_cost_breakdown[i] > 0:
+                ax2.text(0, bottom_dl + dl_cost_breakdown[i]/2, f'{dl_cost_breakdown[i]:.0f}',
+                        ha='center', va='center', fontsize=9, color='white' if i == 2 else 'black')
+            if default_cost_breakdown[i] > 0:
+                ax2.text(1, bottom_default + default_cost_breakdown[i]/2, f'{default_cost_breakdown[i]:.0f}',
+                        ha='center', va='center', fontsize=9, color='white' if i == 2 else 'black')
+            
+            bottom_dl += dl_cost_breakdown[i]
+            bottom_default += default_cost_breakdown[i]
+        
+        ax2.text(0, bottom_dl + 50, f'Total: {dl_cost:.0f}', ha='center', fontweight='bold')
+        ax2.text(1, bottom_default + 50, f'Total: {default_cost:.0f}', ha='center', fontweight='bold')
+        
+        reduction = (default_cost - dl_cost) / default_cost * 100 if default_cost > 0 else 0
+        ax2.text(0.5, max(bottom_dl, bottom_default) + 100, f'Cost Reduction: {reduction:.1f}%',
+                ha='center', fontsize=12, fontweight='bold', color=self.colors['improvement'])
+        
+        ax2.set_xlabel('Scheduler')
+        ax2.set_ylabel('Network Cost (Arbitrary Units)')
+        ax2.set_title('Estimated Network Cost Comparison')
+        ax2.set_xticks([0, 1])
+        ax2.set_xticklabels(['Data Locality', 'Default'])
+        ax2.set_xlim(-0.5, 1.5)
+        
+        legend_elements = [plt.Rectangle((0,0),1,1, facecolor=c, edgecolor='black') 
+                          for c in colors_cost]
+        ax2.legend(legend_elements, transfer_types, loc='upper right')
+        ax2.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved network topology impact to {os.path.join(self.output_dir, filename)}")
+    
+    def visualize_per_pod_analysis(self, filename='per_pod_analysis.png'):
+        if not self.data or 'metrics' not in self.data:
+            print("No metrics data available")
+            return
+        
+        workload = 'ml-training-pipeline'  
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        
+        dl_pods = []
+        default_pods = []
+        
+        key_dl = f"{workload}_data-locality-scheduler_1"
+        key_default = f"{workload}_default-scheduler_1"
+        
+        if key_dl in self.data['metrics']:
+            dl_pods = self.data['metrics'][key_dl]['pod_metrics']
+        
+        if key_default in self.data['metrics']:
+            default_pods = self.data['metrics'][key_default]['pod_metrics']
+        
+        # Plot 1: Pod Placement by Node Type
+        pod_names = []
+        dl_node_types = []
+        default_node_types = []
+        
+        for pod in dl_pods:
+            base_name = pod['pod_name'].split('-6bba97c0-')[0]
+            if base_name not in pod_names:
+                pod_names.append(base_name)
+        
+        for pod_name in pod_names:
+            for pod in dl_pods:
+                if pod_name in pod['pod_name']:
+                    dl_node_types.append(pod['node_type'])
+                    break
+            
+            for pod in default_pods:
+                if pod_name in pod['pod_name']:
+                    default_node_types.append(pod['node_type'])
+                    break
+        
+        y_pos = np.arange(len(pod_names))
+        
+        node_type_map = {'edge': 0, 'cloud': 1}
+        dl_values = [node_type_map.get(nt, 0) for nt in dl_node_types]
+        default_values = [node_type_map.get(nt, 0) for nt in default_node_types]
+        
+        ax1.scatter(dl_values, y_pos, s=100, c=self.colors['data-locality-scheduler'], 
+                   label='Data Locality', edgecolors='black', linewidths=1, zorder=3)
+        ax1.scatter(default_values, y_pos + 0.1, s=100, c=self.colors['default-scheduler'], 
+                   label='Default', edgecolors='black', linewidths=1, marker='s', zorder=3)
+        
+        for i in range(len(y_pos)):
+            if dl_values[i] != default_values[i]:
+                ax1.plot([dl_values[i], default_values[i]], [y_pos[i], y_pos[i] + 0.1], 
+                        'k--', alpha=0.3, zorder=1)
+        
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels([name.replace('-', '\n') for name in pod_names])
+        ax1.set_xticks([0, 1])
+        ax1.set_xticklabels(['Edge', 'Cloud'])
+        ax1.set_xlabel('Node Type')
+        ax1.set_title(f'Pod Placement Decisions - {self._format_workload_name(workload)}')
+        ax1.legend(loc='upper right')
+        ax1.grid(True, alpha=0.3, axis='x')
+        ax1.set_xlim(-0.5, 1.5)
+        
+        dl_scores = []
+        default_scores = []
+        pod_labels = []
+        
+        for pod_name in pod_names:
+            for pod in dl_pods:
+                if pod_name in pod['pod_name']:
+                    dl_scores.append(pod['data_locality']['score'])
+                    break
+            
+            for pod in default_pods:
+                if pod_name in pod['pod_name']:
+                    default_scores.append(pod['data_locality']['score'])
+                    break
+            
+            pod_labels.append(pod_name.split('-')[-1])
+        
+        x = np.arange(len(pod_labels))
+        width = 0.35
+        
+        bars1 = ax2.bar(x - width/2, dl_scores, width, 
+                        label='Data Locality Scheduler',
+                        color=self.colors['data-locality-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        bars2 = ax2.bar(x + width/2, default_scores, width, 
+                        label='Default Scheduler',
+                        color=self.colors['default-scheduler'], 
+                        edgecolor='black', linewidth=0.8)
+        
+        ax2.set_xlabel('Pod')
+        ax2.set_ylabel('Data Locality Score')
+        ax2.set_title('Per-Pod Data Locality Scores')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(pod_labels, rotation=45, ha='right')
+        ax2.legend(loc='upper left')
+        ax2.set_ylim(0, 1.1)
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_dir, filename.replace('.png', '.pdf')), 
+                   format='pdf', bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved per-pod analysis to {os.path.join(self.output_dir, filename)}")
     
     def generate_all_visualizations(self):
-        self.visualize_overall_data_locality()
-        self.visualize_local_data_access()
-        self.visualize_data_distribution()
-        self.visualize_network_transfer_reduction()
-        self.visualize_network_efficiency()
-        self.visualize_improvement_heatmap()
-        self.visualize_overall_improvements()
-        self.visualize_edge_cloud_distribution()
-        self.visualize_combined_metrics()
+        print("Generating visualizations...")
         
-        print(f"All visualizations saved to {self.output_dir}")
+        self.visualize_data_locality_comparison()
+        self.visualize_local_data_access_patterns()
+        self.visualize_network_transfer_analysis()
+        self.visualize_scheduling_latency_analysis()
+        self.visualize_node_placement_distribution()
+        
+        self.visualize_data_access_heatmap()
+        self.visualize_improvement_summary()
+        self.visualize_workload_characteristics()
+        self.visualize_pod_placement_timeline()
+        self.visualize_network_topology_impact()
+        self.visualize_per_pod_analysis()
+        
+        print(f"\nAll visualizations saved to {self.output_dir}")
+        print("Generated files:")
+        print("- data_locality_comparison.png/pdf")
+        print("- local_data_access_patterns.png/pdf")
+        print("- network_transfer_analysis.png/pdf")
+        print("- scheduling_latency_analysis.png/pdf")
+        print("- node_placement_distribution.png/pdf")
+        print("- data_access_heatmap.png/pdf")
+        print("- improvement_summary.png/pdf")
+        print("- workload_characteristics.png/pdf")
+        print("- pod_placement_timeline.png/pdf")
+        print("- network_topology_impact.png/pdf")
+        print("- per_pod_analysis.png/pdf")
 
 
 def main():
@@ -1544,14 +1383,17 @@ def main():
                         help='Specific JSON results file to use')
     parser.add_argument('--summary-file', type=str, default=None,
                         help='Specific CSV summary file to use')
-    parser.add_argument('--report-file', type=str, default=None,
-                        help='Specific Markdown report file to use')
     
     args = parser.parse_args()
     
     visualizer = BenchmarkVisualizer(results_dir=args.results_dir, output_dir=args.output_dir)
-    visualizer.load_data(results_file=args.results_file, summary_file=args.summary_file, report_file=args.report_file)
-    visualizer.generate_all_visualizations()
+    
+    try:
+        visualizer.load_data(results_file=args.results_file, summary_file=args.summary_file)
+        visualizer.generate_all_visualizations()
+    except Exception as e:
+        print(f"Error generating visualizations: {e}")
+        raise
 
 
 if __name__ == '__main__':
