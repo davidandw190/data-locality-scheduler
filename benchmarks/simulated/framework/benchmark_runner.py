@@ -18,7 +18,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("benchmarks/results/benchmark_run.log")
+        logging.FileHandler("benchmarks/simulated/results/benchmark_run.log")
     ]
 )
 logger = logging.getLogger("benchmark-runner")
