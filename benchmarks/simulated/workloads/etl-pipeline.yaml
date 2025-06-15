@@ -7,41 +7,40 @@ metadata:
     workload: etl-pipeline
     stage: extract
   annotations:
-    data.scheduler.thesis/input-1: "region1-bucket/raw-data-batch.csv,104857600,5,9,csv"
-    data.scheduler.thesis/output-1: "intermediate/extracted-region1.parquet,52428800,0,8,parquet"
+    data.scheduler.thesis/input-1: "region1-bucket/raw-data-batch.csv,104857600"
+    data.scheduler.thesis/output-1: "intermediate/extracted-region1.parquet,52428800"
     scheduler.thesis/prefer-region: "region-1"
-    scheduler.thesis/prefer-edge: "true"
     scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-extractor
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-extraction"
-        - name: WORKLOAD_ACTION
-          value: "extract"
-        - name: WORKLOAD_INTENSITY
-          value: "medium"
-        - name: WORKLOAD_DURATION
-          value: "50"
-      resources:
-        requests:
-          memory: "512Mi"
-          cpu: "400m"
-        limits:
-          memory: "1Gi"
-          cpu: "800m"
+  - name: etl-extractor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-extraction"
+    - name: WORKLOAD_ACTION
+      value: "extract"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: WORKLOAD_DURATION
+      value: "50"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -53,41 +52,40 @@ metadata:
     workload: etl-pipeline
     stage: extract
   annotations:
-    data.scheduler.thesis/input-1: "region2-bucket/raw-data-batch.csv,104857600,5,9,csv"
-    data.scheduler.thesis/output-1: "intermediate/extracted-region2.parquet,52428800,0,8,parquet"
+    data.scheduler.thesis/input-1: "region2-bucket/raw-data-batch.csv,104857600"
+    data.scheduler.thesis/output-1: "intermediate/extracted-region2.parquet,52428800"
     scheduler.thesis/prefer-region: "region-2"
-    scheduler.thesis/prefer-edge: "true"
     scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-extractor
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-extraction"
-        - name: WORKLOAD_ACTION
-          value: "extract"
-        - name: WORKLOAD_INTENSITY
-          value: "medium"
-        - name: WORKLOAD_DURATION
-          value: "50"
-      resources:
-        requests:
-          memory: "512Mi"
-          cpu: "400m"
-        limits:
-          memory: "1Gi"
-          cpu: "800m"
+  - name: etl-extractor
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-extraction"
+    - name: WORKLOAD_ACTION
+      value: "extract"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: WORKLOAD_DURATION
+      value: "50"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -99,44 +97,43 @@ metadata:
     workload: etl-pipeline
     stage: transform
   annotations:
-    data.scheduler.thesis/input-1: "intermediate/extracted-region1.parquet,52428800,15,8,parquet"
-    data.scheduler.thesis/input-2: "intermediate/extracted-region2.parquet,52428800,15,8,parquet"
-    data.scheduler.thesis/input-3: "datasets/reference-data.json,20971520,10,7,json"
-    data.scheduler.thesis/output-1: "intermediate/transformed-data.parquet,83886080,0,7,parquet"
+    data.scheduler.thesis/input-1: "intermediate/extracted-region1.parquet,52428800"
+    data.scheduler.thesis/input-2: "intermediate/extracted-region2.parquet,52428800"
+    data.scheduler.thesis/input-3: "datasets/reference-data.json,20971520"
+    data.scheduler.thesis/output-1: "intermediate/transformed-data.parquet,83886080"
     scheduler.thesis/compute-intensive: "true"
     scheduler.thesis/memory-intensive: "true"
     scheduler.thesis/prefer-cloud: "true"
-    scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-transformer
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-transformation"
-        - name: WORKLOAD_ACTION
-          value: "transform"
-        - name: WORKLOAD_INTENSITY
-          value: "very-high"
-        - name: WORKLOAD_DURATION
-          value: "90"
-      resources:
-        requests:
-          memory: "2Gi"
-          cpu: "1500m"
-        limits:
-          memory: "4Gi"
-          cpu: "3000m"
+  - name: etl-transformer
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-transformation"
+    - name: WORKLOAD_ACTION
+      value: "transform"
+    - name: WORKLOAD_INTENSITY
+      value: "very-high"
+    - name: WORKLOAD_DURATION
+      value: "90"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1500m"
+      limits:
+        memory: "4Gi"
+        cpu: "3000m"
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -148,41 +145,41 @@ metadata:
     workload: etl-pipeline
     stage: load
   annotations:
-    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080,10,7,parquet"
-    data.scheduler.thesis/output-1: "datasets/warehouse-data.parquet,83886080,0,7,parquet"
-    data.scheduler.thesis/output-2: "results/etl-summary.json,1048576,0,6,json"
+    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080"
+    data.scheduler.thesis/output-1: "datasets/warehouse-data.parquet,83886080"
+    data.scheduler.thesis/output-2: "results/etl-summary.json,1048576"
     scheduler.thesis/data-intensive: "true"
     scheduler.thesis/prefer-cloud: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-loader
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-loading"
-        - name: WORKLOAD_ACTION
-          value: "load"
-        - name: WORKLOAD_INTENSITY
-          value: "high"
-        - name: WORKLOAD_DURATION
-          value: "60"
-      resources:
-        requests:
-          memory: "1Gi"
-          cpu: "600m"
-        limits:
-          memory: "2Gi"
-          cpu: "1200m"
+  - name: etl-loader
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-loading"
+    - name: WORKLOAD_ACTION
+      value: "load"
+    - name: WORKLOAD_INTENSITY
+      value: "high"
+    - name: WORKLOAD_DURATION
+      value: "60"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "600m"
+      limits:
+        memory: "2Gi"
+        cpu: "1200m"
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -194,41 +191,40 @@ metadata:
     workload: etl-pipeline
     stage: load
   annotations:
-    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080,25,7,parquet"
-    data.scheduler.thesis/output-1: "region1-bucket/processed-data.parquet,41943040,0,8,parquet"
+    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080"
+    data.scheduler.thesis/output-1: "region1-bucket/processed-data.parquet,41943040"
     scheduler.thesis/prefer-region: "region-1"
-    scheduler.thesis/prefer-edge: "true"
     scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-edge-loader
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-edge-loading"
-        - name: WORKLOAD_ACTION
-          value: "load"
-        - name: WORKLOAD_INTENSITY
-          value: "medium"
-        - name: WORKLOAD_DURATION
-          value: "45"
-      resources:
-        requests:
-          memory: "512Mi"
-          cpu: "400m"
-        limits:
-          memory: "1Gi"
-          cpu: "800m"
+  - name: etl-edge-loader
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-edge-loading"
+    - name: WORKLOAD_ACTION
+      value: "load"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: WORKLOAD_DURATION
+      value: "45"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -240,39 +236,38 @@ metadata:
     workload: etl-pipeline
     stage: load
   annotations:
-    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080,25,7,parquet"
-    data.scheduler.thesis/output-1: "region2-bucket/processed-data.parquet,41943040,0,8,parquet"
+    data.scheduler.thesis/input-1: "intermediate/transformed-data.parquet,83886080"
+    data.scheduler.thesis/output-1: "region2-bucket/processed-data.parquet,41943040"
     scheduler.thesis/prefer-region: "region-2"
-    scheduler.thesis/prefer-edge: "true"
     scheduler.thesis/data-intensive: "true"
 spec:
   schedulerName: data-locality-scheduler
   containers:
-    - name: etl-edge-loader
-      image: davidandw190/workload-sim:latest
-      command: [ "python", "/app/simulator.py" ]
-      env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: WORKLOAD_TYPE
-          value: "etl-edge-loading"
-        - name: WORKLOAD_ACTION
-          value: "load"
-        - name: WORKLOAD_INTENSITY
-          value: "medium"
-        - name: WORKLOAD_DURATION
-          value: "45"
-      resources:
-        requests:
-          memory: "512Mi"
-          cpu: "400m"
-        limits:
-          memory: "1Gi"
-          cpu: "800m"
+  - name: etl-edge-loader
+    image: davidandw190/workload-sim:latest
+    command: [ "python", "/app/simulator.py" ]
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: "etl-edge-loading"
+    - name: WORKLOAD_ACTION
+      value: "load"
+    - name: WORKLOAD_INTENSITY
+      value: "medium"
+    - name: WORKLOAD_DURATION
+      value: "45"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "400m"
+      limits:
+        memory: "1Gi"
+        cpu: "800m"
   restartPolicy: Never

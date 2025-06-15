@@ -1,0 +1,304 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: cross-region-data-processing
+    data.scheduler.thesis/input-1: edge-data/sensor-readings.json,419430400,10,9,json
+    data.scheduler.thesis/output-1: intermediate/preprocessed-readings.json,209715200,0,8,json
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-1
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: collection
+    workload: cross-region-data-processing
+  name: edge-data-collector-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: edge-collection
+    - name: WORKLOAD_ACTION
+      value: collect
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: cross-region-data-processing
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: edge-data/sensor-readings.json,419430400,10,9,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: intermediate/preprocessed-readings.json,209715200,0,8,json
+    image: davidandw190/workload-sim:latest
+    name: edge-collector
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: cross-region-data-processing
+    data.scheduler.thesis/input-1: intermediate/preprocessed-readings.json,52428800,15,7,json
+    data.scheduler.thesis/input-2: region1-bucket/reference-data.json,104857600,5,6,json
+    data.scheduler.thesis/output-1: region1-bucket/processed-data.json,26214400,0,8,json
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-1
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: processing
+    workload: cross-region-data-processing
+  name: region1-processor-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: data-processing
+    - name: WORKLOAD_ACTION
+      value: process
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: cross-region-data-processing
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: intermediate/preprocessed-readings.json,52428800,15,7,json
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: region1-bucket/reference-data.json,104857600,5,6,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: region1-bucket/processed-data.json,26214400,0,8,json
+    image: davidandw190/workload-sim:latest
+    name: region-processor
+    resources:
+      limits:
+        cpu: '1.2'
+        memory: 1.5Gi
+      requests:
+        cpu: 600m
+        memory: 768Mi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: cross-region-data-processing
+    data.scheduler.thesis/input-1: intermediate/preprocessed-readings.json,52428800,15,7,json
+    data.scheduler.thesis/input-2: region2-bucket/reference-data.json,104857600,5,6,json
+    data.scheduler.thesis/output-1: region2-bucket/processed-data.json,26214400,0,8,json
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-2
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: processing
+    workload: cross-region-data-processing
+  name: region2-processor-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: data-processing
+    - name: WORKLOAD_ACTION
+      value: process
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: cross-region-data-processing
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: intermediate/preprocessed-readings.json,52428800,15,7,json
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: region2-bucket/reference-data.json,104857600,5,6,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: region2-bucket/processed-data.json,26214400,0,8,json
+    image: davidandw190/workload-sim:latest
+    name: region-processor
+    resources:
+      limits:
+        cpu: '1.2'
+        memory: 1.5Gi
+      requests:
+        cpu: 600m
+        memory: 768Mi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: cross-region-data-processing
+    data.scheduler.thesis/input-1: region1-bucket/processed-data.json,26214400,5,8,json
+    data.scheduler.thesis/input-2: region2-bucket/processed-data.json,26214400,5,8,json
+    data.scheduler.thesis/output-1: results/aggregated-results.json,15728640,0,7,json
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/prefer-cloud: 'true'
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: aggregation
+    workload: cross-region-data-processing
+  name: central-aggregator-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: data-aggregation
+    - name: WORKLOAD_ACTION
+      value: analyze
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: cross-region-data-processing
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: region1-bucket/processed-data.json,26214400,5,8,json
+    - name: DATA_SCHEDULER_THESIS_INPUT_2
+      value: region2-bucket/processed-data.json,26214400,5,8,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: results/aggregated-results.json,15728640,0,7,json
+    image: davidandw190/workload-sim:latest
+    name: aggregator
+    resources:
+      limits:
+        cpu: '1.5'
+        memory: 2Gi
+      requests:
+        cpu: 800m
+        memory: 1Gi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists

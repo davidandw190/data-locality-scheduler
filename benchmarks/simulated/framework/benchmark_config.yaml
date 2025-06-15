@@ -1,5 +1,5 @@
 name: "Data Locality Scheduler Benchmark"
-version: "1.0.0"
+version: "1.1.0"
 
 kubernetes:
   namespace: "scheduler-benchmark"
@@ -29,81 +29,31 @@ schedulers:
 
 workloads:
 - name: "stream-processing-pipeline"
-  description: "Real-time stream processing with fan-out/fan-in pattern and mixed compute/data intensity"
   iterations: 1
   data_intensity: "varies"
   compute_intensity: "varies"
   max_wait_time: 600
 - name: "etl-pipeline"
-  description: "Serverless ETL workflow with varying data/compute requirements per stage"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "varies"
   max_wait_time: 700
 - name: "image-processing-pipeline"
-  description: "Multi-stage image processing with edge preprocessing and cloud ML inference"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "very-high"
   max_wait_time: 700
-
-- name: "ml-training-pipeline"
-  description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
-  iterations: 1
-  data_intensity: "high"
-  compute_intensity: "high"
-  max_wait_time: 600
-
 - name: "cross-region-data-processing"
-  description: "Cross-region data processing with region-specific handling"
   iterations: 1
   data_intensity: "high"
   compute_intensity: "medium"
   max_wait_time: 600
 
 - name: "edge-to-cloud-pipeline"
-  description: "IoT data processing pipeline from edge to cloud"
   iterations: 1
   data_intensity: "medium"
   compute_intensity: "medium"
   max_wait_time: 450
-
-# - name: "data-intensive-analytics"
-#   description: "Data analytics pipeline with multi-region data sources"
-#   iterations: 2
-#   data_intensity: "very-high"
-#   compute_intensity: "high"
-#   max_wait_time: 600
-
-#=+++++++++++++++++++++++++++++++++++++++++
-# # New workloads
-# - name: "earth-observation-pipeline"
-#   description: "Earth observation satellite data processing workflow with large datasets"
-#   iterations: 1
-#   data_intensity: "very-high"
-#   compute_intensity: "high"
-#   max_wait_time: 1200
-
-# - name: "mixed-compute-data"
-#   description: "Workload with alternating compute and data-intensive steps"
-#   iterations: 1
-#   data_intensity: "medium"
-#   compute_intensity: "medium"
-#   max_wait_time: 1200
-
-# - name: "edge-computing-stress-test"
-#   description: "Extreme case scenario with very large datasets"
-#   iterations: 1
-#   data_intensity: "very-high"
-#   compute_intensity: "very-high"
-#   max_wait_time: 2400
-
-# - name: "complex-dependency-stages"
-#   description: "Complex ETL pipeline with cross-region data movement and varied resource requirements"
-#   iterations: 1
-#   data_intensity: "high"
-#   compute_intensity: "high"
-#   max_wait_time: 900
 
 metrics:
   collect_node_metrics: true

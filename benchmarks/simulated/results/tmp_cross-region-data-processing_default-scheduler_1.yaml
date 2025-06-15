@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: cross-region-data-processing
     data.scheduler.thesis/input-1: edge-data/sensor-readings.json,419430400,10,9,json
@@ -12,12 +12,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-1
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: collection
     workload: cross-region-data-processing
-  name: edge-data-collector-abab1ff2-1
+  name: edge-data-collector-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -40,7 +40,7 @@ spec:
     - name: WORKLOAD_INTENSITY
       value: high
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: cross-region-data-processing
     - name: SCHEDULER_NAME
@@ -77,7 +77,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: cross-region-data-processing
     data.scheduler.thesis/input-1: intermediate/preprocessed-readings.json,52428800,15,7,json
@@ -87,12 +87,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-1
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: processing
     workload: cross-region-data-processing
-  name: region1-processor-abab1ff2-1
+  name: region1-processor-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -115,7 +115,7 @@ spec:
     - name: WORKLOAD_INTENSITY
       value: high
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: cross-region-data-processing
     - name: SCHEDULER_NAME
@@ -154,7 +154,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: cross-region-data-processing
     data.scheduler.thesis/input-1: intermediate/preprocessed-readings.json,52428800,15,7,json
@@ -164,12 +164,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-2
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: processing
     workload: cross-region-data-processing
-  name: region2-processor-abab1ff2-1
+  name: region2-processor-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -192,7 +192,7 @@ spec:
     - name: WORKLOAD_INTENSITY
       value: high
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: cross-region-data-processing
     - name: SCHEDULER_NAME
@@ -231,7 +231,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: cross-region-data-processing
     data.scheduler.thesis/input-1: region1-bucket/processed-data.json,26214400,5,8,json
@@ -241,12 +241,12 @@ metadata:
     scheduler.thesis/data-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: aggregation
     workload: cross-region-data-processing
-  name: central-aggregator-abab1ff2-1
+  name: central-aggregator-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -269,7 +269,7 @@ spec:
     - name: WORKLOAD_INTENSITY
       value: high
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: cross-region-data-processing
     - name: SCHEDULER_NAME

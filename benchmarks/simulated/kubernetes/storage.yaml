@@ -218,7 +218,6 @@ spec:
       - name: storage
         emptyDir: {}
 ---
-# Setup job to create buckets
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -234,12 +233,12 @@ spec:
         args:
         - |
           sleep 10
-          # Add servers
+
           mc config host add central http://minio-central:9000 minioadmin minioadmin
           mc config host add edge1 http://minio-edge-region1:9000 minioadmin minioadmin
           mc config host add edge2 http://minio-edge-region2:9000 minioadmin minioadmin
 
-          # Create buckets
+          # Buckets creation
           mc mb -p central/datasets
           mc mb -p central/intermediate
           mc mb -p central/results
@@ -250,11 +249,11 @@ spec:
 
           mc mb -p edge2/region2-bucket
 
-          # Create test files
+          # Test file creation
           dd if=/dev/urandom of=/tmp/test-file-10mb.bin bs=1M count=10
           dd if=/dev/urandom of=/tmp/test-file-20mb.bin bs=1M count=20
 
-          # Upload files
+          # File uploads
           mc cp /tmp/test-file-10mb.bin central/datasets/sample.bin
           mc cp /tmp/test-file-10mb.bin edge1/edge-data/sample.bin
           mc cp /tmp/test-file-10mb.bin edge2/region2-bucket/sample.bin

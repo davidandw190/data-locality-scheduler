@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: data-locality-scheduler
     benchmark.thesis/workload: image-processing-pipeline
     data.scheduler.thesis/input-1: edge-data/raw-images-batch1.tar,209715200,5,9,tar
@@ -13,12 +13,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-1
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: datalocalityscheduler
     stage: preprocessing
     workload: image-processing-pipeline
-  name: image-preprocessor-edge1-abab1ff2-1
+  name: image-preprocessor-edge1-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -43,7 +43,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '70'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: image-processing-pipeline
     - name: SCHEDULER_NAME
@@ -80,7 +80,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: data-locality-scheduler
     benchmark.thesis/workload: image-processing-pipeline
     data.scheduler.thesis/input-1: region2-bucket/raw-images-batch2.tar,209715200,5,9,tar
@@ -90,12 +90,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-2
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: datalocalityscheduler
     stage: preprocessing
     workload: image-processing-pipeline
-  name: image-preprocessor-edge2-abab1ff2-1
+  name: image-preprocessor-edge2-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -120,7 +120,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '70'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: image-processing-pipeline
     - name: SCHEDULER_NAME
@@ -157,7 +157,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: data-locality-scheduler
     benchmark.thesis/workload: image-processing-pipeline
     data.scheduler.thesis/input-1: edge-data/preprocessed-batch1.tar,104857600,20,8,tar
@@ -168,12 +168,12 @@ metadata:
     scheduler.thesis/memory-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: datalocalityscheduler
     stage: feature-extraction
     workload: image-processing-pipeline
-  name: feature-extractor-abab1ff2-1
+  name: feature-extractor-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -198,7 +198,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '90'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: image-processing-pipeline
     - name: SCHEDULER_NAME
@@ -237,7 +237,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: data-locality-scheduler
     benchmark.thesis/workload: image-processing-pipeline
     data.scheduler.thesis/input-1: intermediate/image-features.npz,52428800,15,7,npz
@@ -248,12 +248,12 @@ metadata:
     scheduler.thesis/memory-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: datalocalityscheduler
     stage: inference
     workload: image-processing-pipeline
-  name: ml-inference-cloud-abab1ff2-1
+  name: ml-inference-cloud-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -278,7 +278,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '80'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: image-processing-pipeline
     - name: SCHEDULER_NAME
@@ -317,7 +317,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: data-locality-scheduler
     benchmark.thesis/workload: image-processing-pipeline
     data.scheduler.thesis/input-1: results/inference-results.json,10485760,5,6,json
@@ -327,12 +327,12 @@ metadata:
     scheduler.thesis/data-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: datalocalityscheduler
     stage: distribution
     workload: image-processing-pipeline
-  name: result-distributor-abab1ff2-1
+  name: result-distributor-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -357,7 +357,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '40'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: image-processing-pipeline
     - name: SCHEDULER_NAME

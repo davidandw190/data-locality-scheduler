@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: region1-bucket/raw-data-batch.csv,104857600,5,9,csv
@@ -12,12 +12,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-1
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: extract
     workload: etl-pipeline
-  name: etl-extractor-region1-abab1ff2-1
+  name: etl-extractor-region1-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -42,7 +42,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '50'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
@@ -79,7 +79,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: region2-bucket/raw-data-batch.csv,104857600,5,9,csv
@@ -88,12 +88,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-2
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: extract
     workload: etl-pipeline
-  name: etl-extractor-region2-abab1ff2-1
+  name: etl-extractor-region2-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -118,7 +118,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '50'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
@@ -155,7 +155,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: intermediate/extracted-region1.parquet,52428800,15,8,parquet
@@ -167,12 +167,12 @@ metadata:
     scheduler.thesis/memory-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: transform
     workload: etl-pipeline
-  name: etl-transformer-abab1ff2-1
+  name: etl-transformer-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -197,7 +197,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '90'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
@@ -238,7 +238,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: intermediate/transformed-data.parquet,83886080,10,7,parquet
@@ -247,12 +247,12 @@ metadata:
     scheduler.thesis/data-intensive: 'true'
     scheduler.thesis/prefer-cloud: 'true'
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: load
     workload: etl-pipeline
-  name: etl-loader-warehouse-abab1ff2-1
+  name: etl-loader-warehouse-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -277,7 +277,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '60'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
@@ -316,7 +316,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: intermediate/transformed-data.parquet,83886080,25,7,parquet
@@ -325,12 +325,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-1
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: load
     workload: etl-pipeline
-  name: etl-loader-edge1-abab1ff2-1
+  name: etl-loader-edge1-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -355,7 +355,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '45'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
@@ -392,7 +392,7 @@ kind: Pod
 metadata:
   annotations:
     benchmark.thesis/iteration: '1'
-    benchmark.thesis/run-id: abab1ff2
+    benchmark.thesis/run-id: 0596719c
     benchmark.thesis/scheduler: default-scheduler
     benchmark.thesis/workload: etl-pipeline
     data.scheduler.thesis/input-1: intermediate/transformed-data.parquet,83886080,25,7,parquet
@@ -401,12 +401,12 @@ metadata:
     scheduler.thesis/prefer-edge: 'true'
     scheduler.thesis/prefer-region: region-2
   labels:
-    benchmark-run-id: abab1ff2
+    benchmark-run-id: 0596719c
     iteration: '1'
     scheduler: defaultscheduler
     stage: load
     workload: etl-pipeline
-  name: etl-loader-edge2-abab1ff2-1
+  name: etl-loader-edge2-0596719c-1
   namespace: scheduler-benchmark
 spec:
   containers:
@@ -431,7 +431,7 @@ spec:
     - name: WORKLOAD_DURATION
       value: '45'
     - name: BENCHMARK_RUN_ID
-      value: abab1ff2
+      value: 0596719c
     - name: WORKLOAD_NAME
       value: etl-pipeline
     - name: SCHEDULER_NAME
