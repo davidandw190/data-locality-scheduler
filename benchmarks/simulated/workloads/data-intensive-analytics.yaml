@@ -1,4 +1,3 @@
-# benchmarks/simulated/workloads/data-intensive-analytics.yaml (new workload)
 apiVersion: v1
 kind: Pod
 metadata:

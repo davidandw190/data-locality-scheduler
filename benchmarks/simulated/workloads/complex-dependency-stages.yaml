@@ -1,4 +1,3 @@
-# benchmarks/simulated/workloads/multi-stage-transformation-pipeline.yaml
 apiVersion: v1
 kind: Pod
 metadata:
