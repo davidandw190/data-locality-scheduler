@@ -1,0 +1,2278 @@
+{
+  "metadata": {
+    "run_id": "87e62f82",
+    "timestamp": "2025-06-03T10:01:12.860176",
+    "cluster_info": {
+      "nodes": [
+        {
+          "name": "os-k8s-control-plane-0",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-control-plane-0",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "377",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "45",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "2",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "2",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-130-generic",
+            "node-capability/last-updated": "20250603-070028",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "8323522560",
+            "node-capability/memory-gb": "7",
+            "node-capability/memory-score": "35",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "edge",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-size-gb": "31",
+            "node-capability/storage-type": "hdd",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/controlplane": "true",
+            "node-role.kubernetes.io/etcd": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-1",
+            "topology.kubernetes.io/zone": "zone-1-control"
+          },
+          "capacity": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128440Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128440Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "False"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "False"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "False"
+            },
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-130-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        },
+        {
+          "name": "os-k8s-control-plane-1",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-control-plane-1",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "593",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "45",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "2",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "2",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-130-generic",
+            "node-capability/last-updated": "20250524-224929",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "8323522560",
+            "node-capability/memory-gb": "7",
+            "node-capability/memory-score": "35",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "edge",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-size-gb": "31",
+            "node-capability/storage-type": "hdd",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/controlplane": "true",
+            "node-role.kubernetes.io/etcd": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-1",
+            "topology.kubernetes.io/zone": "zone-1-control"
+          },
+          "capacity": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128440Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128440Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "Unknown"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "Unknown"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "Unknown"
+            },
+            {
+              "type": "Ready",
+              "status": "Unknown"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-130-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        },
+        {
+          "name": "os-k8s-control-plane-2",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-control-plane-2",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "423",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "45",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "2",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "2",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-138-generic",
+            "node-capability/last-updated": "20250603-070025",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "8323526656",
+            "node-capability/memory-gb": "7",
+            "node-capability/memory-score": "35",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "edge",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-size-gb": "31",
+            "node-capability/storage-type": "hdd",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/controlplane": "true",
+            "node-role.kubernetes.io/etcd": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-1",
+            "topology.kubernetes.io/zone": "zone-1-control"
+          },
+          "capacity": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128444Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "2",
+            "ephemeral-storage": "32328636Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "8128444Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "False"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "False"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "False"
+            },
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-138-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        },
+        {
+          "name": "os-k8s-worker-node-0",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-worker-node-0",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "312",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "95",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "16",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "16",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/high-compute": "true",
+            "node-capability/high-memory": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-133-generic",
+            "node-capability/last-updated": "20250603-070028",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "67421753344",
+            "node-capability/memory-gb": "62",
+            "node-capability/memory-score": "80",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "cloud",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-bucket-benchmark-cloud": "true",
+            "node-capability/storage-bucket-cog-assets": "true",
+            "node-capability/storage-bucket-cog-data": "true",
+            "node-capability/storage-bucket-eo-scenes": "true",
+            "node-capability/storage-bucket-fmask-cog": "true",
+            "node-capability/storage-bucket-fmask-raw": "true",
+            "node-capability/storage-bucket-fmask-results": "true",
+            "node-capability/storage-bucket-raw-assets": "true",
+            "node-capability/storage-bucket-requests": "true",
+            "node-capability/storage-bucket-results-bucket": "true",
+            "node-capability/storage-bucket-test-bucket": "true",
+            "node-capability/storage-capacity-bytes": "75161927680",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-service": "true",
+            "node-capability/storage-size-gb": "62",
+            "node-capability/storage-technology": "minio",
+            "node-capability/storage-type": "object",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/worker": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-1",
+            "topology.kubernetes.io/zone": "zone-1-cloud"
+          },
+          "capacity": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841556Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841556Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "False"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "False"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "False"
+            },
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-133-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        },
+        {
+          "name": "os-k8s-worker-node-1",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-worker-node-1",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "436",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "95",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "16",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "16",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/high-compute": "true",
+            "node-capability/high-memory": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-133-generic",
+            "node-capability/last-updated": "20250603-070025",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "67421753344",
+            "node-capability/memory-gb": "62",
+            "node-capability/memory-score": "80",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "edge",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-bucket-benchmark-edge1": "true",
+            "node-capability/storage-bucket-edge-bucket": "true",
+            "node-capability/storage-bucket-edge-data": "true",
+            "node-capability/storage-bucket-region1-bucket": "true",
+            "node-capability/storage-bucket-region1-data": "true",
+            "node-capability/storage-bucket-region1-specific-data": "true",
+            "node-capability/storage-bucket-region1-test-data": "true",
+            "node-capability/storage-bucket-test-bucket": "true",
+            "node-capability/storage-capacity-bytes": "75161927680",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-service": "true",
+            "node-capability/storage-size-gb": "62",
+            "node-capability/storage-technology": "minio",
+            "node-capability/storage-type": "object",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/worker": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-1",
+            "topology.kubernetes.io/zone": "zone-1-edge"
+          },
+          "capacity": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841556Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841556Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "False"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "False"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "False"
+            },
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-133-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        },
+        {
+          "name": "os-k8s-worker-node-2",
+          "labels": {
+            "beta.kubernetes.io/arch": "amd64",
+            "beta.kubernetes.io/os": "linux",
+            "kubernetes.io/arch": "amd64",
+            "kubernetes.io/hostname": "os-k8s-worker-node-2",
+            "kubernetes.io/os": "linux",
+            "node-capability/active-interface": "eth0",
+            "node-capability/collection-duration-ms": "461",
+            "node-capability/compute": "true",
+            "node-capability/compute-score": "95",
+            "node-capability/cpu-avx": "true",
+            "node-capability/cpu-avx2": "true",
+            "node-capability/cpu-cores": "16",
+            "node-capability/cpu-model": "AMD-EPYC-Rome-Processor",
+            "node-capability/cpu-threads": "16",
+            "node-capability/high-bandwidth-network": "true",
+            "node-capability/high-compute": "true",
+            "node-capability/high-memory": "true",
+            "node-capability/is-container": "true",
+            "node-capability/kernel-version": "5.15.0-133-generic",
+            "node-capability/last-updated": "20250603-070028",
+            "node-capability/memory": "true",
+            "node-capability/memory-bandwidth": "50",
+            "node-capability/memory-bytes": "67421745152",
+            "node-capability/memory-gb": "62",
+            "node-capability/memory-score": "80",
+            "node-capability/network": "true",
+            "node-capability/network-score": "95",
+            "node-capability/network-speed-mbps": "10000",
+            "node-capability/node-type": "edge",
+            "node-capability/os-distro": "alpine",
+            "node-capability/os-type": "Linux",
+            "node-capability/primary-interface": "eth0",
+            "node-capability/storage": "true",
+            "node-capability/storage-bucket-benchmark-edge2": "true",
+            "node-capability/storage-bucket-region2-bucket": "true",
+            "node-capability/storage-bucket-region2-data": "true",
+            "node-capability/storage-bucket-test-bucket": "true",
+            "node-capability/storage-capacity-bytes": "75161927680",
+            "node-capability/storage-iops": "30",
+            "node-capability/storage-score": "40",
+            "node-capability/storage-service": "true",
+            "node-capability/storage-size-gb": "62",
+            "node-capability/storage-technology": "minio",
+            "node-capability/storage-type": "object",
+            "node-capability/vector-optimized": "true",
+            "node-role.kubernetes.io/worker": "true",
+            "topology.cinder.csi.openstack.org/zone": "nova",
+            "topology.kubernetes.io/region": "region-2",
+            "topology.kubernetes.io/zone": "zone-2-edge"
+          },
+          "capacity": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841548Ki",
+            "pods": "110"
+          },
+          "allocatable": {
+            "cpu": "16",
+            "ephemeral-storage": "64847800Ki",
+            "hugepages-1Gi": "0",
+            "hugepages-2Mi": "0",
+            "memory": "65841548Ki",
+            "pods": "110"
+          },
+          "conditions": [
+            {
+              "type": "NetworkUnavailable",
+              "status": "False"
+            },
+            {
+              "type": "MemoryPressure",
+              "status": "False"
+            },
+            {
+              "type": "DiskPressure",
+              "status": "False"
+            },
+            {
+              "type": "PIDPressure",
+              "status": "False"
+            },
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "node_info": {
+            "architecture": "amd64",
+            "container_runtime_version": "docker://26.0.2",
+            "kernel_version": "5.15.0-133-generic",
+            "kube_proxy_version": "v1.28.11",
+            "kubelet_version": "v1.28.11",
+            "operating_system": "linux",
+            "os_image": "Ubuntu 22.04 LTS"
+          }
+        }
+      ],
+      "node_count": 6,
+      "node_types": {
+        "edge": [
+          "os-k8s-control-plane-0",
+          "os-k8s-control-plane-1",
+          "os-k8s-control-plane-2",
+          "os-k8s-worker-node-1",
+          "os-k8s-worker-node-2"
+        ],
+        "cloud": [
+          "os-k8s-worker-node-0"
+        ],
+        "other": []
+      }
+    },
+    "config": {
+      "name": "Data Locality Scheduler Benchmark",
+      "version": "1.0.0",
+      "kubernetes": {
+        "namespace": "scheduler-benchmark",
+        "setup_storage": true,
+        "storage_providers": [
+          {
+            "name": "minio-central",
+            "type": "object",
+            "region": "central"
+          },
+          {
+            "name": "minio-edge-region1",
+            "type": "object",
+            "region": "region-1"
+          },
+          {
+            "name": "minio-edge-region2",
+            "type": "object",
+            "region": "region-2"
+          }
+        ]
+      },
+      "schedulers": [
+        {
+          "name": "data-locality-scheduler",
+          "description": "Data locality aware scheduler",
+          "config": {
+            "dataLocalityWeight": 0.6,
+            "nodeTypeWeight": 0.12,
+            "resourceWeight": 0.12,
+            "nodeAffinityWeight": 0.08,
+            "capabilitiesWeight": 0.08
+          }
+        },
+        {
+          "name": "default-scheduler",
+          "description": "Kubernetes default scheduler"
+        }
+      ],
+      "workloads": [
+        {
+          "name": "stream-processing-pipeline",
+          "description": "Real-time stream processing with fan-out/fan-in pattern and mixed compute/data intensity",
+          "iterations": 3,
+          "data_intensity": "varies",
+          "compute_intensity": "varies",
+          "max_wait_time": 600
+        },
+        {
+          "name": "etl-pipeline",
+          "description": "Serverless ETL workflow with varying data/compute requirements per stage",
+          "iterations": 3,
+          "data_intensity": "high",
+          "compute_intensity": "varies",
+          "max_wait_time": 700
+        },
+        {
+          "name": "image-processing-pipeline",
+          "description": "Multi-stage image processing with edge preprocessing and cloud ML inference",
+          "iterations": 3,
+          "data_intensity": "high",
+          "compute_intensity": "very-high",
+          "max_wait_time": 700
+        },
+        {
+          "name": "ml-training-pipeline",
+          "description": "Machine learning training pipeline with data collection, feature extraction, model training, and inference",
+          "iterations": 3,
+          "data_intensity": "high",
+          "compute_intensity": "high",
+          "max_wait_time": 600
+        },
+        {
+          "name": "cross-region-data-processing",
+          "description": "Cross-region data processing with region-specific handling",
+          "iterations": 3,
+          "data_intensity": "high",
+          "compute_intensity": "medium",
+          "max_wait_time": 600
+        },
+        {
+          "name": "edge-to-cloud-pipeline",
+          "description": "IoT data processing pipeline from edge to cloud",
+          "iterations": 3,
+          "data_intensity": "medium",
+          "compute_intensity": "medium",
+          "max_wait_time": 450
+        }
+      ],
+      "metrics": {
+        "collect_node_metrics": true,
+        "collect_pod_metrics": true,
+        "collect_network_metrics": true,
+        "data_transfer_metrics": true,
+        "bandwidth_utilization": true,
+        "collection_interval": 5,
+        "latency_tracking": true,
+        "detailed_data_locality": true,
+        "cross_region_transfer_tracking": true,
+        "preference_satisfaction_tracking": true,
+        "processing_overhead_tracking": true
+      },
+      "execution": {
+        "max_wait_time": 1250,
+        "pod_timeout": 1250,
+        "poll_interval": 3,
+        "parallel_runs": false,
+        "cleanup_after_run": true,
+        "validation_level": "thorough",
+        "detailed_logs": true,
+        "simulation_duration": 60
+      }
+    },
+    "benchmark_duration": 1411.399711,
+    "completed": false
+  },
+  "workloads": {
+    "stream-processing-pipeline_data-locality-scheduler_1": {
+      "start_time": 1748934594.3409746,
+      "deploy_duration": 1.8548617362976074,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748934624.1025808,
+      "duration": 27.90672993659973
+    },
+    "stream-processing-pipeline_data-locality-scheduler_2": {
+      "start_time": 1748934625.1373763,
+      "deploy_duration": 1.9869894981384277,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748934657.9694593,
+      "duration": 30.845086812973022
+    },
+    "stream-processing-pipeline_data-locality-scheduler_3": {
+      "start_time": 1748934658.9362764,
+      "deploy_duration": 1.8813459873199463,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748934688.526678,
+      "duration": 27.709044933319092
+    },
+    "stream-processing-pipeline_default-scheduler_1": {
+      "start_time": 1748934689.7261493,
+      "deploy_duration": 2.009481430053711,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748934716.4162388,
+      "duration": 24.680601358413696
+    },
+    "stream-processing-pipeline_default-scheduler_2": {
+      "start_time": 1748934717.5392518,
+      "deploy_duration": 1.7526648044586182,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748934743.9648283,
+      "duration": 24.672901391983032
+    },
+    "stream-processing-pipeline_default-scheduler_3": {
+      "start_time": 1748934745.2289782,
+      "deploy_duration": 1.8561487197875977,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748934771.75189,
+      "duration": 24.66675591468811
+    },
+    "etl-pipeline_data-locality-scheduler_1": {
+      "start_time": 1748934772.7636573,
+      "deploy_duration": 1.7539443969726562,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748934808.4310622,
+      "duration": 33.913453340530396
+    },
+    "etl-pipeline_data-locality-scheduler_2": {
+      "start_time": 1748934810.2125118,
+      "deploy_duration": 2.287759304046631,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748934846.4892063,
+      "duration": 33.98892116546631
+    },
+    "etl-pipeline_data-locality-scheduler_3": {
+      "start_time": 1748934847.6700723,
+      "deploy_duration": 1.8934214115142822,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748934883.5704718,
+      "duration": 34.00697088241577
+    },
+    "etl-pipeline_default-scheduler_1": {
+      "start_time": 1748934884.910316,
+      "deploy_duration": 2.0048582553863525,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748934914.6987684,
+      "duration": 27.783589363098145
+    },
+    "etl-pipeline_default-scheduler_2": {
+      "start_time": 1748934915.8709698,
+      "deploy_duration": 1.925457239151001,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748934948.746124,
+      "duration": 30.949687719345093
+    },
+    "etl-pipeline_default-scheduler_3": {
+      "start_time": 1748934949.9265552,
+      "deploy_duration": 1.974818468093872,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748934982.8790534,
+      "duration": 30.97767162322998
+    },
+    "image-processing-pipeline_data-locality-scheduler_1": {
+      "start_time": 1748934984.0052197,
+      "deploy_duration": 2.363034963607788,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935014.184829,
+      "duration": 27.816558599472046
+    },
+    "image-processing-pipeline_data-locality-scheduler_2": {
+      "start_time": 1748935015.31252,
+      "deploy_duration": 1.9056141376495361,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935047.9679885,
+      "duration": 30.749845266342163
+    },
+    "image-processing-pipeline_data-locality-scheduler_3": {
+      "start_time": 1748935049.4075778,
+      "deploy_duration": 1.7213640213012695,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935081.8821232,
+      "duration": 30.753175497055054
+    },
+    "image-processing-pipeline_default-scheduler_1": {
+      "start_time": 1748935083.213225,
+      "deploy_duration": 1.9096555709838867,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935112.8180397,
+      "duration": 27.69515299797058
+    },
+    "image-processing-pipeline_default-scheduler_2": {
+      "start_time": 1748935113.7167454,
+      "deploy_duration": 1.7057931423187256,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935143.0987322,
+      "duration": 27.676188468933105
+    },
+    "image-processing-pipeline_default-scheduler_3": {
+      "start_time": 1748935144.0554125,
+      "deploy_duration": 1.8897979259490967,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935170.5306873,
+      "duration": 24.585471630096436
+    },
+    "cross-region-data-processing_data-locality-scheduler_1": {
+      "start_time": 1748935171.447664,
+      "deploy_duration": 1.4799058437347412,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935200.6339023,
+      "duration": 27.706324815750122
+    },
+    "cross-region-data-processing_data-locality-scheduler_2": {
+      "start_time": 1748935201.5004742,
+      "deploy_duration": 1.6586508750915527,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935230.8857875,
+      "duration": 27.726659059524536
+    },
+    "cross-region-data-processing_data-locality-scheduler_3": {
+      "start_time": 1748935231.791131,
+      "deploy_duration": 1.554520606994629,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935261.066637,
+      "duration": 27.7209792137146
+    },
+    "cross-region-data-processing_default-scheduler_1": {
+      "start_time": 1748935261.8585646,
+      "deploy_duration": 1.5587527751922607,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935288.0185387,
+      "duration": 24.60121202468872
+    },
+    "cross-region-data-processing_default-scheduler_2": {
+      "start_time": 1748935289.334986,
+      "deploy_duration": 1.6476874351501465,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935315.6392365,
+      "duration": 24.656554460525513
+    },
+    "cross-region-data-processing_default-scheduler_3": {
+      "start_time": 1748935316.5621157,
+      "deploy_duration": 1.532541275024414,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935342.8585334,
+      "duration": 24.763870239257812
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_1": {
+      "start_time": 1748935343.7642837,
+      "deploy_duration": 1.3134419918060303,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935366.5550628,
+      "duration": 21.477327823638916
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_2": {
+      "start_time": 1748935367.2560446,
+      "deploy_duration": 1.1472938060760498,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935389.861308,
+      "duration": 21.45796227455139
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_3": {
+      "start_time": 1748935390.503,
+      "deploy_duration": 1.3259484767913818,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935413.2772722,
+      "duration": 21.448317527770996
+    },
+    "edge-to-cloud-pipeline_default-scheduler_1": {
+      "start_time": 1748935413.9943683,
+      "deploy_duration": 1.1608412265777588,
+      "status": "completed",
+      "iteration": 1,
+      "completion_time": 1748935436.6908066,
+      "duration": 21.535592079162598
+    },
+    "edge-to-cloud-pipeline_default-scheduler_2": {
+      "start_time": 1748935437.345937,
+      "deploy_duration": 1.2631471157073975,
+      "status": "completed",
+      "iteration": 2,
+      "completion_time": 1748935460.0740428,
+      "duration": 21.464953660964966
+    },
+    "edge-to-cloud-pipeline_default-scheduler_3": {
+      "start_time": 1748935460.8732147,
+      "deploy_duration": 1.2722368240356445,
+      "status": "completed",
+      "iteration": 3,
+      "completion_time": 1748935483.6145368,
+      "duration": 21.469079971313477
+    }
+  },
+  "metrics": {
+    "stream-processing-pipeline_data-locality-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "stream-processing-pipeline_data-locality-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "stream-processing-pipeline_data-locality-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "stream-processing-pipeline_default-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "stream-processing-pipeline_default-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "stream-processing-pipeline_default-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_data-locality-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_data-locality-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_data-locality-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_default-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_default-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "etl-pipeline_default-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_data-locality-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_data-locality-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_data-locality-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_default-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_default-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "image-processing-pipeline_default-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_data-locality-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_data-locality-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_data-locality-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_default-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_default-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "cross-region-data-processing_default-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_data-locality-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_default-scheduler_1": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_default-scheduler_2": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    },
+    "edge-to-cloud-pipeline_default-scheduler_3": {
+      "pod_metrics": [],
+      "scheduling_metrics": {
+        "placement_latencies": [],
+        "scheduling_attempts": 0,
+        "scheduling_errors": 0,
+        "scheduling_events": []
+      },
+      "data_locality_metrics": {
+        "overall_score": 0,
+        "weighted_score": 0,
+        "size_weighted_score": 0,
+        "local_refs": 0,
+        "same_zone_refs": 0,
+        "same_region_refs": 0,
+        "cross_region_refs": 0,
+        "total_refs": 0,
+        "local_data_size": 0,
+        "same_zone_data_size": 0,
+        "same_region_data_size": 0,
+        "cross_region_data_size": 0,
+        "total_data_size": 0,
+        "network_metrics": {
+          "total_data_size_bytes": 0,
+          "local_data_size_bytes": 0,
+          "same_zone_data_size_bytes": 0,
+          "same_region_data_size_bytes": 0,
+          "cross_region_data_size_bytes": 0,
+          "edge_to_cloud_transfers": 0,
+          "cloud_to_edge_transfers": 0,
+          "edge_to_cloud_data_size_bytes": 0,
+          "cloud_to_edge_data_size_bytes": 0
+        }
+      }
+    }
+  },
+  "comparison": {
+    "edge-to-cloud-pipeline": {
+      "data_locality_comparison": {
+        "data-locality-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "default-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "improvement_percentage": 0
+      },
+      "preference_comparison": {
+        "data-locality-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        },
+        "default-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        }
+      },
+      "network_comparison": {},
+      "scheduling_latency_comparison": {},
+      "node_distribution_comparison": {}
+    },
+    "etl-pipeline": {
+      "data_locality_comparison": {
+        "data-locality-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "default-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "improvement_percentage": 0
+      },
+      "preference_comparison": {
+        "data-locality-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        },
+        "default-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        }
+      },
+      "network_comparison": {},
+      "scheduling_latency_comparison": {},
+      "node_distribution_comparison": {}
+    },
+    "image-processing-pipeline": {
+      "data_locality_comparison": {
+        "data-locality-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "default-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "improvement_percentage": 0
+      },
+      "preference_comparison": {
+        "data-locality-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        },
+        "default-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        }
+      },
+      "network_comparison": {},
+      "scheduling_latency_comparison": {},
+      "node_distribution_comparison": {}
+    },
+    "cross-region-data-processing": {
+      "data_locality_comparison": {
+        "data-locality-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "default-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "improvement_percentage": 0
+      },
+      "preference_comparison": {
+        "data-locality-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        },
+        "default-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        }
+      },
+      "network_comparison": {},
+      "scheduling_latency_comparison": {},
+      "node_distribution_comparison": {}
+    },
+    "stream-processing-pipeline": {
+      "data_locality_comparison": {
+        "data-locality-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "default-scheduler": {
+          "mean": 0.0,
+          "weighted_mean": 0.0,
+          "size_weighted_mean": 0.0,
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "min": 0,
+          "max": 0,
+          "local_data_percentage": 0,
+          "cross_region_percentage": 0
+        },
+        "improvement_percentage": 0
+      },
+      "preference_comparison": {
+        "data-locality-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        },
+        "default-scheduler": {
+          "edge_preference_satisfaction": 0,
+          "cloud_preference_satisfaction": 0,
+          "region_preference_satisfaction": 0
+        }
+      },
+      "network_comparison": {},
+      "scheduling_latency_comparison": {},
+      "node_distribution_comparison": {}
+    },
+    "overall_averages": {
+      "data_locality_improvement": 0.0,
+      "size_weighted_improvement": 0.0,
+      "local_data_improvement": 0.0,
+      "cross_region_reduction": 0.0,
+      "network_overhead_reduction": 0.0,
+      "processing_overhead_reduction": 0.0
+    }
+  }
+}

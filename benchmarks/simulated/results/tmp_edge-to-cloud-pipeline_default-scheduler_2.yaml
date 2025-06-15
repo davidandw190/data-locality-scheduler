@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: edge-to-cloud-pipeline
+    data.scheduler.thesis/input-1: edge-data/sensor-data.json,20971520,5,9,json
+    data.scheduler.thesis/output-1: intermediate/preprocessed-data.json,10485760,0,8,json
+    scheduler.thesis/data-intensive: 'true'
+    scheduler.thesis/low-latency: 'true'
+    scheduler.thesis/prefer-edge: 'true'
+    scheduler.thesis/prefer-region: region-1
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: collect
+    workload: edge-to-cloud-pipeline
+  name: edge-data-collector-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: edge-collection
+    - name: WORKLOAD_ACTION
+      value: collect
+    - name: WORKLOAD_INTENSITY
+      value: medium
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: edge-to-cloud-pipeline
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: edge-data/sensor-data.json,20971520,5,9,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: intermediate/preprocessed-data.json,10485760,0,8,json
+    image: davidandw190/workload-sim:latest
+    name: edge-collector
+    resources:
+      limits:
+        cpu: 400m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    benchmark.thesis/iteration: '2'
+    benchmark.thesis/run-id: 99f78c08
+    benchmark.thesis/scheduler: default-scheduler
+    benchmark.thesis/workload: edge-to-cloud-pipeline
+    data.scheduler.thesis/input-1: intermediate/preprocessed-data.json,10485760,10,8,json
+    data.scheduler.thesis/output-1: results/processed-results.json,5242880,0,7,json
+    scheduler.thesis/compute-intensive: 'true'
+    scheduler.thesis/memory-intensive: 'true'
+    scheduler.thesis/prefer-cloud: 'true'
+  labels:
+    benchmark-run-id: 99f78c08
+    iteration: '2'
+    scheduler: defaultscheduler
+    stage: process
+    workload: edge-to-cloud-pipeline
+  name: cloud-data-processor-99f78c08-2
+  namespace: scheduler-benchmark
+spec:
+  containers:
+  - command:
+    - python
+    - /app/simulator.py
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: WORKLOAD_TYPE
+      value: cloud-processing
+    - name: WORKLOAD_ACTION
+      value: process
+    - name: WORKLOAD_INTENSITY
+      value: high
+    - name: BENCHMARK_RUN_ID
+      value: 99f78c08
+    - name: WORKLOAD_NAME
+      value: edge-to-cloud-pipeline
+    - name: SCHEDULER_NAME
+      value: default-scheduler
+    - name: ITERATION
+      value: '2'
+    - name: WORKLOAD_DURATION
+      value: '60'
+    - name: DATA_SCHEDULER_THESIS_INPUT_1
+      value: intermediate/preprocessed-data.json,10485760,10,8,json
+    - name: DATA_SCHEDULER_THESIS_OUTPUT_1
+      value: results/processed-results.json,5242880,0,7,json
+    image: davidandw190/workload-sim:latest
+    name: cloud-processor
+    resources:
+      limits:
+        cpu: '1.5'
+        memory: 2Gi
+      requests:
+        cpu: 800m
+        memory: 1Gi
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists

@@ -47,12 +47,12 @@ workloads:
   compute_intensity: "very-high"
   max_wait_time: 700
 
-- name: "ml-training-pipeline"
-  description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
-  iterations: 1
-  data_intensity: "high"
-  compute_intensity: "high"
-  max_wait_time: 600
+#- name: "ml-training-pipeline"
+#  description: "Machine learning training pipeline with data collection, feature extraction, model training, and inference"
+#  iterations: 3
+#  data_intensity: "high"
+#  compute_intensity: "high"
+#  max_wait_time: 600
 
 - name: "cross-region-data-processing"
   description: "Cross-region data processing with region-specific handling"
