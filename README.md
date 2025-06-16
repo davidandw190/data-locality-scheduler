@@ -59,7 +59,33 @@ The system consists of three main components:
 
 - Kubernetes cluster (v1.23+)
 - `kubectl` configured
-- Docker (for building custom images)
+- Docker
+
+
+### Clone the Repository
+
+```bash
+# Clone the data locality scheduler project
+git clone github.com/davidandw190/data-locality-aware-scheduler
+cd data-locality-aware-scheduler/
+
+# Navigate to the benchmarker framework
+cd benchmarks/simulated
+```
+
+
+
+
+
+### Install Dependencies
+
+```python
+# Install Python dependencies 
+pip install -r requirements.txt
+
+# Check framework help
+python benchmark_runner.py --help
+```
 
 ### Basic Deployment
 
@@ -114,48 +140,48 @@ For serverless workloads using Knative:
 
 1. **Deploy the webhook**:
 
-```bash
-  kubectl apply -f integration/knative/manifests/
-```
-
-
+  ```bash
+    kubectl apply -f integration/knative/manifests/
+  ```
 2. **Deploy Knative services normally** - they will automatically use the data-locality scheduler:
 
-```bash
-  kubectl apply -f - <<EOF
-    apiVersion: serving.knative.dev/v1
-    kind: Service
-    metadata:
-      name: eo-fmask-processor
-      namespace: default
-      annotations:
-        scheduler.thesis/data-sources: "landsat-l1,landsat-l2"
-        scheduler.thesis/workload-type: "compute-intensive"
-    spec:
-      template:
-        metadata:
-          annotations:
-            autoscaling.knative.dev/target: "5"
-        spec:
-          containers:
-          - name: fmask-processor
-            image: my-registry/eo-fmask:latest
-            ports:
-            - containerPort: 8080
-            env:
-            - name: MINIO_ENDPOINT
-              value: "minio.storage.svc.cluster.local:9000"
-            - name: LANDSAT_BUCKET
-              value: "landsat-l1"
-            resources:
-              requests:
-                memory: "2Gi"
-                cpu: "1000m"
-              limits:
-                memory: "4Gi"
-                cpu: "2000m"
-  EOF
-```
+  ```bash
+    kubectl apply -f - <<EOF
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        name: eo-fmask-processor
+        namespace: default
+        annotations:
+          scheduler.thesis/data-sources: "landsat-l1,landsat-l2"
+          scheduler.thesis/workload-type: "compute-intensive"
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/target: "5"
+          spec:
+            containers:
+            - name: fmask-processor
+              image: my-registry/eo-fmask:latest
+              ports:
+              - containerPort: 8080
+              env:
+              - name: MINIO_ENDPOINT
+                value: "minio.storage.svc.cluster.local:9000"
+              - name: LANDSAT_BUCKET
+                value: "landsat-l1"
+              resources:
+                requests:
+                  memory: "2Gi"
+                  cpu: "1000m"
+                limits:
+                  memory: "4Gi"
+                  cpu: "2000m"
+    EOF
+  ```
+
+
 3. **Trigger the function with a CloudEvent** containing data dependencies:
 
 ```bash
