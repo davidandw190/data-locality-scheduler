@@ -15,7 +15,7 @@ class StorageManager:
     def deploy_storage_services(self):
         logger.info("Deploying storage services")
         
-        storage_manifests = Path("benchmarks/simulated/kubernetes/storage.yaml")
+        storage_manifests = Path("benchmarks/simulated/kubernetes/storage-config.yaml")
         if not storage_manifests.exists():
             raise FileNotFoundError(f"Storage manifest not found: {storage_manifests}")
         

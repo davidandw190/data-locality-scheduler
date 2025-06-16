@@ -2,7 +2,6 @@ schedulerName: "data-locality-scheduler"
 podQueueSize: 100
 healthServerPort: 8080
 refreshInterval: "5m"
-enableMockData: false
 
 # filtering options
 percentageOfNodesToScore: 100

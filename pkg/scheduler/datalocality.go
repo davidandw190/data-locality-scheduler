@@ -244,47 +244,6 @@ func (p *DataLocalityPriority) extractDataDependencies(pod *v1.Pod) ([]DataDepen
 		}
 	}
 
-	// TODO: remove in the future
-	if eoInput, ok := pod.Annotations["data.scheduler.thesis/eo-input"]; ok {
-		parts := strings.Split(eoInput, ",")
-		if len(parts) >= 2 {
-			urn := strings.TrimSpace(parts[0])
-			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-			if err != nil {
-				size = 100 * 1024 * 1024 // 100MB default
-			}
-
-			weight := math.Log1p(float64(size) / float64(1024*1024))
-
-			inputData = append(inputData, DataDependency{
-				URN:            urn,
-				SizeBytes:      size,
-				ProcessingTime: 30, // default processing time for EO data
-				Weight:         weight,
-			})
-		}
-	}
-
-	if eoOutput, ok := pod.Annotations["data.scheduler.thesis/eo-output"]; ok {
-		parts := strings.Split(eoOutput, ",")
-		if len(parts) >= 2 {
-			urn := strings.TrimSpace(parts[0])
-			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-			if err != nil {
-				size = 50 * 1024 * 1024 // 50MB default
-			}
-
-			weight := math.Log1p(float64(size) / float64(1024*1024))
-
-			outputData = append(outputData, DataDependency{
-				URN:            urn,
-				SizeBytes:      size,
-				ProcessingTime: 0,
-				Weight:         weight,
-			})
-		}
-	}
-
 	if len(parseErrors) > 0 {
 		return inputData, outputData, fmt.Errorf("data dependency parsing errors: %s",
 			strings.Join(parseErrors, "; "))

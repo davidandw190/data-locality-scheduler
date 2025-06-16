@@ -43,7 +43,6 @@ func main() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file")
 	flag.StringVar(&master, "master", "", "The address of the Kubernetes API server")
 	flag.StringVar(&config.SchedulerName, "scheduler-name", config.SchedulerName, "Name of the scheduler")
-	flag.BoolVar(&config.EnableMockData, "enable-mock-data", config.EnableMockData, "Enable mock MinIO data creation for testing")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 
 	// Performance and caching flags

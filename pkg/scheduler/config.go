@@ -18,7 +18,6 @@ type SchedulerConfig struct {
 	HealthServerPort  int           `yaml:"healthServerPort"`
 	SchedulerInterval time.Duration `yaml:"schedulerInterval"`
 	RefreshInterval   time.Duration `yaml:"refreshInterval"`
-	EnableMockData    bool          `yaml:"enableMockData"`
 
 	// Filtering options
 	PercentageOfNodesToScore int `yaml:"percentageOfNodesToScore"`
@@ -92,7 +91,6 @@ func NewDefaultConfig() *SchedulerConfig {
 		HealthServerPort:  8080,
 		SchedulerInterval: 1 * time.Second,
 		RefreshInterval:   5 * time.Minute,
-		EnableMockData:    false,
 
 		// Filtering options
 		PercentageOfNodesToScore: 100,
@@ -240,7 +238,6 @@ func (c *SchedulerConfig) LoadFromEnv() {
 	c.HealthServerPort = getEnvInt("HEALTH_SERVER_PORT", c.HealthServerPort)
 	c.SchedulerInterval = getEnvDuration("SCHEDULER_INTERVAL", c.SchedulerInterval)
 	c.RefreshInterval = getEnvDuration("REFRESH_INTERVAL", c.RefreshInterval)
-	c.EnableMockData = getEnvBool("ENABLE_MOCK_DATA", c.EnableMockData)
 
 	// Filtering options
 	c.PercentageOfNodesToScore = getEnvInt("PERCENTAGE_OF_NODES_TO_SCORE", c.PercentageOfNodesToScore)
@@ -392,7 +389,6 @@ func (c *SchedulerConfig) String() string {
   Scheduler Name: %s
   Scheduler Interval: %v
   Refresh Interval: %v
-  Enable Mock Data: %v
   
   Filtering:
     Percentage of Nodes to Score: %d%%
@@ -434,7 +430,6 @@ func (c *SchedulerConfig) String() string {
 		c.SchedulerName,
 		c.SchedulerInterval,
 		c.RefreshInterval,
-		c.EnableMockData,
 
 		c.PercentageOfNodesToScore,
 		c.MinFeasibleNodesToFind,

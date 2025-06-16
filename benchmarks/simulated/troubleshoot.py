@@ -58,10 +58,10 @@ def check_kubernetes_resources(namespace="scheduler-benchmark"):
     return True
 
 def deploy_test_storage():
-    """Deploy test storage services from storage.yaml"""
+    """Deploy test storage services from storage-config.yaml"""
     logger.info("Deploying test storage services")
     
-    storage_yaml = Path("benchmarks/simulated/kubernetes/storage.yaml")
+    storage_yaml = Path("benchmarks/simulated/kubernetes/storage-config.yaml")
     if not storage_yaml.exists():
         logger.error(f"Storage YAML file not found: {storage_yaml}")
         return False

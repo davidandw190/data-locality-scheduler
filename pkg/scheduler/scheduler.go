@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"slices"
+
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage"
 	"github.com/davidandw190/data-locality-scheduler/pkg/storage/minio"
 	"github.com/prometheus/client_golang/prometheus"
@@ -85,7 +87,6 @@ type Scheduler struct {
 	nodeResourceCache    map[string]*nodeResources
 	cacheLock            sync.RWMutex
 	dataLocalityPriority *DataLocalityPriority
-	enableMockData       bool
 	metrics              schedulerMetrics
 	recorder             record.EventRecorder
 	retryCount           map[string]int
@@ -126,7 +127,6 @@ func NewScheduler(clientset kubernetes.Interface, config *SchedulerConfig) *Sche
 		priorityFuncs:     make([]PriorityFunc, 0),
 		nodeResourceCache: make(map[string]*nodeResources),
 		config:            config,
-		enableMockData:    config.EnableMockData,
 		metrics: schedulerMetrics{
 			schedulingLatency: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name:    "data_locality_scheduler_latency_seconds",
@@ -266,12 +266,6 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 	if s.config.ResourceCacheEnabled {
 		go s.startCacheCleanup(ctx)
-	}
-
-	if s.config.EnableMockData {
-		klog.Info("Creating mock storage data for testing")
-		s.storageIndex.MockMinioData()
-		s.bandwidthGraph.MockNetworkPaths()
 	}
 
 	go s.refreshStorageDataPeriodically(ctx)
@@ -646,10 +640,6 @@ func (s *Scheduler) refreshStorageInformation(ctx context.Context) error {
 	return nil
 }
 
-func (s *Scheduler) SetEnableMockData(enable bool) {
-	s.enableMockData = enable
-}
-
 func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error {
 	klog.Info("Discovering and registering MinIO services...")
 	minioIndexer := minio.NewIndexer(s.storageIndex, 5*time.Minute)
@@ -742,12 +732,6 @@ func (s *Scheduler) discoverAndRegisterMinioServices(ctx context.Context) error 
 		s.storageMutex.RUnlock()
 
 		klog.Infof("After aggressive discovery: found %d data items", dataItemCount)
-
-		if dataItemCount == 0 && s.enableMockData {
-			klog.Warning("No MinIO data items found after exhaustive discovery. Creating mock data.")
-			s.storageIndex.MockMinioData()
-			s.bandwidthGraph.MockNetworkPaths()
-		}
 	}
 
 	minioIndexer.StartRefresher(ctx)
@@ -1184,48 +1168,6 @@ func (p *Scheduler) extractDataDependencies(pod *v1.Pod) ([]DataDependency, []Da
 		}
 	}
 
-	// TODO: will be removed in the future
-	if eoInput, ok := pod.Annotations["data.scheduler.thesis/eo-input"]; ok {
-		parts := strings.Split(eoInput, ",")
-		if len(parts) >= 2 {
-			urn := strings.TrimSpace(parts[0])
-			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-			if err != nil {
-				size = 100 * 1024 * 1024 // 100MB default
-			}
-
-			weight := math.Log1p(float64(size) / float64(1024*1024))
-
-			inputData = append(inputData, DataDependency{
-				URN:            urn,
-				SizeBytes:      size,
-				ProcessingTime: 30,
-				Weight:         weight,
-			})
-		}
-	}
-
-	// TODO: will be removed in the future
-	if eoOutput, ok := pod.Annotations["data.scheduler.thesis/eo-output"]; ok {
-		parts := strings.Split(eoOutput, ",")
-		if len(parts) >= 2 {
-			urn := strings.TrimSpace(parts[0])
-			size, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-			if err != nil {
-				size = 50 * 1024 * 1024 // 50MB default
-			}
-
-			weight := math.Log1p(float64(size) / float64(1024*1024))
-
-			outputData = append(outputData, DataDependency{
-				URN:            urn,
-				SizeBytes:      size,
-				ProcessingTime: 0,
-				Weight:         weight,
-			})
-		}
-	}
-
 	if len(parseErrors) > 0 {
 		return inputData, outputData, fmt.Errorf("data dependency parsing errors: %s",
 			strings.Join(parseErrors, "; "))
@@ -1263,13 +1205,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 
 		if bestSourceNode != "" {
 			dataType := "unknown"
-			if strings.Contains(data.URN, "eo-scenes") {
-				dataType = "eo-imagery"
-			} else if strings.Contains(data.URN, "fmask") {
-				dataType = "mask"
-			} else if strings.Contains(data.URN, "cog") {
-				dataType = "cog"
-			}
 
 			s.metrics.dataTransferTime.WithLabelValues(
 				bestSourceNode, nodeName, dataType,
@@ -1315,13 +1250,6 @@ func (s *Scheduler) recordDataTransferMetrics(pod *v1.Pod, nodeName string, inpu
 
 		if bestDestNode != "" {
 			dataType := "unknown"
-			if strings.Contains(data.URN, "eo-scenes") {
-				dataType = "eo-imagery"
-			} else if strings.Contains(data.URN, "fmask") {
-				dataType = "mask"
-			} else if strings.Contains(data.URN, "cog") {
-				dataType = "cog"
-			}
 
 			s.metrics.dataTransferTime.WithLabelValues(
 				nodeName, bestDestNode, dataType,
@@ -2739,10 +2667,8 @@ func nodeHasLabelKey(node *v1.Node, key string) bool {
 
 func nodeHasValueForKey(node *v1.Node, key string, values []string) bool {
 	if value, exists := node.Labels[key]; exists {
-		for _, v := range values {
-			if value == v {
-				return true
-			}
+		if slices.Contains(values, value) {
+			return true
 		}
 	}
 	return false
